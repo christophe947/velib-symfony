@@ -6,6 +6,12 @@
 
     <h1>🚲 Stations Vélib</h1>
 
+    <div id="map" style="height:500px;" class="mb-4"></div>
+
+    <script>
+        window.stations = {{ stations|json_encode|raw }};
+    </script>
+
     <div class="mb-4">
 
         <input

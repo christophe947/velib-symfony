@@ -27,4 +27,6 @@ return [
     'bootstrap' => ['version' => '5.3.8'],
     '@popperjs/core' => ['version' => '2.11.8'],
     'bootstrap/dist/css/bootstrap.min.css' => ['version' => '5.3.8', 'type' => 'css'],
+    'leaflet' => ['version' => '1.9.4'],
+    'leaflet/dist/leaflet.min.css' => ['version' => '1.9.4', 'type' => 'css'],
 ];

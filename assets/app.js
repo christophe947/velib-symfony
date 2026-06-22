@@ -6,6 +6,9 @@
  */
 import './styles/app.css';
 import 'bootstrap';
+import 'leaflet';
+import 'leaflet/dist/leaflet.min.css';
+import './map.js';
 
 document.addEventListener('DOMContentLoaded', () => {
 

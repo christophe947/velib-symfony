@@ -89,7 +89,7 @@ class VelibApiService
         }
 
 
-        return array_slice($stations, 0, 20);
+        return $stations;
     }
 }
 
