@@ -1,33 +1,38 @@
 # 🚲 Vélib Symfony
 
-## ✅ Fait
-- Symfony 8.1
-- Git configuré
-- Bootstrap installé
-- API Vélib connectée
-- Service VelibApiService
-- Liste des stations
-- Cards Bootstrap
-- Recherche instantanée
-- Statut disponibilité vélo
-- Statut retour borne
+## Version actuelle
+v0.1.0
 
-## 🔜 Prochaines étapes
+## ✅ V0.1.0 - Base application
 
-### V1
-- Carte Leaflet
-- Marqueurs stations
-- Popups avec disponibilité
-- Finition UI
-- Docker
-- Déploiement
+- [x] Symfony 8.1
+- [x] Git configuré
+- [x] Bootstrap installé
+- [x] API Vélib connectée
+- [x] Service VelibApiService
+- [x] Liste des stations
+- [x] Cards Bootstrap
+- [x] Recherche instantanée
+- [x] Statut disponibilité vélo
+- [x] Statut retour borne
 
-### V2
-- Favoris
-- Géolocalisation
-- Distance utilisateur
-- Rafraîchissement automatique
-- Statistiques
+## 🔜 V0.2.0 - Carte & déploiement
+
+- [ ] Carte Leaflet
+- [ ] Marqueurs stations
+- [ ] Popups avec disponibilité
+- [ ] Finition UI
+- [ ] Docker
+- [ ] Déploiement
+
+## 🚀 V0.3.0 - Fonctionnalités avancées
+
+- [ ] Favoris
+- [ ] Géolocalisation
+- [ ] Distance utilisateur
+- [ ] Rafraîchissement automatique
+- [ ] Statistiques
 
 ## Notes
+
 Projet portfolio Symfony moderne.
