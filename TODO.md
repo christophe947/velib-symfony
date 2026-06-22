@@ -1,12 +1,13 @@
 # 🚲 Vélib Symfony
 
 ## Version actuelle
-v0.1.0
+v0.2.0 - Leaflet en cours
 
-## ✅ V0.1.0 - Base application
+## ✅ Fait
 
 - [x] Symfony 8.1
 - [x] Git configuré
+- [x] Branches Git (develop / feature)
 - [x] Bootstrap installé
 - [x] API Vélib connectée
 - [x] Service VelibApiService
@@ -15,17 +16,25 @@ v0.1.0
 - [x] Recherche instantanée
 - [x] Statut disponibilité vélo
 - [x] Statut retour borne
+- [x] Carte Leaflet affichée
+- [x] Marqueurs stations
+- [x] Popups stations
+- [x] Affichage de toutes les stations
 
-## 🔜 V0.2.0 - Carte & déploiement
+## 🔜 En cours (feature/leaflet-map)
 
-- [ ] Carte Leaflet
-- [ ] Marqueurs stations
-- [ ] Popups avec disponibilité
+- [ ] Corriger / personnaliser les icônes marqueurs
+- [ ] Améliorer les popups
+- [ ] Couleurs marqueurs selon disponibilité
+- [ ] Synchronisation liste ↔ carte
+
+## 🚀 Après V1
+
 - [ ] Finition UI
 - [ ] Docker
 - [ ] Déploiement
 
-## 🚀 V0.3.0 - Fonctionnalités avancées
+## V2
 
 - [ ] Favoris
 - [ ] Géolocalisation
