@@ -1,34 +1,53 @@
 {% extends 'base.html.twig' %}
 
 {% block body %}
+
 <div class="container mt-4">
 
-    <h1>Stations Vélib</h1>
+<h1>🚲 Stations Vélib</h1>
 
-    <table class="table table-striped">
-        <thead>
-        <tr>
-            <th>ID</th>
-            <th>Code</th>
-            <th>Vélos</th>
-            <th>Bornes libres</th>
-        </tr>
-        </thead>
 
-        <tbody>
+<div class="row">
 
-        {% for station in stations %}
-            <tr>
-                <td>{{ station.station_id }}</td>
-                <td>{{ station.stationCode }}</td>
-                <td>{{ station.num_bikes_available }}</td>
-                <td>{{ station.num_docks_available }}</td>
-            </tr>
-        {% endfor %}
+{% for station in stations %}
 
-        </tbody>
-    </table>
+<div class="col-md-4 mb-3">
+
+<div class="card shadow">
+
+<div class="card-body">
+
+<h5 class="card-title">
+{{ station.name }}
+</h5>
+
+<p>
+📍 {{ station.address }}
+</p>
+
+<hr>
+
+<p>
+🚲 Vélos disponibles :
+<strong>{{ station.bikes }}</strong>
+</p>
+
+<p>
+🅿️ Bornes libres :
+<strong>{{ station.docks }}</strong>
+</p>
+
 
 </div>
-{% endblock %}
 
+</div>
+
+</div>
+
+{% endfor %}
+
+</div>
+
+</div>
+
+{% endblock %}
