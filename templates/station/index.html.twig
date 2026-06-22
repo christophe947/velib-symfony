@@ -1,7 +1,5 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Stations{% endblock %}
-
 {% block body %}
 <div class="container mt-4">
 
@@ -10,22 +8,27 @@
     <table class="table table-striped">
         <thead>
         <tr>
-            <th>Station</th>
+            <th>ID</th>
+            <th>Code</th>
             <th>Vélos</th>
             <th>Bornes libres</th>
         </tr>
         </thead>
 
         <tbody>
+
         {% for station in stations %}
             <tr>
-                <td>{{ station.name }}</td>
-                <td>{{ station.bikes }}</td>
-                <td>{{ station.stands }}</td>
+                <td>{{ station.station_id }}</td>
+                <td>{{ station.stationCode }}</td>
+                <td>{{ station.num_bikes_available }}</td>
+                <td>{{ station.num_docks_available }}</td>
             </tr>
         {% endfor %}
+
         </tbody>
     </table>
 
 </div>
 {% endblock %}
+
