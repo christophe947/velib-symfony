@@ -7,5 +7,32 @@
 import './styles/app.css';
 import 'bootstrap';
 
+document.addEventListener('DOMContentLoaded', () => {
 
-console.log('This log comes from assets/app.js - welcome to AssetMapper! 🎉');
+    const searchInput = document.getElementById('station-search');
+
+    if (!searchInput) {
+        return;
+    }
+
+    searchInput.addEventListener('input', () => {
+
+        const search = searchInput.value.toLowerCase();
+
+        document
+            .querySelectorAll('.station-card')
+            .forEach(card => {
+
+                const stationName =
+                    card.dataset.stationName;
+
+                card.style.display =
+                    stationName.includes(search)
+                        ? ''
+                        : 'none';
+            });
+    });
+});
+
+
+//console.log('This log comes from assets/app.js - welcome to AssetMapper! 🎉');
