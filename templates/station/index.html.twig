@@ -4,69 +4,55 @@
 
 <div class="container mt-4">
 
-<h1>🚲 Stations Vélib</h1>
+    <h1>🚲 Stations Vélib</h1>
 
+    <div class="row">
 
-<div class="row">
+        {% for station in stations %}
 
-{% for station in stations %}
+            <div class="col-md-4 mb-3">
 
-<div class="col-md-4 mb-3">
+                <div class="card shadow">
 
-<div class="card shadow">
+                    <div class="card-body">
 
-<div class="card-body">
+                        <h5 class="card-title">
+                            {{ station.name }}
+                        </h5>
 
-<h5 class="card-title">
-{{ station.name }}
-</h5>
+                        <span class="badge text-bg-success">
+                            🚲 {{ station.rentalStatus }}
+                        </span>
 
-{% if station.bikes > 10 %}
+                        <span class="badge text-bg-primary">
+                            🅿️ {{ station.returnStatus }}
+                        </span>
 
-    <span class="badge text-bg-success">
-        Beaucoup de vélos
-    </span>
+                        <p class="mt-3">
+                            📍 {{ station.address }}
+                        </p>
 
-{% elseif station.bikes > 3 %}
+                        <hr>
 
-    <span class="badge text-bg-warning">
-        Disponible
-    </span>
+                        <p>
+                            🚲 Vélos disponibles :
+                            <strong>{{ station.bikes }}</strong>
+                        </p>
 
-{% else %}
+                        <p>
+                            🅿️ Bornes libres :
+                            <strong>{{ station.docks }}</strong>
+                        </p>
 
-    <span class="badge text-bg-danger">
-        Presque vide 
-    </span>
+                    </div>
 
-{% endif %}
+                </div>
 
-<p>
-📍 {{ station.address }}
-</p>
+            </div>
 
-<hr>
+        {% endfor %}
 
-<p>
-🚲 Vélos disponibles :
-<strong>{{ station.bikes }}</strong>
-</p>
-
-<p>
-🅿️ Bornes libres :
-<strong>{{ station.docks }}</strong>
-</p>
-
-
-</div>
-
-</div>
-
-</div>
-
-{% endfor %}
-
-</div>
+    </div>
 
 </div>
 

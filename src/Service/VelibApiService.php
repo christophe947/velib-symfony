@@ -18,6 +18,31 @@ class VelibApiService
     ) {
     }
 
+    private function getRentalStatus(int $bikes): string
+    {
+        if ($bikes === 0) {
+            return 'Indisponible';
+        }
+
+        if ($bikes <= 3) {
+            return 'Quelques vélos';
+        }
+
+        return 'Disponible';
+    }
+
+    private function getReturnStatus(int $docks): string
+    {
+        if ($docks === 0) {
+            return 'Impossible';
+        }
+
+        if ($docks <= 5) {
+            return 'Peu de places';
+        }
+
+        return 'Places disponibles';
+    }
 
     public function getStations(): array
     {
@@ -52,7 +77,15 @@ class VelibApiService
 
                 'bikes' => $station['num_bikes_available'],
                 'docks' => $station['num_docks_available'],
+                'rentalStatus' => $this->getRentalStatus(
+                    $station['num_bikes_available']
+                ),
+                'returnStatus' => $this->getReturnStatus(
+                    $station['num_docks_available']
+                ),
             ];
+
+            
         }
 
 
