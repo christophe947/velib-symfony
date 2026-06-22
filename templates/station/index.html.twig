@@ -1,0 +1,31 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Stations{% endblock %}
+
+{% block body %}
+<div class="container mt-4">
+
+    <h1>Stations Vélib</h1>
+
+    <table class="table table-striped">
+        <thead>
+        <tr>
+            <th>Station</th>
+            <th>Vélos</th>
+            <th>Bornes libres</th>
+        </tr>
+        </thead>
+
+        <tbody>
+        {% for station in stations %}
+            <tr>
+                <td>{{ station.name }}</td>
+                <td>{{ station.bikes }}</td>
+                <td>{{ station.stands }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+</div>
+{% endblock %}
