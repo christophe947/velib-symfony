@@ -21,6 +21,26 @@
 {{ station.name }}
 </h5>
 
+{% if station.bikes > 10 %}
+
+    <span class="badge text-bg-success">
+        Beaucoup de vélos
+    </span>
+
+{% elseif station.bikes > 3 %}
+
+    <span class="badge text-bg-warning">
+        Disponible
+    </span>
+
+{% else %}
+
+    <span class="badge text-bg-danger">
+        Presque vide 
+    </span>
+
+{% endif %}
+
 <p>
 📍 {{ station.address }}
 </p>
