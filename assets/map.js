@@ -90,7 +90,7 @@ if (mapElement) {
 
     if (bounds.length > 0) {
         map.fitBounds(bounds, {
-            padding: [30, 30],
+            padding: [50, 50],
             maxZoom: 14
         });
     }
@@ -109,7 +109,7 @@ if (mapElement) {
                 display:inline-block;
                 border-radius:50%;
             "></span>
-            Beaucoup<br>
+            10 vélos ou plus<br>
 
             <span style="
                 background:orange;
@@ -118,7 +118,7 @@ if (mapElement) {
                 display:inline-block;
                 border-radius:50%;
             "></span>
-            Quelques-uns<br>
+            1 à 9 vélos<br>
 
             <span style="
                 background:red;
@@ -127,7 +127,7 @@ if (mapElement) {
                 display:inline-block;
                 border-radius:50%;
             "></span>
-            Aucun
+            Aucun vélo
         `;
 
         return div;
