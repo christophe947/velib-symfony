@@ -70,6 +70,7 @@ class VelibApiService
             $id = $station['station_id'];
 
             $stations[] = [
+                'id' => $station['station_id'],
                 'name' => $stationsInfo[$id]['name'] ?? 'Station inconnue',
                 'address' => $stationsInfo[$id]['address'] ?? '',
                 'latitude' => $stationsInfo[$id]['lat'] ?? null,

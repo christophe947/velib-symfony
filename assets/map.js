@@ -45,6 +45,7 @@ L.Icon.Default.mergeOptions({
 
 const mapElement = document.getElementById('map');
 
+
 if (mapElement) {
 
     const map = L.map('map');
@@ -65,20 +66,22 @@ if (mapElement) {
             station.longitude
     ]);
 
-        /*L.marker([
-            station.latitude,
-            station.longitude
-        ])*/
         const color = getMarkerColor(
             station.bikes
         );
 
-        L.marker([
+        const marker = L.marker(
+        [
             station.latitude,
             station.longitude
-        ], {
-        icon: createIcon(color)
-        })
+        ],
+        {
+            icon: createIcon(
+                getMarkerColor(station.bikes)
+            )
+        }
+    )
+        
         .addTo(map)
         .bindPopup(`
             <strong>${station.name}</strong><br>
@@ -86,14 +89,28 @@ if (mapElement) {
             🅿️ ${station.docks} places
         `);
 
+        if (selectedStation == station.id) {
+
+        map.setView(
+            [
+                station.latitude,
+                station.longitude
+            ],
+            16
+        );
+
+        marker.openPopup();
+    }
+
     });
 
-    if (bounds.length > 0) {
+    if (!selectedStation && bounds.length > 0) {
         map.fitBounds(bounds, {
             padding: [50, 50],
             maxZoom: 14
         });
     }
+
     const legend = L.control({ position: 'bottomright' });
 
     legend.onAdd = function () {

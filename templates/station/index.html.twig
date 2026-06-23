@@ -1,7 +1,7 @@
 {% extends 'base.html.twig' %}
 
 {% block body %}
-
+<!--{{ dump(stations) }}; -->
 <div class="container mt-4">
 
     <h1>🚲 Stations Vélib</h1>
@@ -10,6 +10,7 @@
 
     <script>
         window.stations = {{ stations|json_encode|raw }};
+        const selectedStation = {{ selectedStation|json_encode|raw }};
     </script>
 
     <div class="mb-4">
@@ -48,6 +49,10 @@
                         <p class="mt-3">
                             📍 {{ station.address }}
                         </p>
+
+                        <a href="{{ path('app_stations', {station: station.id}) }}" class="btn btn-primary btn-sm">
+                            🗺️ Voir sur la carte
+                        </a>
 
                         <hr>
 
