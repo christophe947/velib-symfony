@@ -1,5 +1,40 @@
 import L from 'leaflet';
 
+function getMarkerColor(bikes) {
+
+    if (bikes >= 10) {
+        return 'green';
+    }
+
+    if (bikes > 0) {
+        return 'orange';
+    }
+
+    return 'red';
+}
+
+function createIcon(color) {
+
+    return L.divIcon({
+
+        className: '',
+
+        html: `
+            <div style="
+                background:${color};
+                width:20px;
+                height:20px;
+                border-radius:50%;
+                border:3px solid white;
+            ">
+            </div>
+        `,
+
+        iconSize: [20,20]
+
+    });
+}
+
 delete L.Icon.Default.prototype._getIconUrl;
 
 L.Icon.Default.mergeOptions({
@@ -12,11 +47,8 @@ const mapElement = document.getElementById('map');
 
 if (mapElement) {
 
-    const map = L.map('map').setView(
-        [48.8566, 2.3522],
-        12
-    );
-
+    const map = L.map('map');
+    
     L.tileLayer(
         'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
         {
@@ -24,13 +56,29 @@ if (mapElement) {
         }
     ).addTo(map);
 
+    const bounds = [];
 
     stations.forEach(station => {
+
+        bounds.push([
+            station.latitude,
+            station.longitude
+    ]);
+
+        /*L.marker([
+            station.latitude,
+            station.longitude
+        ])*/
+        const color = getMarkerColor(
+            station.bikes
+        );
 
         L.marker([
             station.latitude,
             station.longitude
-        ])
+        ], {
+        icon: createIcon(color)
+        })
         .addTo(map)
         .bindPopup(`
             <strong>${station.name}</strong><br>
@@ -39,5 +87,53 @@ if (mapElement) {
         `);
 
     });
+
+    if (bounds.length > 0) {
+        map.fitBounds(bounds, {
+            padding: [30, 30],
+            maxZoom: 14
+        });
+    }
+    const legend = L.control({ position: 'bottomright' });
+
+    legend.onAdd = function () {
+
+        const div = L.DomUtil.create('div', 'map-legend');
+
+        div.innerHTML = `
+            <strong>Disponibilité vélos</strong><br>
+            <span style="
+                background:green;
+                width:12px;
+                height:12px;
+                display:inline-block;
+                border-radius:50%;
+            "></span>
+            Beaucoup<br>
+
+            <span style="
+                background:orange;
+                width:12px;
+                height:12px;
+                display:inline-block;
+                border-radius:50%;
+            "></span>
+            Quelques-uns<br>
+
+            <span style="
+                background:red;
+                width:12px;
+                height:12px;
+                display:inline-block;
+                border-radius:50%;
+            "></span>
+            Aucun
+        `;
+
+        return div;
+    };
+
+    legend.addTo(map);
+
 
 }
