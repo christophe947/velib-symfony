@@ -18,30 +18,28 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
+    searchInput.focus();
+
+searchInput.setSelectionRange(
+    searchInput.value.length,
+    searchInput.value.length
+);
+
+    let timer = null;
+
     searchInput.addEventListener('input', () => {
 
-    const search = searchInput.value.toLowerCase();
+        clearTimeout(timer);
 
-    document
-        .querySelectorAll('.station-card')
-        .forEach(card => {
+        timer = setTimeout(() => {
 
-            const stationName =
-                card.dataset.stationName || '';
+            const search = searchInput.value.trim();
 
-            const stationAddress =
-                card.dataset.stationAddress || '';
+            window.location.href =
+                `/stations?search=${encodeURIComponent(search)}`;
 
-            const match =
-                stationName.includes(search)
-                ||
-                stationAddress.includes(search);
+        }, 800);
 
-            card.style.display =
-                match ? '' : 'none';
-        });
+    });
+
 });
-});
-
-
-//console.log('This log comes from assets/app.js - welcome to AssetMapper! 🎉');

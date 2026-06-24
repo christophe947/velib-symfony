@@ -20,6 +20,29 @@ class StationController extends AbstractController
 
         $stations = $velibApiService->getStations();
 
+        $search = $request->query->get('search', '');
+
+        if ($search) {
+
+    $stations = array_filter($stations, function ($station) use ($search) {
+
+        return str_contains(
+            strtolower($station['name']),
+            strtolower($search)
+        )
+        ||
+        str_contains(
+            strtolower($station['address'] ?? ''),
+            strtolower($search)
+        );
+
+    });
+
+    $stations = array_values($stations);
+}
+
+        
+
 
         usort($stations, function ($a, $b) {
             return strcmp(
@@ -37,7 +60,6 @@ class StationController extends AbstractController
 
         $totalPages = ceil($totalStations / $limit);
 
-
         $stations = array_slice(
             $stations,
             ($page - 1) * $limit,
@@ -49,7 +71,8 @@ class StationController extends AbstractController
             'stations' => $stations,
             'selectedStation' => $selectedStation,
             'currentPage' => $page,
-            'totalPages' => $totalPages
+            'totalPages' => $totalPages,
+            'search' => $search
         ]);
     }
 }
