@@ -20,6 +20,7 @@ class StationController extends AbstractController
 
         $stations = $velibApiService->getStations();
 
+
         usort($stations, function ($a, $b) {
             return strcmp(
                 strtolower($a['name']),
@@ -27,9 +28,28 @@ class StationController extends AbstractController
             );
         });
 
+
+        $page = max(1, $request->query->getInt('page', 1));
+
+        $limit = 20;
+
+        $totalStations = count($stations);
+
+        $totalPages = ceil($totalStations / $limit);
+
+
+        $stations = array_slice(
+            $stations,
+            ($page - 1) * $limit,
+            $limit
+        );
+
+
         return $this->render('station/index.html.twig', [
             'stations' => $stations,
-            'selectedStation' => $selectedStation
+            'selectedStation' => $selectedStation,
+            'currentPage' => $page,
+            'totalPages' => $totalPages
         ]);
     }
 }

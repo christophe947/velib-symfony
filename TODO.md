@@ -47,7 +47,10 @@ v0.3.0 - Carte + UX en cours
 - [ ] Panneau informations station
 - [ ] Synchronisation liste ↔ carte
 - [ ] Responsive mobile
-
+### Pagination UX
+- [ ] Ajouter pagination avancée
+      Exemple : ‹ 1 ... 35 ... 70 ›
+- [ ] Ajouter précédent / suivant avec texte
 ---
 
 ## 🚀 Après V1

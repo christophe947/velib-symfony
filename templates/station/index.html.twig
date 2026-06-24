@@ -90,9 +90,45 @@
 
             </div>
 
+            
+
         {% endfor %}
 
     </div>
+
+    <nav>
+
+<ul class="pagination justify-content-center">
+
+    {% if currentPage > 1 %}
+        <li class="page-item">
+            <a class="page-link"
+               href="{{ path('app_stations', {page: currentPage - 1}) }}">
+                ‹
+            </a>
+        </li>
+    {% endif %}
+
+
+    <li class="page-item active">
+        <span class="page-link">
+            {{ currentPage }}
+        </span>
+    </li>
+
+
+    {% if currentPage < totalPages %}
+        <li class="page-item">
+            <a class="page-link"
+               href="{{ path('app_stations', {page: currentPage + 1}) }}">
+                ›
+            </a>
+        </li>
+    {% endif %}
+
+</ul>
+
+</nav>
 
 </div>
 
