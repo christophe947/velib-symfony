@@ -32,23 +32,17 @@
 
             <ul class="navbar-nav ms-auto gap-2">
 
-                <li class="nav-item">
-                    <a class="nav-link active" href="{{ path('app_home') }}">
-                        Accueil
-                    </a>
-                </li>
+                <a class="nav-link {% if app.request.attributes.get('_route') == 'app_home' %}active{% endif %}" href="{{ path('app_home') }}">
+                    Accueil
+                </a>
 
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ path('app_stations') }}">
-                        Stations
-                    </a>
-                </li>
+                <a class="nav-link {% if app.request.attributes.get('_route') == 'app_stations' %}active{% endif %}" href="{{ path('app_stations') }}">
+                    Stations
+                </a>
 
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ path('app_map') }}">
-                        Carte
-                    </a>
-                </li>
+                <a class="nav-link {% if app.request.attributes.get('_route') == 'app_map' %}active{% endif %}" href="{{ path('app_map') }}">
+                    Carte
+                </a>
 
             </ul>
 
