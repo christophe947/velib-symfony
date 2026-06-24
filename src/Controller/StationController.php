@@ -11,21 +11,12 @@ use Symfony\Component\HttpFoundation\Request;
 class StationController extends AbstractController
 {
     #[Route('/stations', name: 'app_stations')]
-    /*public function index(VelibApiService $velibApiService): Response
-    {
-        return $this->render('station/index.html.twig', [
-            'stations' => $velibApiService->getStations(),
-        ]);
-    }*/
     public function index(Request $request, VelibApiService $velibApiService): Response
     {
-        $selectedStation = $request->query->get('station');
-
         $stations = $velibApiService->getStations();
 
         return $this->render('station/index.html.twig', [
-            'stations' => $stations,
-            'selectedStation' => $selectedStation
+            'stations' => $stations
         ]);
     }
     

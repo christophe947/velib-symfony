@@ -41,6 +41,17 @@ v0.2.0 - Leaflet en cours
 - [ ] Distance utilisateur
 - [ ] Rafraîchissement automatique
 - [ ] Statistiques
+### UX Carte
+- [ ] Carte plein écran
+- [ ] Panneau informations station
+- [ ] Meilleur responsive mobile
+## Amélioration future
+- [ ] Carte plein écran
+- [ ] Panneau informations station
+- [ ] Reverse geocoding adresse
+### Amélioration données stations
+- [ ] Ajouter adresse via reverse geocoding (lat/long → adresse)
+- [ ] Mettre en cache les résultats pour éviter trop d'appels API
 
 ## Notes
 

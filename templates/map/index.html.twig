@@ -1,0 +1,18 @@
+{% extends 'base.html.twig' %}
+
+{% block body %}
+
+<div class="container mt-4">
+
+    <h1>🗺️ Carte Vélib</h1>
+
+    <div id="map" style="height:500px;" class="mb-4"></div>
+
+    <script>
+        window.stations = {{ stations|json_encode|raw }};
+        const selectedStation = {{ selectedStation|json_encode|raw }};
+    </script>
+
+</div>
+
+{% endblock %}
