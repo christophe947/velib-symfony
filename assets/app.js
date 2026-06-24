@@ -20,21 +20,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
     searchInput.addEventListener('input', () => {
 
-        const search = searchInput.value.toLowerCase();
+    const search = searchInput.value.toLowerCase();
 
-        document
-            .querySelectorAll('.station-card')
-            .forEach(card => {
+    document
+        .querySelectorAll('.station-card')
+        .forEach(card => {
 
-                const stationName =
-                    card.dataset.stationName;
+            const stationName =
+                card.dataset.stationName || '';
 
-                card.style.display =
-                    stationName.includes(search)
-                        ? ''
-                        : 'none';
-            });
-    });
+            const stationAddress =
+                card.dataset.stationAddress || '';
+
+            const match =
+                stationName.includes(search)
+                ||
+                stationAddress.includes(search);
+
+            card.style.display =
+                match ? '' : 'none';
+        });
+});
 });
 
 

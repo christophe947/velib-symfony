@@ -1,7 +1,9 @@
 # 🚲 Vélib Symfony
 
 ## Version actuelle
-v0.2.0 - Leaflet en cours
+v0.3.0 - Carte + UX en cours
+
+---
 
 ## ✅ Fait
 
@@ -14,44 +16,58 @@ v0.2.0 - Leaflet en cours
 - [x] Liste des stations
 - [x] Cards Bootstrap
 - [x] Recherche instantanée
+- [x] Recherche par nom
+- [x] Recherche par adresse (si disponible)
 - [x] Statut disponibilité vélo
 - [x] Statut retour borne
 - [x] Carte Leaflet affichée
-- [x] Marqueurs stations
+- [x] Page carte séparée
+- [x] Marqueurs personnalisés
+- [x] Couleurs marqueurs selon disponibilité
 - [x] Popups stations
-- [x] Affichage de toutes les stations
+- [x] Légende carte
+- [x] Navigation active selon la page
+- [x] Page accueil UX
 
-## 🔜 En cours (feature/leaflet-map)
+---
 
-- [ ] Corriger / personnaliser les icônes marqueurs
-- [ ] Améliorer les popups
-- [ ] Couleurs marqueurs selon disponibilité
+## 🔜 En cours
+
+### Recherche stations
+- [ ] Tri alphabétique
+- [ ] Pagination des stations
+- [ ] Filtres avancés
+
+### Données stations
+- [ ] Reverse geocoding (lat/long → adresse)
+- [ ] Cache des adresses
+
+### Carte UX
+- [ ] Carte plein écran
+- [ ] Panneau informations station
 - [ ] Synchronisation liste ↔ carte
+- [ ] Responsive mobile
+
+---
 
 ## 🚀 Après V1
 
-- [ ] Finition UI
 - [ ] Docker
 - [ ] Déploiement
+- [ ] PWA mobile
+
+---
 
 ## V2
 
-- [ ] Favoris
+- [ ] Comptes utilisateurs
+- [ ] Favoris stations
 - [ ] Géolocalisation
 - [ ] Distance utilisateur
 - [ ] Rafraîchissement automatique
 - [ ] Statistiques
-### UX Carte
-- [ ] Carte plein écran
-- [ ] Panneau informations station
-- [ ] Meilleur responsive mobile
-## Amélioration future
-- [ ] Carte plein écran
-- [ ] Panneau informations station
-- [ ] Reverse geocoding adresse
-### Amélioration données stations
-- [ ] Ajouter adresse via reverse geocoding (lat/long → adresse)
-- [ ] Mettre en cache les résultats pour éviter trop d'appels API
+
+---
 
 ## Notes
 
