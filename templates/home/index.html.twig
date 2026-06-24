@@ -5,8 +5,113 @@
 {% block body %}
 
 <div class="container mt-5">
-    <h1>🚲 Velib Tracker</h1>
-    <p>Application Symfony 8.1</p>
+
+    <div class="text-center">
+
+        <h1 class="display-3 fw-bold">
+            🚲 Velib Tracker
+        </h1>
+
+        <p class="lead mt-3">
+            Consultez les disponibilités Vélib en temps réel à Paris.
+        </p>
+
+        <div class="mt-4">
+
+            <a href="{{ path('app_stations') }}"
+               class="btn btn-primary btn-lg me-2">
+                🚲 Voir les stations
+            </a>
+
+            <a href="{{ path('app_map') }}"
+               class="btn btn-outline-dark btn-lg">
+                🗺️ Ouvrir la carte
+            </a>
+
+        </div>
+
+    </div>
+
+
+    <div class="row mt-5 text-center">
+
+
+        <div class="col-md-4 mb-3">
+
+            <div class="card shadow h-100">
+
+                <div class="card-body">
+
+                    <h2>🚲</h2>
+
+                    <h5>
+                        Disponibilité en direct
+                    </h5>
+
+                    <p>
+                        Visualisez les vélos disponibles
+                        et les places libres.
+                    </p>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+
+        <div class="col-md-4 mb-3">
+
+            <div class="card shadow h-100">
+
+                <div class="card-body">
+
+                    <h2>🗺️</h2>
+
+                    <h5>
+                        Carte interactive
+                    </h5>
+
+                    <p>
+                        Trouvez rapidement une station
+                        autour de vous.
+                    </p>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+
+        <div class="col-md-4 mb-3">
+
+            <div class="card shadow h-100">
+
+                <div class="card-body">
+
+                    <h2>⚡</h2>
+
+                    <h5>
+                        Données actualisées
+                    </h5>
+
+                    <p>
+                        Informations récupérées
+                        depuis l’API Vélib.
+                    </p>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+    </div>
+
 </div>
 
 {% endblock %}
