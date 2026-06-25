@@ -11,10 +11,7 @@ use Symfony\Component\HttpFoundation\Request;
 class StationController extends AbstractController
 {
     #[Route('/stations', name: 'app_stations')]
-    public function index(
-        Request $request,
-        VelibApiService $velibApiService
-    ): Response
+    public function index(Request $request, VelibApiService $velibApiService): Response
     {
         $selectedStation = $request->query->get('station');
 
@@ -24,25 +21,22 @@ class StationController extends AbstractController
 
         if ($search) {
 
-    $stations = array_filter($stations, function ($station) use ($search) {
+            $stations = array_filter($stations, function ($station) use ($search) {
 
-        return str_contains(
-            strtolower($station['name']),
-            strtolower($search)
-        )
-        ||
-        str_contains(
-            strtolower($station['address'] ?? ''),
-            strtolower($search)
-        );
+                return str_contains(
+                    strtolower($station['name']),
+                    strtolower($search)
+                )
+                ||
+                str_contains(
+                    strtolower($station['address'] ?? ''),
+                    strtolower($search)
+                );
 
-    });
+            });
 
-    $stations = array_values($stations);
-}
-
-        
-
+            $stations = array_values($stations);
+        }
 
         usort($stations, function ($a, $b) {
             return strcmp(

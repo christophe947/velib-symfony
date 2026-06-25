@@ -104,12 +104,17 @@ if (mapElement) {
 
     });
 
-    if (!selectedStation && bounds.length > 0) {
-        map.fitBounds(bounds, {
-            padding: [50, 50],
-            maxZoom: 14
-        });
-    }
+    if (!selectedStation) {
+
+    map.setView(
+        [
+            48.8566,
+            2.3522
+        ],
+        13
+    );
+
+}
 
     const legend = L.control({ position: 'bottomright' });
 

@@ -8,6 +8,13 @@
     min-width: 160px;
 }
 
+.map-container {
+    height: 75vh;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+}
+
 /*body {
     background-color: skyblue;
 }*/
