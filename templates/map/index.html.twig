@@ -4,13 +4,30 @@
 
 <div class="container-fluid mt-3">
 
-    
     <div class="mb-3">
-    <h1 class="h3 mb-1">🗺️ Carte des stations</h1>
-    <p class="text-muted mb-0">
-        Trouvez rapidement un vélo disponible près de vous
-    </p>
-</div>
+        <h1 class="h3 mb-1">🗺️ Carte des stations</h1>
+
+        <p class="text-muted mb-0">
+            Trouvez rapidement un vélo disponible près de vous
+        </p>
+    </div>
+
+    <div class="d-flex justify-content-center mb-3">
+
+        <div class="btn-group" role="group">
+            <button 
+                id="mode-bikes"
+                class="btn btn-primary active">
+                🚲 Prendre
+            </button>
+
+            <button 
+                id="mode-docks"
+                class="btn btn-outline-primary">
+                🅿️ Rendre
+            </button>
+        </div>
+    </div>
 
     <div id="map" class="map-container"></div>
 

@@ -1,16 +1,40 @@
 import L from 'leaflet';
 
-function getMarkerColor(bikes) {
+let displayMode =
+    localStorage.getItem('mapMode') || 'bikes';
 
-    if (bikes >= 10) {
+let bikesButton;
+let docksButton;
+let mapElement;
+
+    
+
+function getLegendTitle() {
+
+    return displayMode === 'bikes'
+        ? 'Disponibilité vélos'
+        : 'Places disponibles';
+
+}
+
+function getMarkerColor(value) {
+
+    if (value >= 10) {
         return 'green';
     }
 
-    if (bikes > 0) {
+    if (value > 0) {
         return 'orange';
     }
 
     return 'red';
+}
+
+function getModeLabel() {
+
+    return displayMode === 'bikes'
+        ? 'vélos disponibles'
+        : 'places libres';
 }
 
 function createIcon(color) {
@@ -43,45 +67,86 @@ L.Icon.Default.mergeOptions({
     shadowUrl: '/images/marker-shadow.png',
 });
 
-const mapElement = document.getElementById('map');
+function updateModeButtons() {
 
+    if (!bikesButton || !docksButton) {
+        return;
+    }
 
-if (mapElement) {
+    if (displayMode === 'bikes') {
 
-    const map = L.map('map');
-    
-    L.tileLayer(
-        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        {
-            attribution: '© OpenStreetMap'
-        }
-    ).addTo(map);
+        bikesButton.className =
+            'btn btn-primary active';
 
-    const bounds = [];
+        docksButton.className =
+            'btn btn-outline-primary';
 
-    stations.forEach(station => {
+    } else {
 
-        bounds.push([
-            station.latitude,
-            station.longitude
-    ]);
+        docksButton.className =
+            'btn btn-primary active';
 
-        const color = getMarkerColor(
-            station.bikes
-        );
+        bikesButton.className =
+            'btn btn-outline-primary';
+
+    }
+
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+
+    mapElement = document.getElementById('map');
+
+    bikesButton = document.getElementById('mode-bikes');
+    docksButton = document.getElementById('mode-docks');
+
+    updateModeButtons();
+
+    bikesButton?.addEventListener('click', () => {
+        localStorage.setItem('mapMode', 'bikes');
+        location.reload();
+    });
+
+    docksButton?.addEventListener('click', () => {
+        localStorage.setItem('mapMode', 'docks');
+        location.reload();
+    });
+
+    if (mapElement) {
+
+        const map = L.map('map');
+        
+        L.tileLayer(
+            'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+            {
+                attribution: '© OpenStreetMap'
+            }
+        ).addTo(map);
+
+        const bounds = [];
+
+        stations.forEach(station => {
+            bounds.push([
+                station.latitude,
+                station.longitude
+            ]);
+
+        const value =
+            displayMode === 'bikes'
+                ? station.bikes
+                :station.docks;
 
         const marker = L.marker(
-        [
-            station.latitude,
-            station.longitude
-        ],
-        {
-            icon: createIcon(
-                getMarkerColor(station.bikes)
-            )
-        }
-    )
-        
+            [
+                station.latitude,
+                station.longitude
+            ],
+            {
+                icon: createIcon(
+                    getMarkerColor(value)
+                )
+            }
+        )
         .addTo(map)
         .bindPopup(`
             <strong>${station.name}</strong><br>
@@ -90,31 +155,26 @@ if (mapElement) {
         `);
 
         if (selectedStation == station.id) {
-
-        map.setView(
-            [
-                station.latitude,
-                station.longitude
-            ],
-            16
-        );
-
-        marker.openPopup();
-    }
-
+            map.setView(
+                [
+                    station.latitude,
+                    station.longitude
+                ],
+                16
+            );
+            marker.openPopup();
+        }
     });
 
     if (!selectedStation) {
-
-    map.setView(
-        [
-            48.8566,
-            2.3522
-        ],
-        13
-    );
-
-}
+        map.setView(
+            [
+                48.8566,
+                2.3522
+            ],
+            13
+        );
+    }
 
     const legend = L.control({ position: 'bottomright' });
 
@@ -123,7 +183,7 @@ if (mapElement) {
         const div = L.DomUtil.create('div', 'map-legend');
 
         div.innerHTML = `
-            <strong>Disponibilité vélos</strong><br>
+            <strong>${getLegendTitle()}</strong><br>
             <span style="
                 background:green;
                 width:12px;
@@ -131,7 +191,7 @@ if (mapElement) {
                 display:inline-block;
                 border-radius:50%;
             "></span>
-            10 vélos ou plus<br>
+            10 ${getModeLabel()} ou plus<br>
 
             <span style="
                 background:orange;
@@ -140,7 +200,7 @@ if (mapElement) {
                 display:inline-block;
                 border-radius:50%;
             "></span>
-            1 à 9 vélos<br>
+            1 à 9 ${getModeLabel()}<br>
 
             <span style="
                 background:red;
@@ -149,7 +209,7 @@ if (mapElement) {
                 display:inline-block;
                 border-radius:50%;
             "></span>
-            Aucun vélo
+            Pas de ${getModeLabel()}
         `;
 
         return div;
@@ -157,5 +217,8 @@ if (mapElement) {
 
     legend.addTo(map);
 
+    }
+});
 
-}
+
+
