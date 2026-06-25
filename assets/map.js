@@ -78,11 +78,13 @@ function createIcon(color) {
 
 function updateLegend() {
 
-    if (!legend) return;
-
-    legend.remove();
+    if (legend) {
+        legend.remove();
+    }
 
     legend = L.control({ position: 'bottomright' });
+
+    
 
     legend.onAdd = function () {
 
@@ -322,47 +324,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             markersLayer = L.layerGroup().addTo(map);
 
-            legend = L.control({ position: 'bottomright' });
+            
 
-            legend.onAdd = function () {
-
-                const div = L.DomUtil.create('div', 'map-legend');
-
-                div.innerHTML = `
-                    <strong>${getLegendTitle()}</strong><br>
-
-                    <span style="
-                        background:green;
-                        width:12px;
-                        height:12px;
-                        display:inline-block;
-                        border-radius:50%;
-                    "></span>
-                    10 ${getModeLabel()} ou plus<br>
-
-                    <span style="
-                        background:orange;
-                        width:12px;
-                        height:12px;
-                        display:inline-block;
-                        border-radius:50%;
-                    "></span>
-                    1 à 9 ${getModeLabel()}<br>
-
-                    <span style="
-                        background:red;
-                        width:12px;
-                        height:12px;
-                        display:inline-block;
-                        border-radius:50%;
-                    "></span>
-                    Pas de ${getModeLabel()}
-                `;
-
-                return div;
-            };
-
-            legend.addTo(map);
+            
         }
 
         
