@@ -18,12 +18,19 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
+
+    if (document.getElementById('map')) {
+        return;
+    }
+
+
     searchInput.focus();
 
-searchInput.setSelectionRange(
-    searchInput.value.length,
-    searchInput.value.length
-);
+    searchInput.setSelectionRange(
+        searchInput.value.length,
+        searchInput.value.length
+    );
+
 
     let timer = null;
 

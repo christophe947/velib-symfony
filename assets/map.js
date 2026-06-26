@@ -6,33 +6,24 @@ let displayMode =
 let bikesButton;
 let docksButton;
 let mapElement;
-
 let map;
 let markersLayer;
 let legend;
-
-//let currentPopup = openedStation;
-
 let openedStation = null;
-
-
-
-
 let fromCard = false;
 
 if (typeof selectedStation !== 'undefined' && selectedStation !== null) {
     fromCard = true;
 }
 
-    
 
 function getLegendTitle() {
 
     return displayMode === 'bikes'
         ? 'Disponibilité vélos'
         : 'Places disponibles';
-
 }
+
 
 function getMarkerColor(value) {
 
@@ -53,6 +44,7 @@ function getModeLabel() {
         ? 'vélos disponibles'
         : 'places disponibles';
 }
+
 
 function createIcon(color) {
 
@@ -76,6 +68,7 @@ function createIcon(color) {
     });
 }
 
+
 function updateLegend() {
 
     if (legend) {
@@ -83,8 +76,6 @@ function updateLegend() {
     }
 
     legend = L.control({ position: 'bottomright' });
-
-    
 
     legend.onAdd = function () {
 
@@ -138,6 +129,7 @@ L.Icon.Default.mergeOptions({
     shadowUrl: '/images/marker-shadow.png',
 });
 
+
 function updateModeButtons() {
 
     if (!bikesButton || !docksButton) {
@@ -161,12 +153,114 @@ function updateModeButtons() {
             'btn btn-outline-primary';
 
     }
-
 }
 
-function renderMarkers() {
 
-    if (!markersLayer || !stations) {
+function updateStationPanel(station) {
+
+    const panel =
+        document.getElementById('station-panel');
+
+    if (!panel) {
+        return;
+    }
+
+    panel.innerHTML = `
+        <div class="station-info">
+
+            <h4>${station.name}</h4>
+
+            <hr>
+
+            <p>
+                🚲 <strong>${station.bikes}</strong>
+                vélos disponibles
+            </p>
+
+            <p>
+                🅿️ <strong>${station.docks}</strong>
+                places libres
+            </p>
+
+        </div>
+
+    `;
+}
+
+
+function showStationList(list = stations) {
+
+    const container =
+        document.getElementById('station-results');
+
+    if (!container) {
+        return;
+    }
+
+    container.innerHTML = list.slice(0,20).map(station => `
+
+        <div 
+            class="mb-3 station-item"
+            data-id="${station.id}"
+            style="cursor:pointer">
+
+            <strong>
+                ${station.name}
+            </strong>
+
+            <br>
+
+            🚲 ${station.bikes}
+            🅿️ ${station.docks}
+
+        </div>
+
+        `)
+        .join('');
+
+        container.querySelectorAll('.station-item').forEach(item => {
+
+            item.addEventListener('pointerdown', () => {
+
+                const station = stations.find(
+                    s => s.id == item.dataset.id
+                );
+
+                if (!station) return;
+
+                openedStation = station.id;
+
+                // cache la liste
+                container.innerHTML = "";
+
+                // reset la recherche
+                const searchInput = document.getElementById('station-search');
+
+                if (searchInput) {
+                    searchInput.value = "";
+                }
+
+                updateStationPanel(station);
+
+                map.setView(
+                    [
+                        station.latitude,
+                        station.longitude
+                    ],
+                    16
+                );
+
+                renderMarkers();
+
+            });
+
+        });
+}
+   
+    
+function renderMarkers(data = stations) {
+
+    if (!markersLayer || !data) {
         return;
     }
 
@@ -174,75 +268,84 @@ function renderMarkers() {
 
     markersLayer.clearLayers();
 
-    stations.forEach(station => {
+    data.forEach(station => {
 
-                const value =
-                    displayMode === 'bikes'
-                        ? station.bikes
-                        : station.docks;
+        const value =
+            displayMode === 'bikes'
+                ? station.bikes
+                : station.docks;
 
-
-                const marker = L.marker(
-                    [
-                        station.latitude,
-                        station.longitude
-                    ],
-                    {
-                        icon: createIcon(
-                            getMarkerColor(value)
-                        )
-                    }
-                )
-                .bindPopup(`
-                    <strong>${station.name}</strong><br>
-                    🚲 ${station.bikes} vélos<br>
-                    🅿️ ${station.docks} places
-                `);
-
-                markersLayer.addLayer(marker);
-
-                marker.on('click', () => {
-
-    openedStation = station.id;
-
-    if (typeof selectedStation !== 'undefined') {
-        selectedStation = null;
-    }
-
-    fromCard = false;
-
-});
-
-
-       if (
-    currentPopup == station.id ||
-    (
-        fromCard &&
-        selectedStation == station.id
-    )
-
-) {
-
-    if (fromCard) {
-
-        map.setView(
+        const marker = L.marker(
             [
                 station.latitude,
                 station.longitude
             ],
-            16
-        );
+            {
+                icon: createIcon(
+                    getMarkerColor(value)
+                )
+            }
+        )
+        .bindPopup(`
+            <strong>${station.name}</strong><br>
+            🚲 ${station.bikes} vélos<br>
+            🅿️ ${station.docks} places
+        `);
 
-        openedStation = station.id;
-        fromCard = false;
-    }
+        markersLayer.addLayer(marker);
 
-    marker.openPopup();
-}
+        marker.on('click', () => {
+
+            openedStation = station.id;
+            updateStationPanel(station);
+
+            if (typeof selectedStation !== 'undefined') {
+                selectedStation = null;
+            }
+
+            fromCard = false;
+
+        });
+
+
+        if (
+            currentPopup == station.id ||
+        (
+            fromCard &&
+            selectedStation == station.id
+        )
+
+        ) {
+
+        if (fromCard) {
+
+            map.setView(
+                [
+                    station.latitude,
+                    station.longitude
+                ],
+                16
+            );
+            updateStationPanel(station);
+            openedStation = station.id;
+            fromCard = false;
+        }
+
+        marker.openPopup();
+        }
     });
 } 
 
 document.addEventListener('DOMContentLoaded', () => {
+
+    const searchForm = document.getElementById('station-search-form');
+
+    if (searchForm) {
+        searchForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            return false;
+        });
+    }
 
     mapElement = document.getElementById('map');
 
@@ -260,17 +363,13 @@ document.addEventListener('DOMContentLoaded', () => {
         'bikes'
     );
 
-    //fromCard = false;
-    
-
     updateModeButtons();
     renderMarkers();
     updateLegend();
-
 });
 
 
-    docksButton?.addEventListener('click', () => {
+docksButton?.addEventListener('click', () => {
 
     displayMode = 'docks';
 
@@ -278,67 +377,81 @@ document.addEventListener('DOMContentLoaded', () => {
         'mapMode',
         'docks'
     );
-
-    //fromCard = false;
     
     updateModeButtons();
     renderMarkers();
     updateLegend();
 
 });
-    
-
-    
 
 
+const searchInput = document.getElementById('station-search');
 
-    
+searchInput?.addEventListener('blur', () => {
 
-    if (mapElement) {
+    setTimeout(() => {
+        document
+        .getElementById('station-results')
+        .innerHTML = "";
 
-        function initMap() {
+    }, 200);
 
-            
-           if (map) {
-        return;
+});
+
+searchInput?.addEventListener('keydown', (e) => {
+
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
     }
 
-    map = L.map('map');
-
-    L.tileLayer(
-        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        {
-            attribution: '© OpenStreetMap'
-        }
-    ).addTo(map);
+});
 
 
-    map.setView(
-        [48.8566, 2.3522],
-        13
+searchInput?.addEventListener('input', () => {
+
+    const value = searchInput.value.toLowerCase();
+
+    const filtered = stations.filter(station =>
+        station.name.toLowerCase().includes(value)
     );
 
-            
+    showStationList(filtered);
 
-            
+    renderMarkers(filtered);
 
-            markersLayer = L.layerGroup().addTo(map);
+});
+    
 
-            
+if (mapElement) {
 
+    function initMap() {
             
+        if (map) {
+            return;
         }
 
-        
+        map = L.map('map');
 
+        L.tileLayer(
+            'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+            {
+                attribution: '© OpenStreetMap'
+            }
+        ).addTo(map);
 
-        initMap();
-        renderMarkers();
-        updateLegend();
+        map.setView(
+            [48.8566, 2.3522],
+            13
+        );
+
+        markersLayer = L.layerGroup().addTo(map);   
+    }
+    initMap();
+    renderMarkers();
+    updateLegend();
             
-    };
-
-
+};
     
 });
     
