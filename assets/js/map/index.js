@@ -1,6 +1,8 @@
 import L from 'leaflet';
 import { updateStationPanel } from './stationPanel.js';
 import { updateLegend } from './legend.js';
+//import { renderMarkers } from './markers.js';
+import { renderMarkers, setOpenedStation } from './markers.js';
 
 let displayMode =
     localStorage.getItem('mapMode') || 'bikes';
@@ -10,13 +12,34 @@ let docksButton;
 let mapElement;
 let map;
 let markersLayer;
-let openedStation = null;
+//let openedStation = null;
 let fromCard = false;
+let savedMapView = null;
+let isSearching = false;
 
 if (typeof selectedStation !== 'undefined' && selectedStation !== null) {
     fromCard = true;
 }
 
+function fitStationsBounds(list) {
+
+    if (!list.length) return;
+
+
+    const bounds = L.latLngBounds(
+        list.map(station => [
+            station.latitude,
+            station.longitude
+        ])
+    );
+
+
+    map.fitBounds(bounds, {
+        padding:[50,50]
+    });
+
+}
+/*
 function getMarkerColor(value) {
 
     if (value >= 10) {
@@ -52,7 +75,7 @@ function createIcon(color) {
 
     });
 }
-
+*/
 
 function updateModeButtons() {
 
@@ -114,42 +137,48 @@ function showStationList(list = stations) {
 
             item.addEventListener('pointerdown', () => {
 
-                const station = stations.find(
-                    s => s.id == item.dataset.id
-                );
+    const station = stations.find(
+        s => s.id == item.dataset.id
+    );
 
-                if (!station) return;
+    if (!station) return;
 
-                openedStation = station.id;
 
-                // cache la liste
-                container.innerHTML = "";
+   setOpenedStation(station.id);
 
-                // reset la recherche
-                const searchInput = document.getElementById('station-search');
+container.innerHTML = "";
 
-                if (searchInput) {
-                    searchInput.value = "";
-                }
+const searchInput = document.getElementById('station-search');
 
-                updateStationPanel(station);
+if (searchInput) {
+    searchInput.value = "";
+}
 
-                map.setView(
-                    [
-                        station.latitude,
-                        station.longitude
-                    ],
-                    16
-                );
+renderMarkers(
+    map,
+    markersLayer,
+    stations,
+    displayMode,
+    updateStationPanel
+);
 
-                renderMarkers();
+map.setView(
+    [
+        station.latitude,
+        station.longitude
+    ],
+    16
+);
 
-            });
+updateStationPanel(station);
+
+});
+   
 
         });
 }
    
-    
+/** 
 function renderMarkers(data = stations) {
 
     if (!markersLayer || !data) {
@@ -227,7 +256,7 @@ function renderMarkers(data = stations) {
         }
     });
 } 
-
+*/
 document.addEventListener('DOMContentLoaded', () => {
 
     const searchForm = document.getElementById('station-search-form');
@@ -251,7 +280,14 @@ document.addEventListener('DOMContentLoaded', () => {
     displayMode = 'bikes';
 
     updateModeButtons();
-    renderMarkers();
+    renderMarkers(
+        map,
+        markersLayer,
+        stations,
+        displayMode,
+        updateStationPanel,
+        false
+    );
     updateLegend(map, displayMode);
 });
 
@@ -261,7 +297,14 @@ docksButton?.addEventListener('click', () => {
     displayMode = 'docks';
     
     updateModeButtons();
-    renderMarkers();
+    renderMarkers(
+        map,
+        markersLayer,
+        stations,
+        displayMode,
+        updateStationPanel,
+        false
+    );
     updateLegend(map, displayMode);
 
 });
@@ -288,8 +331,107 @@ searchInput?.addEventListener('keydown', (e) => {
     }
 
 });
+searchInput?.addEventListener('input', () => {
+
+    const value = searchInput.value.toLowerCase();
 
 
+    if (value && !isSearching) {
+
+        savedMapView = {
+            center: map.getCenter(),
+            zoom: map.getZoom()
+        };
+
+        isSearching = true;
+    }
+
+
+    const filtered = stations.filter(station =>
+        station.name.toLowerCase().includes(value)
+    );
+
+
+    showStationList(filtered);
+
+
+    renderMarkers(
+        map,
+        markersLayer,
+        filtered,
+        displayMode,
+        updateStationPanel,
+        false
+    );
+
+
+    if (value && filtered.length) {
+
+        fitStationsBounds(filtered);
+
+    }
+
+
+    if (!value && isSearching) {
+
+        isSearching = false;
+
+
+        renderMarkers(
+            map,
+            markersLayer,
+            stations,
+            displayMode,
+            updateStationPanel,
+            false
+        );
+
+
+        if (savedMapView) {
+
+            map.setView(
+                savedMapView.center,
+                savedMapView.zoom
+            );
+
+        }
+
+    }
+
+});
+/*
+searchInput?.addEventListener('input', () => {
+
+    const value = searchInput.value.toLowerCase();
+
+
+    const filtered = stations.filter(station =>
+        station.name.toLowerCase().includes(value)
+    );
+
+
+    showStationList(filtered);
+
+
+    renderMarkers(
+        map,
+        markersLayer,
+        filtered,
+        displayMode,
+        updateStationPanel,
+        false
+    );
+
+
+    if (value && filtered.length) {
+
+        fitStationsBounds(filtered);
+
+    }
+
+});
+*/
+/*
 searchInput?.addEventListener('input', () => {
 
     const value = searchInput.value.toLowerCase();
@@ -300,10 +442,17 @@ searchInput?.addEventListener('input', () => {
 
     showStationList(filtered);
 
-    renderMarkers(filtered);
+    renderMarkers(
+        map,
+        markersLayer,
+        filtered,
+        displayMode,
+        updateStationPanel,
+        true
+    );
 
 });
-    
+  */  
 
 if (mapElement) {
 
@@ -330,7 +479,34 @@ if (mapElement) {
         markersLayer = L.layerGroup().addTo(map);   
     }
     initMap();
-    renderMarkers();
+    map.on('moveend', () => {
+
+    if (!isSearching) {
+
+        savedMapView = {
+            center: map.getCenter(),
+            zoom: map.getZoom()
+        };
+
+    }
+
+});
+
+    if (fromCard) {
+
+    setOpenedStation(
+        selectedStation.id ?? selectedStation
+    );
+
+}
+    renderMarkers(
+        map,
+        markersLayer,
+        stations,
+        displayMode,
+        updateStationPanel,
+        true
+    );
     updateLegend(map, displayMode);
             
 };
