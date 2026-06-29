@@ -1,5 +1,6 @@
 import L from 'leaflet';
 import { updateStationPanel } from './stationPanel.js';
+import { updateLegend } from './legend.js';
 
 let displayMode =
     localStorage.getItem('mapMode') || 'bikes';
@@ -9,22 +10,12 @@ let docksButton;
 let mapElement;
 let map;
 let markersLayer;
-let legend;
 let openedStation = null;
 let fromCard = false;
 
 if (typeof selectedStation !== 'undefined' && selectedStation !== null) {
     fromCard = true;
 }
-
-
-function getLegendTitle() {
-
-    return displayMode === 'bikes'
-        ? 'Disponibilité vélos'
-        : 'Places disponibles';
-}
-
 
 function getMarkerColor(value) {
 
@@ -37,13 +28,6 @@ function getMarkerColor(value) {
     }
 
     return 'red';
-}
-
-function getModeLabel() {
-
-    return displayMode === 'bikes'
-        ? 'vélos disponibles'
-        : 'places disponibles';
 }
 
 
@@ -68,67 +52,6 @@ function createIcon(color) {
 
     });
 }
-
-
-function updateLegend() {
-
-    if (legend) {
-        legend.remove();
-    }
-
-    legend = L.control({ position: 'bottomright' });
-
-    legend.onAdd = function () {
-
-        const div = L.DomUtil.create(
-            'div',
-            'map-legend'
-        );
-
-        div.innerHTML = `
-            <strong>${getLegendTitle()}</strong><br>
-
-            <span style="
-                background:green;
-                width:12px;
-                height:12px;
-                display:inline-block;
-                border-radius:50%;
-            "></span>
-            10 ${getModeLabel()} ou plus<br>
-
-            <span style="
-                background:orange;
-                width:12px;
-                height:12px;
-                display:inline-block;
-                border-radius:50%;
-            "></span>
-            1 à 9 ${getModeLabel()}<br>
-
-            <span style="
-                background:red;
-                width:12px;
-                height:12px;
-                display:inline-block;
-                border-radius:50%;
-            "></span>
-            Pas de ${getModeLabel()}
-        `;
-
-        return div;
-    };
-
-    legend.addTo(map);
-}
-
-delete L.Icon.Default.prototype._getIconUrl;
-
-L.Icon.Default.mergeOptions({
-    iconUrl: '/images/marker-icon.png',
-    iconRetinaUrl: '/images/marker-icon-2x.png',
-    shadowUrl: '/images/marker-shadow.png',
-});
 
 
 function updateModeButtons() {
@@ -156,38 +79,6 @@ function updateModeButtons() {
     }
 }
 
-/** 
-function updateStationPanel(station) {
-
-    const panel =
-        document.getElementById('station-panel');
-
-    if (!panel) {
-        return;
-    }
-
-    panel.innerHTML = `
-        <div class="station-info">
-
-            <h4>${station.name}</h4>
-
-            <hr>
-
-            <p>
-                🚲 <strong>${station.bikes}</strong>
-                vélos disponibles
-            </p>
-
-            <p>
-                🅿️ <strong>${station.docks}</strong>
-                places libres
-            </p>
-
-        </div>
-
-    `;
-}
-**/
 
 function showStationList(list = stations) {
 
@@ -359,29 +250,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     displayMode = 'bikes';
 
-    localStorage.setItem(
-        'mapMode',
-        'bikes'
-    );
-
     updateModeButtons();
     renderMarkers();
-    updateLegend();
+    updateLegend(map, displayMode);
 });
 
 
 docksButton?.addEventListener('click', () => {
 
     displayMode = 'docks';
-
-    localStorage.setItem(
-        'mapMode',
-        'docks'
-    );
     
     updateModeButtons();
     renderMarkers();
-    updateLegend();
+    updateLegend(map, displayMode);
 
 });
 
@@ -450,7 +331,7 @@ if (mapElement) {
     }
     initMap();
     renderMarkers();
-    updateLegend();
+    updateLegend(map, displayMode);
             
 };
     
