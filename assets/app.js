@@ -8,7 +8,8 @@ import './styles/app.css';
 import 'bootstrap';
 import 'leaflet';
 import 'leaflet/dist/leaflet.min.css';
-import './map.js';
+
+import './js/map/index.js';
 
 document.addEventListener('DOMContentLoaded', () => {
 

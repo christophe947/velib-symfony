@@ -1,4 +1,5 @@
 import L from 'leaflet';
+import { updateStationPanel } from './stationPanel.js';
 
 let displayMode =
     localStorage.getItem('mapMode') || 'bikes';
@@ -155,7 +156,7 @@ function updateModeButtons() {
     }
 }
 
-
+/** 
 function updateStationPanel(station) {
 
     const panel =
@@ -186,7 +187,7 @@ function updateStationPanel(station) {
 
     `;
 }
-
+**/
 
 function showStationList(list = stations) {
 
