@@ -2,7 +2,7 @@ import L from 'leaflet';
 import { updateStationPanel } from './stationPanel.js';
 import { updateLegend } from './legend.js';
 //import { renderMarkers } from './markers.js';
-import { renderMarkers, setOpenedStation } from './markers.js';
+import { renderMarkers, setOpenedStation, getOpenedStation } from './markers.js';
 
 let displayMode =
     localStorage.getItem('mapMode') || 'bikes';
@@ -12,19 +12,21 @@ let docksButton;
 let mapElement;
 let map;
 let markersLayer;
-//let openedStation = null;
 let fromCard = false;
 let savedMapView = null;
 let isSearching = false;
+let savedZoom = null;
+let currentFilteredStations = null;
+let defaultZoom = 13;
 
 if (typeof selectedStation !== 'undefined' && selectedStation !== null) {
     fromCard = true;
 }
 
+ 
 function fitStationsBounds(list) {
 
     if (!list.length) return;
-
 
     const bounds = L.latLngBounds(
         list.map(station => [
@@ -33,53 +35,15 @@ function fitStationsBounds(list) {
         ])
     );
 
-
     map.fitBounds(bounds, {
-        padding:[50,50]
-    });
-
-}
-/*
-function getMarkerColor(value) {
-
-    if (value >= 10) {
-        return 'green';
-    }
-
-    if (value > 0) {
-        return 'orange';
-    }
-
-    return 'red';
-}
-
-
-function createIcon(color) {
-
-    return L.divIcon({
-
-        className: '',
-
-        html: `
-            <div style="
-                background:${color};
-                width:20px;
-                height:20px;
-                border-radius:50%;
-                border:3px solid white;
-            ">
-            </div>
-        `,
-
-        iconSize: [20,20]
-
+        padding:[30,30]
     });
 }
-*/
+
 
 function updateModeButtons() {
 
-    if (!bikesButton || !docksButton) {
+    if (!bikesButton || !docksButton) { 
         return;
     }
 
@@ -145,6 +109,7 @@ function showStationList(list = stations) {
 
 
    setOpenedStation(station.id);
+   
 
 container.innerHTML = "";
 
@@ -178,85 +143,7 @@ updateStationPanel(station);
         });
 }
    
-/** 
-function renderMarkers(data = stations) {
 
-    if (!markersLayer || !data) {
-        return;
-    }
-
-    let currentPopup = openedStation;
-
-    markersLayer.clearLayers();
-
-    data.forEach(station => {
-
-        const value =
-            displayMode === 'bikes'
-                ? station.bikes
-                : station.docks;
-
-        const marker = L.marker(
-            [
-                station.latitude,
-                station.longitude
-            ],
-            {
-                icon: createIcon(
-                    getMarkerColor(value)
-                )
-            }
-        )
-        .bindPopup(`
-            <strong>${station.name}</strong><br>
-            🚲 ${station.bikes} vélos<br>
-            🅿️ ${station.docks} places
-        `);
-
-        markersLayer.addLayer(marker);
-
-        marker.on('click', () => {
-
-            openedStation = station.id;
-            updateStationPanel(station);
-
-            if (typeof selectedStation !== 'undefined') {
-                selectedStation = null;
-            }
-
-            fromCard = false;
-
-        });
-
-
-        if (
-            currentPopup == station.id ||
-        (
-            fromCard &&
-            selectedStation == station.id
-        )
-
-        ) {
-
-        if (fromCard) {
-
-            map.setView(
-                [
-                    station.latitude,
-                    station.longitude
-                ],
-                16
-            );
-            updateStationPanel(station);
-            openedStation = station.id;
-            fromCard = false;
-        }
-
-        marker.openPopup();
-        }
-    });
-} 
-*/
 document.addEventListener('DOMContentLoaded', () => {
 
     const searchForm = document.getElementById('station-search-form');
@@ -279,15 +166,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     displayMode = 'bikes';
 
+    localStorage.setItem('mapMode', displayMode);
+
     updateModeButtons();
+
+    const currentCenter = map.getCenter();
+    const currentZoom = map.getZoom();
+
     renderMarkers(
         map,
         markersLayer,
-        stations,
+        currentFilteredStations ?? stations,
+        //stations,
         displayMode,
         updateStationPanel,
         false
     );
+
+    map.setView(
+        currentCenter,
+        currentZoom
+    );
+
     updateLegend(map, displayMode);
 });
 
@@ -295,16 +195,29 @@ document.addEventListener('DOMContentLoaded', () => {
 docksButton?.addEventListener('click', () => {
 
     displayMode = 'docks';
+
+    localStorage.setItem('mapMode', displayMode);
     
     updateModeButtons();
+
+    const currentCenter = map.getCenter();
+    const currentZoom = map.getZoom();
+
     renderMarkers(
         map,
         markersLayer,
-        stations,
+        currentFilteredStations ?? stations,
+        //stations,
         displayMode,
         updateStationPanel,
         false
     );
+
+    map.setView(
+        currentCenter,
+        currentZoom
+    );
+
     updateLegend(map, displayMode);
 
 });
@@ -338,6 +251,8 @@ searchInput?.addEventListener('input', () => {
 
     if (value && !isSearching) {
 
+        //savedZoom = map.getZoom();
+
         savedMapView = {
             center: map.getCenter(),
             zoom: map.getZoom()
@@ -351,7 +266,7 @@ searchInput?.addEventListener('input', () => {
         station.name.toLowerCase().includes(value)
     );
 
-
+    currentFilteredStations = filtered;
     showStationList(filtered);
 
 
@@ -375,6 +290,7 @@ searchInput?.addEventListener('input', () => {
     if (!value && isSearching) {
 
         isSearching = false;
+        currentFilteredStations = null;
 
 
         renderMarkers(
@@ -387,54 +303,41 @@ searchInput?.addEventListener('input', () => {
         );
 
 
-        if (savedMapView) {
+        const openedId = getOpenedStation();
 
-            map.setView(
-                savedMapView.center,
-                savedMapView.zoom
-            );
+const station = stations.find(
+    s => s.id == openedId
+);
 
-        }
+if (station) {
+
+    map.setView(
+        [
+            station.latitude,
+            station.longitude
+        ],
+        //map.getZoom()
+        savedMapView?.zoom ?? defaultZoom
+    );
+
+} else if (savedMapView) {
+
+        map.setView(
+        savedMapView.center,
+        savedMapView.zoom
+    );
+
+    }
 
     }
 
 });
-/*
-searchInput?.addEventListener('input', () => {
+
+searchInput?.addEventListener('focus', () => {
 
     const value = searchInput.value.toLowerCase();
 
-
-    const filtered = stations.filter(station =>
-        station.name.toLowerCase().includes(value)
-    );
-
-
-    showStationList(filtered);
-
-
-    renderMarkers(
-        map,
-        markersLayer,
-        filtered,
-        displayMode,
-        updateStationPanel,
-        false
-    );
-
-
-    if (value && filtered.length) {
-
-        fitStationsBounds(filtered);
-
-    }
-
-});
-*/
-/*
-searchInput?.addEventListener('input', () => {
-
-    const value = searchInput.value.toLowerCase();
+    if (!value) return;
 
     const filtered = stations.filter(station =>
         station.name.toLowerCase().includes(value)
@@ -442,17 +345,8 @@ searchInput?.addEventListener('input', () => {
 
     showStationList(filtered);
 
-    renderMarkers(
-        map,
-        markersLayer,
-        filtered,
-        displayMode,
-        updateStationPanel,
-        true
-    );
-
 });
-  */  
+
 
 if (mapElement) {
 
@@ -473,12 +367,14 @@ if (mapElement) {
 
         map.setView(
             [48.8566, 2.3522],
-            13
+            defaultZoom
         );
 
         markersLayer = L.layerGroup().addTo(map);   
     }
+
     initMap();
+
     map.on('moveend', () => {
 
     if (!isSearching) {
@@ -491,6 +387,8 @@ if (mapElement) {
     }
 
 });
+
+
 
     if (fromCard) {
 

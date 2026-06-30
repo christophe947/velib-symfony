@@ -46,6 +46,11 @@ function createIcon(color) {
 
 }
 
+export function getOpenedStation() {
+
+    return openedStation;
+
+}
 
 
 export function renderMarkers(
@@ -56,7 +61,6 @@ export function renderMarkers(
     updateStationPanel,
     shouldZoom = false
 ) {
-
 
     markersLayer.clearLayers();
 
@@ -91,7 +95,6 @@ export function renderMarkers(
         `);
 
 
-
         marker.on('click',()=>{
 
             //openedStation = station.id;
@@ -102,34 +105,27 @@ export function renderMarkers(
 
         });
 
-
-
         markersLayer.addLayer(marker);
-
-
 
         // 👇 restaure le popup après changement de mode
         if (openedStation == station.id) {
 
-    if (shouldZoom) {
+            if (shouldZoom) {
 
-        map.setView(
-            [
-                station.latitude,
-                station.longitude
-            ],
-            16
-        );
+                map.setView(
+                    [
+                        station.latitude,
+                        station.longitude
+                    ],
+                    16
+                );
 
-    }
+            }
 
-    updateStationPanel(station);
+            updateStationPanel(station);
 
-    marker.openPopup();
+            marker.openPopup();
 
-}
-
-
+        }
     });
-
 }
