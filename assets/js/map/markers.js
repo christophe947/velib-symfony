@@ -59,7 +59,8 @@ export function renderMarkers(
     stations,
     displayMode,
     updateStationPanel,
-    shouldZoom = false
+    shouldZoom = false,
+    actions = {}
 ) {
 
     markersLayer.clearLayers();
@@ -96,12 +97,14 @@ export function renderMarkers(
 
 
         marker.on('click',()=>{
-
+            console.log(actions);
             //openedStation = station.id;
             setOpenedStation(station.id);
 
-
             updateStationPanel(station);
+            actions.clearSearchState?.();
+            //console.log(actions);
+            
 
         });
 

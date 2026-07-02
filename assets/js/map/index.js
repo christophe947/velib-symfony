@@ -18,11 +18,16 @@ let isSearching = false;
 let savedZoom = null;
 let currentFilteredStations = null;
 let defaultZoom = 13;
+let searchTimeout = null;
 
 if (typeof selectedStation !== 'undefined' && selectedStation !== null) {
     fromCard = true;
 }
 
+const actions = {
+    setOpenedStation,
+    clearSearchState
+};
  
 function fitStationsBounds(list) {
 
@@ -35,8 +40,41 @@ function fitStationsBounds(list) {
         ])
     );
 
+    /*map.fitBounds(bounds, {
+        padding: [40, 40],
+        animate: true,
+        duration: 0.6,   // 👈 smooth mais rapide
+        easeLinearity: 0.25
+    });*/
+
+    /*const zoom = map.getZoom();
+
     map.fitBounds(bounds, {
-        padding:[30,30]
+        padding: [40, 40],
+        animate: true,
+        duration: zoom > 15 ? 0.3 : 0.6
+    });*/
+    let duration = 0.5;
+    let padding = [40, 40];
+
+    if (list.length <= 3) {
+        duration = 0.4;
+        padding = [60, 60];
+    }
+    else if (list.length <= 15) {
+        duration = 0.5;
+        padding = [50, 50];
+    }
+    else {
+        duration = 0.7;
+        padding = [30, 30];
+    }
+
+    map.fitBounds(bounds, {
+        padding,
+        animate: true,
+        duration,
+        easeLinearity: 0.25
     });
 }
 
@@ -66,6 +104,64 @@ function updateModeButtons() {
     }
 }
 
+export function clearSearchState() {
+
+    isSearching = false;
+    currentFilteredStations = null;
+
+    const searchInput = document.getElementById('station-search');
+    if (searchInput) {
+        searchInput.value = "";
+    }
+
+    const container = document.getElementById('station-results');
+    if (container) {
+        container.innerHTML = "";
+    }
+}
+
+function cancelSearch() {
+
+    const searchInput = document.getElementById('station-search');
+
+    // reset état recherche
+    isSearching = false;
+    currentFilteredStations = null;
+
+    if (searchTimeout) {
+    clearTimeout(searchTimeout);
+    searchTimeout = null;
+}
+
+    // vider input + liste
+    if (searchInput) {
+        searchInput.value = "";
+    }
+
+    const container = document.getElementById('station-results');
+    if (container) {
+        container.innerHTML = "";
+    }
+
+    // remettre tous les markers
+    renderMarkers(
+        map,
+        markersLayer,
+        stations,
+        displayMode,
+        updateStationPanel,
+        false,
+        actions
+    );
+
+    // restaurer la vue sauvegardée si elle existe
+    if (savedMapView) {
+        map.setView(
+            savedMapView.center,
+            savedMapView.zoom
+        );
+    }
+}
 
 function showStationList(list = stations) {
 
@@ -101,6 +197,8 @@ function showStationList(list = stations) {
 
             item.addEventListener('pointerdown', () => {
 
+                
+
     const station = stations.find(
         s => s.id == item.dataset.id
     );
@@ -109,6 +207,8 @@ function showStationList(list = stations) {
 
 
    setOpenedStation(station.id);
+
+   //clearSearchState();
    
 
 container.innerHTML = "";
@@ -116,15 +216,19 @@ container.innerHTML = "";
 const searchInput = document.getElementById('station-search');
 
 if (searchInput) {
+    //searchInput.blur();
     searchInput.value = "";
 }
+
 
 renderMarkers(
     map,
     markersLayer,
     stations,
     displayMode,
-    updateStationPanel
+    updateStationPanel,
+    false,
+    actions
 );
 
 map.setView(
@@ -180,7 +284,8 @@ document.addEventListener('DOMContentLoaded', () => {
         //stations,
         displayMode,
         updateStationPanel,
-        false
+        false,
+        actions
     );
 
     map.setView(
@@ -210,7 +315,8 @@ docksButton?.addEventListener('click', () => {
         //stations,
         displayMode,
         updateStationPanel,
-        false
+        false,
+        actions
     );
 
     map.setView(
@@ -244,94 +350,61 @@ searchInput?.addEventListener('keydown', (e) => {
     }
 
 });
-searchInput?.addEventListener('input', () => {
-
-    const value = searchInput.value.toLowerCase();
 
 
-    if (value && !isSearching) {
+    searchInput?.addEventListener('input', () => {
 
-        //savedZoom = map.getZoom();
-
-        savedMapView = {
-            center: map.getCenter(),
-            zoom: map.getZoom()
-        };
-
-        isSearching = true;
+    if (searchTimeout) {
+        clearTimeout(searchTimeout);
     }
 
+    searchTimeout = setTimeout(() => {
 
-    const filtered = stations.filter(station =>
-        station.name.toLowerCase().includes(value)
-    );
+        const value = searchInput.value.toLowerCase();
 
-    currentFilteredStations = filtered;
-    showStationList(filtered);
+        if (!value.trim()) {
+            cancelSearch();
+            return;
+        }
 
+        if (value && !isSearching) {
 
-    renderMarkers(
-        map,
-        markersLayer,
-        filtered,
-        displayMode,
-        updateStationPanel,
-        false
-    );
+            savedMapView = {
+                center: map.getCenter(),
+                zoom: map.getZoom()
+            };
 
+            isSearching = true;
+        }
 
-    if (value && filtered.length) {
+        const filtered = stations.filter(station =>
+            station.name.toLowerCase().includes(value)
+        );
 
-        fitStationsBounds(filtered);
+        currentFilteredStations = filtered;
 
-    }
-
-
-    if (!value && isSearching) {
-
-        isSearching = false;
-        currentFilteredStations = null;
-
+        showStationList(filtered);
 
         renderMarkers(
             map,
             markersLayer,
-            stations,
+            filtered,
             displayMode,
             updateStationPanel,
-            false
+            false,
+            actions
         );
 
+        fitStationsBounds(filtered);
 
-        const openedId = getOpenedStation();
-
-const station = stations.find(
-    s => s.id == openedId
-);
-
-if (station) {
-
-    map.setView(
-        [
-            station.latitude,
-            station.longitude
-        ],
-        //map.getZoom()
-        savedMapView?.zoom ?? defaultZoom
-    );
-
-} else if (savedMapView) {
-
-        map.setView(
-        savedMapView.center,
-        savedMapView.zoom
-    );
-
-    }
-
-    }
-
+    }, 400);
 });
+
+    
+
+
+
+
 
 searchInput?.addEventListener('focus', () => {
 
@@ -403,7 +476,8 @@ if (mapElement) {
         stations,
         displayMode,
         updateStationPanel,
-        true
+        true,
+        actions
     );
     updateLegend(map, displayMode);
             
