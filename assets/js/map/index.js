@@ -2,6 +2,7 @@ import L from 'leaflet';
 import { updateStationPanel } from './stationPanel.js';
 import { updateLegend } from './legend.js';
 import { renderMarkers} from './markers.js';
+import { createMap } from './map.js';
 import { showStationList,
      initSearch,
       cancelSearch
@@ -263,7 +264,7 @@ const searchInput = document.getElementById('station-search');
 
 if (mapElement) {
 
-    function initMap() {
+    /*function initMap() {
             
         if (map) {
             return;
@@ -284,9 +285,22 @@ if (mapElement) {
         navigation.initDefaultView();
 
         markersLayer = L.layerGroup().addTo(map);   
-    }
+    }*/
 
-    initMap();
+    //initMap();
+
+    const mapInstance = createMap();
+
+
+    map = mapInstance.map;
+    console.log('map');
+    markersLayer = mapInstance.markersLayer;
+
+
+    navigation.init(map);
+
+    navigation.initDefaultView();
+
 
     initSearch({
     stations,
@@ -307,7 +321,13 @@ if (mapElement) {
         if (navigation.isProgrammatic()) {
 
             navigation.endProgrammaticMove();
-            
+
+            if (navigation.saveAfterProgrammaticMove) {
+
+                navigation.saveUserView();
+
+            }
+
             console.log("move from code ");
             return;
         } 

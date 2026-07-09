@@ -82,7 +82,7 @@ export function showStationList(
 ); 
         updateStationPanel(station);
         navigation.focusStation(station);
-        navigation.saveUserView();
+        //navigation.saveUserView();
         //console.log(navigation.saveUserView);
       
         actions.endSearch?.();

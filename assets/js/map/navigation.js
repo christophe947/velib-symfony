@@ -20,22 +20,30 @@ class NavigationManager {
 
         this.isProgrammaticMove = false;
 
+        this.saveAfterProgrammaticMove = false;
+
     }
 
 
-    startProgrammaticMove() {
+    startProgrammaticMove(saveAfter = false) {
+
         this.isProgrammaticMove = true;
-    }
+        this.saveAfterProgrammaticMove = saveAfter;
 
+    }
 
     endProgrammaticMove() {
         this.isProgrammaticMove = false;
+        this.saveAfterProgrammaticMove = false;
     }
 
 
     isProgrammatic() {
         return this.isProgrammaticMove;
     }
+
+
+    
 
 
     init(map) {
@@ -72,7 +80,7 @@ class NavigationManager {
 
 
     restoreUserView() {
-
+console.log("USER VIEW", this.userView);
         if (!this.userView) {
             this.initDefaultView();
         
@@ -102,7 +110,8 @@ class NavigationManager {
 
         this.mode = "focus";
 
-        this.startProgrammaticMove();
+        
+        this.startProgrammaticMove(true);
 
         
 
