@@ -1,5 +1,9 @@
 import L from 'leaflet';
 import { navigation } from './navigation.js';
+import {
+    setCurrentFilteredStations,
+    getCurrentFilteredStations
+} from './state.js';
 
 
 
@@ -88,12 +92,13 @@ export function showStationList(
 }
 
 let searchTimeout = null;
-let currentFilteredStations = null;
+setCurrentFilteredStations(null);
+//let currentFilteredStations = null;
 //let isSearching = false;
 
-export function getCurrentFilteredStations() {
+/*export function getCurrentFilteredStations() {
     return currentFilteredStations;
-}
+}*/
 
 export function clearCurrentFilteredStations() {
     currentFilteredStations = null;
@@ -247,7 +252,8 @@ searchInput.addEventListener('input', () => {
         );
 
 
-        currentFilteredStations = filtered;
+        //currentFilteredStations = filtered;
+        setCurrentFilteredStations(filtered);
 
         showStationList(
             filtered,

@@ -1,11 +1,16 @@
 import L from 'leaflet';
 import { updateStationPanel } from './stationPanel.js';
 import { updateLegend } from './legend.js';
-import { renderMarkers, setOpenedStation, getOpenedStation } from './markers.js';
+import { renderMarkers} from './markers.js';
 import { showStationList, initSearch } from './search.js';
 import { navigation } from './navigation.js';
 //test
-import { getCurrentFilteredStations } from './search.js';
+//import { getCurrentFilteredStations } from './search.js';
+import {
+    setOpenedStation,
+    getOpenedStation,
+    getSearching
+} from './state.js';
 
 
 let displayMode =
@@ -38,26 +43,24 @@ if (typeof selectedStation !== 'undefined' && selectedStation !== null) {
 }
 
 const actions = {
+
     setOpenedStation,
     clearSearchState,
 
     startSearch: () => {
-        isSearching = true;
-        console.log("SEARCH ON");
+        setSearching(true);
     },
 
     endSearch: () => {
-    //console.trace("SEARCH OFF");
-    isSearching = false;
-},
-
-    getSearching: () => {
-        return isSearching;
+        setSearching(false);
     },
+
+    getSearching,
 
     ignoreNextMove: () => {
-        ignoreNextMove = true;
+        setIgnoreNextMove(true);
     },
+
     getAllStations: () => stations,
 };
  
@@ -337,7 +340,7 @@ if (mapElement) {
     map.on('moveend', () => {
 
 
-     if (navigation.isProgrammaticMove) {
+     if (navigation.isProgrammatic()) {
         navigation.endProgrammaticMove();
         //navigation.startProgrammaticMove();
         

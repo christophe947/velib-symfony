@@ -45,6 +45,8 @@ class NavigationManager {
 
 
     initDefaultView() {
+
+        this.startProgrammaticMove();
         
         return this.map.flyTo(
             this.defaultView.center,

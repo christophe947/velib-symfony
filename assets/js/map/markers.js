@@ -1,40 +1,17 @@
 import L from 'leaflet';
 import { navigation } from './navigation.js';
 import { clearCurrentFilteredStations } from './search.js';
-import { getCurrentFilteredStations } from './search.js';
+//import { getCurrentFilteredStations } from './search.js';
 import {
     getAvailabilityRate,
     getAvailabilityColor
 } from './availability.js';
+import {
+    setOpenedStation,
+    getOpenedStation
+} from './state.js';
 
 
-let openedStation = null;
-
-
-export function setOpenedStation(id) {
-
-    openedStation = id;
-}
-
-
-export function getOpenedStation() {
-
-    return openedStation;
-}
-
-
-/*function getMarkerColor(value) {
-
-    if (value >= 10) {
-        return 'green';
-    }
-
-    if (value > 0) {
-        return 'orange';
-    }
-
-    return 'red';
-}*/
 
 
 function createIcon(color) {
@@ -68,11 +45,7 @@ export function renderMarkers(
     shouldZoom = false,
     actions = {}
 ) {
-    console.log(
-        "renderMarkers reçoit :",
-        stations.length
-    );
-
+    
     markersLayer.clearLayers();
 
     stations.forEach(station => {
@@ -86,16 +59,7 @@ export function renderMarkers(
             station,
             displayMode
         );
-        console.log(
-    station.name,
-    {
-        capacity: station.capacity,
-        bikes: station.bikes,
-        docks: station.docks,
-        mode: displayMode,
-        rate: rate
-    }
-);
+        
 
         const marker = L.marker(
             [
@@ -148,7 +112,7 @@ export function renderMarkers(
         markersLayer.addLayer(marker);
 
         // 👇 restaure le popup après changement de mode a verif
-        if (openedStation == station.id) {
+        if (getOpenedStation() == station.id) {
 
             if (shouldZoom) {
 
