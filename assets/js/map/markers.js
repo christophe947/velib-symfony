@@ -1,15 +1,29 @@
 import L from 'leaflet';
+import { navigation } from './navigation.js';
+import { clearCurrentFilteredStations } from './search.js';
+import { getCurrentFilteredStations } from './search.js';
+import {
+    getAvailabilityRate,
+    getAvailabilityColor
+} from './availability.js';
+
 
 let openedStation = null;
+
 
 export function setOpenedStation(id) {
 
     openedStation = id;
-
 }
 
 
-function getMarkerColor(value) {
+export function getOpenedStation() {
+
+    return openedStation;
+}
+
+
+/*function getMarkerColor(value) {
 
     if (value >= 10) {
         return 'green';
@@ -20,7 +34,7 @@ function getMarkerColor(value) {
     }
 
     return 'red';
-}
+}*/
 
 
 function createIcon(color) {
@@ -41,15 +55,7 @@ function createIcon(color) {
         `,
 
         iconSize:[20,20]
-
     });
-
-}
-
-export function getOpenedStation() {
-
-    return openedStation;
-
 }
 
 
@@ -62,19 +68,34 @@ export function renderMarkers(
     shouldZoom = false,
     actions = {}
 ) {
+    console.log(
+        "renderMarkers reçoit :",
+        stations.length
+    );
 
     markersLayer.clearLayers();
 
-
     stations.forEach(station => {
 
-
-        const value =
+        /*const value =
             displayMode === 'bikes'
             ? station.bikes
-            : station.docks;
+            : station.docks;*/
 
-
+        const rate = getAvailabilityRate(
+            station,
+            displayMode
+        );
+        console.log(
+    station.name,
+    {
+        capacity: station.capacity,
+        bikes: station.bikes,
+        docks: station.docks,
+        mode: displayMode,
+        rate: rate
+    }
+);
 
         const marker = L.marker(
             [
@@ -83,11 +104,13 @@ export function renderMarkers(
             ],
             {
                 icon:createIcon(
-                    getMarkerColor(value)
+                    getAvailabilityColor(
+                        station,
+                        displayMode
+                    )
                 )
             }
         );
-
 
         marker.bindPopup(`
             <strong>${station.name}</strong><br>
@@ -95,22 +118,36 @@ export function renderMarkers(
             🅿️ ${station.docks} places
         `);
 
-
         marker.on('click',()=>{
-            console.log(actions);
-            //openedStation = station.id;
+    
+            navigation.restoreAfterSearch(station);
+        
+            navigation.saveUserView();
+        
             setOpenedStation(station.id);
-
+        
+            clearCurrentFilteredStations();
+        
+            renderMarkers(
+                map,
+                markersLayer,
+                actions.getAllStations(),
+                displayMode,
+                updateStationPanel,
+                false,
+                actions
+            ); 
+   
             updateStationPanel(station);
+
+            actions.endSearch?.();
+
             actions.clearSearchState?.();
-            //console.log(actions);
-            
-
         });
-
+            
         markersLayer.addLayer(marker);
 
-        // 👇 restaure le popup après changement de mode
+        // 👇 restaure le popup après changement de mode a verif
         if (openedStation == station.id) {
 
             if (shouldZoom) {
@@ -122,13 +159,11 @@ export function renderMarkers(
                     ],
                     16
                 );
-
             }
 
             updateStationPanel(station);
 
             marker.openPopup();
-
         }
     });
 }

@@ -75,7 +75,7 @@ class VelibApiService
                 'address' => $stationsInfo[$id]['address'] ?? '',
                 'latitude' => $stationsInfo[$id]['lat'] ?? null,
                 'longitude' => $stationsInfo[$id]['lon'] ?? null,
-
+                'capacity' => $stationsInfo[$id]['capacity'] ?? 0,
                 'bikes' => $station['num_bikes_available'],
                 'docks' => $station['num_docks_available'],
                 'rentalStatus' => $this->getRentalStatus(

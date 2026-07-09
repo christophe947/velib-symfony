@@ -80,6 +80,23 @@
 #map {
     height: 100%;
 }
-/*body {
-    background-color: skyblue;
-}*/
+
+
+.legend-color {
+
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 8px;
+
+}
+
+
+.legend-item {
+
+    display:flex;
+    align-items:center;
+    margin-bottom:5px;
+
+}
