@@ -50,11 +50,7 @@ export function renderMarkers(
 
     stations.forEach(station => {
 
-        /*const value =
-            displayMode === 'bikes'
-            ? station.bikes
-            : station.docks;*/
-
+        
         const rate = getAvailabilityRate(
             station,
             displayMode
@@ -85,9 +81,11 @@ export function renderMarkers(
         marker.on('click',()=>{
     
             navigation.restoreAfterSearch(station);
-        
-            navigation.saveUserView();
-        
+
+            map.once('moveend', () => {
+                navigation.saveUserView();
+            });
+            
             setOpenedStation(station.id);
         
             clearCurrentFilteredStations();

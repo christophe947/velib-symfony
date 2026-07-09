@@ -83,6 +83,7 @@ export function showStationList(
         updateStationPanel(station);
         navigation.focusStation(station);
         navigation.saveUserView();
+        //console.log(navigation.saveUserView);
       
         actions.endSearch?.();
         actions.clearSearchState?.();
@@ -93,16 +94,67 @@ export function showStationList(
 
 let searchTimeout = null;
 setCurrentFilteredStations(null);
-//let currentFilteredStations = null;
-//let isSearching = false;
-
-/*export function getCurrentFilteredStations() {
-    return currentFilteredStations;
-}*/
 
 export function clearCurrentFilteredStations() {
-    currentFilteredStations = null;
-    console.log("currentFilteredStations appelé", currentFilteredStations);
+    setCurrentFilteredStations(null);
+    //currentFilteredStations = null;
+    console.log("currentFilteredStations appelé", getCurrentFilteredStations());
+}
+
+export function cancelSearch() {
+
+    const searchInput = document.getElementById('station-search');
+
+    // reset état recherche
+    setSearching(false);
+
+    setCurrentFilteredStations(null);
+
+    console.log("CANCEL SEARCH");
+
+    if (searchTimeout) {
+    clearTimeout(searchTimeout);
+    searchTimeout = null;
+}
+
+    // vider input + liste
+    if (searchInput) {
+        searchInput.value = "";
+    }
+
+    const container = document.getElementById('station-results');
+    if (container) {
+        container.innerHTML = "";
+    }
+
+    // remettre tous les markers
+    renderMarkers(
+        map,
+        markersLayer,
+        stations,
+        getDisplayMode(),
+        updateStationPanel,
+        false,
+        actions
+    );
+
+    // restaurer la vue sauvegardée si elle existe
+    if (navigation.mode === "savedView") {
+
+        navigation.startProgrammaticMove();
+
+        navigation.restoreUserView();
+
+        setTimeout(() => {
+    actions.endSearch?.();
+}, 300);
+    }
+
+    if (!navigation.saveUserView) {
+        navigation.initDefaultView();
+    }
+
+
 }
 
 export function initSearch(options) {
@@ -125,8 +177,6 @@ export function initSearch(options) {
         document.getElementById('station-search');
 
         
-
-
     if (!searchInput) {
         return;
     }
@@ -205,18 +255,32 @@ searchInput.addEventListener('input', () => {
 
         if (!value.trim()) {   
             //important pour reset lors du switch par exemple un affichage complet et non filtré avec 4 stations
-            currentFilteredStations = null;
+            //currentFilteredStations = null;
+            
+            setCurrentFilteredStations(null);
 
-            console.log(getCurrentFilteredStations());
+            /*const container = document.getElementById('station-results');
+
+if (container) {
+    container.innerHTML = "";
+}*/
+
+            console.log(navigation.mode);
 
             if (navigation.mode !== "savedView") {            
                 console.log("search vide sans vue enregistre");
 
                 navigation.initDefaultView();
+                //navigation.endtProgrammaticMove();
+
+                //return;
+            } else {
+                
+                navigation.restoreUserView();
             }
             
             
-            navigation.restoreUserView();
+            
             
             clearSearchState?.();
 

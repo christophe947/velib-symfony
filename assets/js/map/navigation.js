@@ -48,7 +48,7 @@ class NavigationManager {
 
         this.startProgrammaticMove();
         
-        return this.map.flyTo(
+        return this.map.setView(
             this.defaultView.center,
             this.defaultView.zoom,
             {
@@ -103,6 +103,8 @@ class NavigationManager {
         this.mode = "focus";
 
         this.startProgrammaticMove();
+
+        
 
         this.map.flyTo(
             this.focusView.center,

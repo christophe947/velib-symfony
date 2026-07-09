@@ -2,19 +2,22 @@ import L from 'leaflet';
 import { updateStationPanel } from './stationPanel.js';
 import { updateLegend } from './legend.js';
 import { renderMarkers} from './markers.js';
-import { showStationList, initSearch } from './search.js';
+import { showStationList,
+     initSearch,
+      cancelSearch
+} from './search.js';
 import { navigation } from './navigation.js';
-//test
-//import { getCurrentFilteredStations } from './search.js';
 import {
     setOpenedStation,
     getOpenedStation,
-    getSearching
+    setSearching,
+    getSearching,
+    setCurrentFilteredStations,
+    getCurrentFilteredStations,
+    setDisplayMode,
+    getDisplayMode
 } from './state.js';
 
-
-let displayMode =
-    localStorage.getItem('mapMode') || 'bikes';
 
 let bikesButton;
 let docksButton;
@@ -22,20 +25,8 @@ let mapElement;
 let map;
 let markersLayer;
 let fromCard = false;
-let isSearching = false;
-let savedZoom = null;
-let currentFilteredStations = null;
-let defaultZoom = 13;
-let searchTimeout = null;
-
-let ignoreNextMove = false;
 
 
-
-
-export function setSearching(value) {
-    isSearching = value;
-}
 
 
 if (typeof selectedStation !== 'undefined' && selectedStation !== null) {
@@ -57,9 +48,9 @@ const actions = {
 
     getSearching,
 
-    ignoreNextMove: () => {
+    /*ignoreNextMove: () => {
         setIgnoreNextMove(true);
-    },
+    },*/
 
     getAllStations: () => stations,
 };
@@ -107,7 +98,7 @@ function updateModeButtons() {
         return;
     }
 
-    if (displayMode === 'bikes') {
+    if (getDisplayMode() === 'bikes') {
 
         bikesButton.className =
             'btn btn-primary active';
@@ -130,9 +121,8 @@ export function clearSearchState() {
 
     console.log("CLEAR SEARCH");
     
-    currentFilteredStations = null;
+    setCurrentFilteredStations(null);
     
-
     const searchInput = document.getElementById('station-search');
     if (searchInput) {
         searchInput.value = "";
@@ -144,13 +134,15 @@ export function clearSearchState() {
     }
 }
 
-function cancelSearch() {
+/*function cancelSearch() {
 
     const searchInput = document.getElementById('station-search');
 
     // reset état recherche
-    isSearching = false;
-    currentFilteredStations = null;
+    setSearching(false);
+
+    setCurrentFilteredStations(null);
+
     console.log("CANCEL SEARCH");
 
     if (searchTimeout) {
@@ -173,7 +165,7 @@ function cancelSearch() {
         map,
         markersLayer,
         stations,
-        displayMode,
+        getDisplayMode(),
         updateStationPanel,
         false,
         actions
@@ -196,7 +188,7 @@ function cancelSearch() {
     }
 
 
-}
+}*/
 
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -222,34 +214,22 @@ document.addEventListener('DOMContentLoaded', () => {
     bikesButton?.addEventListener('click', () => {
 
         navigation.startProgrammaticMove();
-
-    displayMode = 'bikes';
-
-    localStorage.setItem('mapMode', displayMode);
-
-    updateModeButtons();
-
-    //const currentCenter = map.getCenter();
-    //const currentZoom = map.getZoom();
-
-    console.log("SWITCH FILTER",  getCurrentFilteredStations()
-);
-
-    renderMarkers(
-        map,
-        markersLayer,
-        
-        getCurrentFilteredStations() ?? stations,
-        
-        displayMode,
-        updateStationPanel,
-        false,
-        actions
-    );
-
+        setDisplayMode('bikes');
     
+        updateModeButtons();
 
-    updateLegend(map, displayMode);
+        renderMarkers(
+            map,
+            markersLayer,
+            
+            getCurrentFilteredStations() ?? stations,
+            getDisplayMode(),
+            updateStationPanel,
+            false,
+            actions
+        );
+
+    updateLegend(map, getDisplayMode());
 });
 
 
@@ -257,33 +237,21 @@ docksButton?.addEventListener('click', () => {
 
     navigation.startProgrammaticMove();
 
-    displayMode = 'docks';
+    setDisplayMode('docks');
 
-    localStorage.setItem('mapMode', displayMode);
-    
     updateModeButtons();
-
-    //const currentCenter = map.getCenter();
-    //const currentZoom = map.getZoom();
-
-    console.log("SWITCH FILTER",  getCurrentFilteredStations()
-);
 
     renderMarkers(
         map,
         markersLayer,
         getCurrentFilteredStations() ?? stations,
-        
-        displayMode,
+        getDisplayMode(),
         updateStationPanel,
         false,
         actions
     );
 
-    
-
-    updateLegend(map, displayMode);
-
+    updateLegend(map, getDisplayMode());
 });
 
 
@@ -313,10 +281,7 @@ if (mapElement) {
             }
         ).addTo(map);
 
-        map.setView(
-            [48.8566, 2.3522],
-            defaultZoom
-        );
+        navigation.initDefaultView();
 
         markersLayer = L.layerGroup().addTo(map);   
     }
@@ -327,7 +292,7 @@ if (mapElement) {
     stations,
     map,
     markersLayer,
-    displayMode,
+    getDisplayMode,
     updateStationPanel,
     renderMarkers,
     setOpenedStation,
@@ -339,46 +304,41 @@ if (mapElement) {
 
     map.on('moveend', () => {
 
+        if (navigation.isProgrammatic()) {
 
-     if (navigation.isProgrammatic()) {
-        navigation.endProgrammaticMove();
-        //navigation.startProgrammaticMove();
-        
-        console.log("move from code ");
-        return;
-    } 
-       navigation.saveUserView(); 
-       console.log("move from user");
-    
+            navigation.endProgrammaticMove();
+            
+            console.log("move from code ");
+            return;
+        } 
+        navigation.saveUserView(); 
 
-    
-
-});
+        console.log("move from user");
+    });
 
 
 
     if (fromCard) {
 
-    setOpenedStation(
-        selectedStation.id ?? selectedStation
-    );
+        setOpenedStation(
+            selectedStation.id ?? selectedStation
+        );
+    }
 
-}
     renderMarkers(
         map,
         markersLayer,
         stations,
-        displayMode,
+        //displayMode,
+        getDisplayMode(),
         updateStationPanel,
         true,
         actions
     );
-    updateLegend(map, displayMode);
-            
+
+    updateLegend(map, getDisplayMode());
 };
 
-
-    
 });
     
 
