@@ -136,8 +136,8 @@ console.log("USER VIEW", this.userView);
             zoom: this.defaultZoom
         };
 
-        this.startProgrammaticMove();
-
+        //this.startProgrammaticMove();
+        this.startProgrammaticMove(true);
 
         if (currentZoom <= this.defaultView.zoom) {
 
@@ -168,7 +168,7 @@ console.log("USER VIEW", this.userView);
     // a verif
     if (this.userView) {
 
-        console.log("RESTORE USER VIEW");
+        console.log("RESTORE USER VIEW test existence");
 
         this.startProgrammaticMove();
 

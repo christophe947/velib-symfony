@@ -2,24 +2,30 @@ import L from 'leaflet';
 import { getAvailabilityLegend } from './availability.js';
 
 let legend = null;
-let displayMode =
-    localStorage.getItem('mapMode') || 'bikes';
+//let displayMode = localStorage.getItem('mapMode') || 'bikes';
 
 
-function getLegendTitle(displayMode) {
+/*function getLegendTitle(displayMode) {
 
     return displayMode === 'bikes'
         ? 'Disponibilité vélos'
         : 'Places disponibles';
+}*/
+
+function getLegendTitle(displayMode) {
+
+    return displayMode === 'bikes'
+        ? '🚲 Disponibilité vélos'
+        : '🅿️ Places disponibles';
 }
-
-
-function getModeLabel(displayMode) {
+/*function getModeLabel(displayMode) {
 
     return displayMode === 'bikes'
         ? 'vélos disponibles'
         : 'places disponibles';
-}
+}*/
+
+
 
 
 export function updateLegend(map, displayMode) {
@@ -47,21 +53,30 @@ export function updateLegend(map, displayMode) {
         const items = getAvailabilityLegend();
 
 
-        div.innerHTML = items.map(item => `
+        
+        div.innerHTML = `
 
-            <div class="legend-item">
-
-                <span 
-                    class="legend-color"
-                    style="background:${item.color}"
-                ></span>
-
-                ${item.label}
-
+            <div class="legend-title">
+                <strong>${getLegendTitle(displayMode)}</strong>
             </div>
+            
+            <hr>
 
-        `).join('');
+            ${items.map(item => `
 
+                <div class="legend-item">
+
+                    <span
+                        class="legend-color"
+                        style="background:${item.color}"
+                    ></span>
+
+                    ${item.label}
+
+                </div>
+
+            `).join('')}
+        `;
 
         return div;
     };

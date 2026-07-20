@@ -8,7 +8,8 @@ import {
 } from './availability.js';
 import {
     setOpenedStation,
-    getOpenedStation
+    getOpenedStation,
+    getDisplayMode
 } from './state.js';
 
 
@@ -78,13 +79,19 @@ export function renderMarkers(
             🅿️ ${station.docks} places
         `);
 
+
+
+
+
         marker.on('click',()=>{
     
+            
             navigation.restoreAfterSearch(station);
 
-            map.once('moveend', () => {
+            /*map.once('moveend', () => {
                 navigation.saveUserView();
-            });
+                console.log('vue enregistré', navigation.saveUserView)
+            });*/
             
             setOpenedStation(station.id);
         
@@ -104,7 +111,7 @@ export function renderMarkers(
 
             actions.endSearch?.();
 
-            actions.clearSearchState?.();
+            //actions.clearSearchState?.();
         });
             
         markersLayer.addLayer(marker);

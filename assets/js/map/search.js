@@ -2,7 +2,8 @@ import L from 'leaflet';
 import { navigation } from './navigation.js';
 import {
     setCurrentFilteredStations,
-    getCurrentFilteredStations
+    getCurrentFilteredStations,
+    getDisplayMode
 } from './state.js';
 
 
@@ -70,6 +71,7 @@ export function showStationList(
     console.log("focus suite a click station liste");
     
     setOpenedStation(station.id);
+    navigation.focusStation(station);
 
     renderMarkers(
     map,
@@ -81,12 +83,10 @@ export function showStationList(
     actions
 ); 
         updateStationPanel(station);
-        navigation.focusStation(station);
-        //navigation.saveUserView();
-        //console.log(navigation.saveUserView);
+        
       
         actions.endSearch?.();
-        actions.clearSearchState?.();
+        //actions.clearSearchState?.();
     
     });
             });
@@ -99,6 +99,23 @@ export function clearCurrentFilteredStations() {
     setCurrentFilteredStations(null);
     //currentFilteredStations = null;
     console.log("currentFilteredStations appelé", getCurrentFilteredStations());
+}
+
+export function clearSearchState() {
+
+    console.log("CLEAR SEARCH");
+    
+    setCurrentFilteredStations(null);
+    
+    const searchInput = document.getElementById('station-search');
+    if (searchInput) {
+        searchInput.value = "";
+    }
+
+    const container = document.getElementById('station-results');
+    if (container) {
+        container.innerHTML = "";
+    }
 }
 
 export function cancelSearch() {
@@ -163,7 +180,7 @@ export function initSearch(options) {
     stations,
     map,
     markersLayer,
-    displayMode,
+    //getDisplayMode,
     updateStationPanel,
     renderMarkers,
     setOpenedStation,
@@ -229,7 +246,7 @@ export function initSearch(options) {
                 stations,
                 map,
                 markersLayer,
-                displayMode,
+                getDisplayMode(),
                 updateStationPanel,
                 renderMarkers,
                 setOpenedStation,
@@ -288,7 +305,7 @@ if (container) {
                 map,
                 markersLayer,
                 stations,
-                displayMode,
+                getDisplayMode(),
                 updateStationPanel,
                 false,
                 actions
@@ -300,7 +317,7 @@ if (container) {
 
         if (!actions.getSearching?.()) {
             console.log("search en cour");
-    //navigation.saveUserView();
+   
 
     // a verifier
     actions.startSearch();
@@ -316,7 +333,6 @@ if (container) {
         );
 
 
-        //currentFilteredStations = filtered;
         setCurrentFilteredStations(filtered);
 
         showStationList(
@@ -324,7 +340,7 @@ if (container) {
             stations,
             map,
             markersLayer,
-            displayMode,
+            getDisplayMode(),
             updateStationPanel,
             renderMarkers,
             setOpenedStation,
@@ -336,7 +352,7 @@ if (container) {
             map,
             markersLayer,
             filtered,
-            displayMode,
+            getDisplayMode(),
             updateStationPanel,
             false,
             actions

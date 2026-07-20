@@ -14,12 +14,6 @@ export function createMap() {
         }
     ).addTo(map);
 
-    /*map.setView(
-        [48.8566, 2.3522],
-        13
-    );*/
-    //navigation.initDefaultView();
-
 
     const markersLayer =
         L.layerGroup().addTo(map);

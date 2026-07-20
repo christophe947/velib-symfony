@@ -3,9 +3,11 @@ import { updateStationPanel } from './stationPanel.js';
 import { updateLegend } from './legend.js';
 import { renderMarkers} from './markers.js';
 import { createMap } from './map.js';
+import { initDisplayMode } from './displayMode.js';
 import { showStationList,
      initSearch,
-      cancelSearch
+      cancelSearch,
+      clearSearchState
 } from './search.js';
 import { navigation } from './navigation.js';
 import {
@@ -37,6 +39,7 @@ if (typeof selectedStation !== 'undefined' && selectedStation !== null) {
 const actions = {
 
     setOpenedStation,
+
     clearSearchState,
 
     startSearch: () => {
@@ -45,13 +48,12 @@ const actions = {
 
     endSearch: () => {
         setSearching(false);
+        //test
+        clearSearchState();
     },
 
     getSearching,
 
-    /*ignoreNextMove: () => {
-        setIgnoreNextMove(true);
-    },*/
 
     getAllStations: () => stations,
 };
@@ -93,103 +95,6 @@ function fitStationsBounds(list) {
 }
 
 
-function updateModeButtons() {
-
-    if (!bikesButton || !docksButton) { 
-        return;
-    }
-
-    if (getDisplayMode() === 'bikes') {
-
-        bikesButton.className =
-            'btn btn-primary active';
-
-        docksButton.className =
-            'btn btn-outline-primary';
-
-    } else {
-
-        docksButton.className =
-            'btn btn-primary active';
-
-        bikesButton.className =
-            'btn btn-outline-primary';
-
-    }
-}
-
-export function clearSearchState() {
-
-    console.log("CLEAR SEARCH");
-    
-    setCurrentFilteredStations(null);
-    
-    const searchInput = document.getElementById('station-search');
-    if (searchInput) {
-        searchInput.value = "";
-    }
-
-    const container = document.getElementById('station-results');
-    if (container) {
-        container.innerHTML = "";
-    }
-}
-
-/*function cancelSearch() {
-
-    const searchInput = document.getElementById('station-search');
-
-    // reset état recherche
-    setSearching(false);
-
-    setCurrentFilteredStations(null);
-
-    console.log("CANCEL SEARCH");
-
-    if (searchTimeout) {
-    clearTimeout(searchTimeout);
-    searchTimeout = null;
-}
-
-    // vider input + liste
-    if (searchInput) {
-        searchInput.value = "";
-    }
-
-    const container = document.getElementById('station-results');
-    if (container) {
-        container.innerHTML = "";
-    }
-
-    // remettre tous les markers
-    renderMarkers(
-        map,
-        markersLayer,
-        stations,
-        getDisplayMode(),
-        updateStationPanel,
-        false,
-        actions
-    );
-
-    // restaurer la vue sauvegardée si elle existe
-    if (navigation.mode === "savedView") {
-
-        navigation.startProgrammaticMove();
-
-        navigation.restoreUserView();
-
-        setTimeout(() => {
-    actions.endSearch?.();
-}, 300);
-    }
-
-    if (!navigation.saveUserView) {
-        navigation.initDefaultView();
-    }
-
-
-}*/
 
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -205,55 +110,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     mapElement = document.getElementById('map');
 
-    bikesButton = document.getElementById('mode-bikes');
-    docksButton = document.getElementById('mode-docks');
-
-    updateModeButtons();
-
-
-
-    bikesButton?.addEventListener('click', () => {
-
-        navigation.startProgrammaticMove();
-        setDisplayMode('bikes');
     
-        updateModeButtons();
 
-        renderMarkers(
-            map,
-            markersLayer,
-            
-            getCurrentFilteredStations() ?? stations,
-            getDisplayMode(),
-            updateStationPanel,
-            false,
-            actions
-        );
-
-    updateLegend(map, getDisplayMode());
-});
-
-
-docksButton?.addEventListener('click', () => {
-
-    navigation.startProgrammaticMove();
-
-    setDisplayMode('docks');
-
-    updateModeButtons();
-
-    renderMarkers(
-        map,
-        markersLayer,
-        getCurrentFilteredStations() ?? stations,
-        getDisplayMode(),
-        updateStationPanel,
-        false,
-        actions
-    );
-
-    updateLegend(map, getDisplayMode());
-});
 
 
 const searchInput = document.getElementById('station-search');
@@ -264,36 +122,13 @@ const searchInput = document.getElementById('station-search');
 
 if (mapElement) {
 
-    /*function initMap() {
-            
-        if (map) {
-            return;
-        }
-
-        map = L.map('map');
-
-
-        navigation.init(map);
-
-        L.tileLayer(
-            'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-            {
-                attribution: '© OpenStreetMap'
-            }
-        ).addTo(map);
-
-        navigation.initDefaultView();
-
-        markersLayer = L.layerGroup().addTo(map);   
-    }*/
-
-    //initMap();
+    
 
     const mapInstance = createMap();
 
 
     map = mapInstance.map;
-    console.log('map');
+    //console.log('map');
     markersLayer = mapInstance.markersLayer;
 
 
@@ -316,20 +151,40 @@ if (mapElement) {
     
 });
 
+initDisplayMode({
+    map,
+    markersLayer,
+    stations,
+    renderMarkers,
+    updateStationPanel,
+    updateLegend,
+    actions
+});
+
     map.on('moveend', () => {
 
         if (navigation.isProgrammatic()) {
 
+            const saveAfter = navigation.saveAfterProgrammaticMove;
+
             navigation.endProgrammaticMove();
 
-            if (navigation.saveAfterProgrammaticMove) {
+            if (saveAfter) {
 
                 navigation.saveUserView();
-
+                
             }
-
             console.log("move from code ");
             return;
+            /*if (navigation.saveAfterProgrammaticMove) {
+
+                navigation.saveUserView();
+                navigation.saveAfterProgrammaticMove = false;
+
+            }*/
+
+            
+            
         } 
         navigation.saveUserView(); 
 
