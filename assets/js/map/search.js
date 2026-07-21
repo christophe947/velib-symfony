@@ -5,6 +5,10 @@ import {
     getCurrentFilteredStations,
     getDisplayMode
 } from './state.js';
+import {
+    highlightMarker,
+    resetHighlightedMarker
+} from './markers.js';
 
 
 

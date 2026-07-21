@@ -7,7 +7,8 @@ import { initDisplayMode } from './displayMode.js';
 import { showStationList,
      initSearch,
       cancelSearch,
-      clearSearchState
+      clearSearchState,
+      clearCurrentFilteredStations
 } from './search.js';
 import { navigation } from './navigation.js';
 import {
@@ -41,6 +42,8 @@ const actions = {
     setOpenedStation,
 
     clearSearchState,
+
+    clearCurrentFilteredStations,
 
     startSearch: () => {
         setSearching(true);

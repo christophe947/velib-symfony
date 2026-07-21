@@ -47,6 +47,7 @@ export function highlightMarker(stationId) {
     }
 
     highlightedMarker = marker;
+    marker.setZIndexOffset(1000);
 
 
     const markerElement = marker.getElement();
@@ -64,25 +65,31 @@ export function highlightMarker(stationId) {
             .getElement();
 
         if (popupElement) {
-            console.log('popupElement trouvé');
+            
            popupElement.classList.add('highlight');
+           console.log('popupElement trouvé', popupElement);
         }
 
     });
     //navigation.startProgrammaticMove(true);
     marker.openPopup();
-    //marker.openPopup({
-    //autoPan:false
-//});
+    
 }
 
 
 export function resetHighlightedMarker() {
 
-
     if (!highlightedMarker) {
         return;
     }
+    
+    const popupElement = highlightedMarker
+    .getPopup()
+    ?.getElement();
+
+if (popupElement) {
+    popupElement.classList.remove('highlight');
+}
 
     const markerElement = highlightedMarker.getElement();
 
@@ -90,9 +97,9 @@ export function resetHighlightedMarker() {
         
         markerElement.classList.remove('highlight')
     }
-        
-    highlightedMarker.closePopup();
 
+    highlightedMarker.setZIndexOffset(0);
+    highlightedMarker.closePopup();
     highlightedMarker = null;
 }
 
@@ -131,12 +138,6 @@ export function renderMarkers(
             ],
             {
                 icon:createIcon(color)
-                /*icon:createIcon(
-                    getAvailabilityColor(
-                        station,
-                        displayMode
-                    )
-                )*/
             }
             
         );
@@ -153,16 +154,15 @@ export function renderMarkers(
 
         
 
-
-
         marker.on('click',()=>{
     
-            
             navigation.restoreAfterSearch(station);
 
             setOpenedStation(station.id);
         
-            clearCurrentFilteredStations();
+            //clearCurrentFilteredStations();
+            actions.clearCurrentFilteredStations?.();
+            //actions.clearSearch?.();
         
             renderMarkers(
                 map,
@@ -178,7 +178,6 @@ export function renderMarkers(
 
             actions.endSearch?.();
 
-            //actions.clearSearchState?.();
         });
 
         stationMarkers.set(station.id, marker);
@@ -207,6 +206,6 @@ export function renderMarkers(
     });
 }
 
-window.highlightMarker = highlightMarker;
-window.resetHighlightedMarker = resetHighlightedMarker;
-console.log("highlightMarker exposé");
+//window.highlightMarker = highlightMarker;
+//window.resetHighlightedMarker = resetHighlightedMarker;
+//console.log("highlightMarker exposé");

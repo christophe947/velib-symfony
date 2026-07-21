@@ -119,8 +119,8 @@
     transform:scale(1.5);
 }
 
-.leaflet-popup-content-wrapper.highlight {
+.leaflet-popup.highlight .leaflet-popup-content-wrapper {
 
-    opacity:0.20;
+    opacity:0.925;
 
 }
