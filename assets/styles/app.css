@@ -100,3 +100,27 @@
     margin-bottom:5px;
 
 }
+
+.marker-dot {
+
+    width:20px;
+    height:20px;
+    border-radius:50%;
+    border:3px solid white;
+
+    transition:
+        transform 0.25s ease,
+        opacity 0.25s ease;
+}
+
+
+.station-marker.highlight .marker-dot {
+
+    transform:scale(1.5);
+}
+
+.leaflet-popup-content-wrapper.highlight {
+
+    opacity:0.20;
+
+}

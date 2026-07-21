@@ -68,6 +68,12 @@ class NavigationManager {
 
     saveUserView() {
 
+        console.log(
+        "SAVE USER VIEW",
+        this.map.getZoom(),
+        this.map.getCenter()
+    );
+
         this.userView = {
             center: [
                 this.map.getCenter().lat,
@@ -80,7 +86,7 @@ class NavigationManager {
 
 
     restoreUserView() {
-console.log("USER VIEW", this.userView);
+        console.log("USER VIEW", this.userView);
         if (!this.userView) {
             this.initDefaultView();
         

@@ -13,27 +13,87 @@ import {
 } from './state.js';
 
 
+const stationMarkers = new Map();
 
+let highlightedMarker = null;
 
-function createIcon(color) {
+function createIcon(color, size = 20) {
 
     return L.divIcon({
 
-        className:'',
+        className:'station-marker',
 
         html:`
-        <div style="
-            background:${color};
-            width:20px;
-            height:20px;
-            border-radius:50%;
-            border:3px solid white;
-        ">
+        <div 
+            class="marker-dot"
+            style="
+                background:${color};
+            ">
         </div>
         `,
 
-        iconSize:[20,20]
+        iconSize:[20,20],
+        iconAnchor:[10,10]
     });
+}
+
+
+export function highlightMarker(stationId) {
+
+    const marker = stationMarkers.get(stationId);
+
+    if (!marker) {
+        return;
+    }
+
+    highlightedMarker = marker;
+
+
+    const markerElement = marker.getElement();
+
+    if (markerElement) {
+        markerElement.classList.add('highlight');
+    }
+
+    navigation.startProgrammaticMove();
+
+    marker.once('popupopen', () => {
+
+        const popupElement = marker
+            .getPopup()
+            .getElement();
+
+        if (popupElement) {
+            console.log('popupElement trouvé');
+           popupElement.classList.add('highlight');
+        }
+
+    });
+    //navigation.startProgrammaticMove(true);
+    marker.openPopup();
+    //marker.openPopup({
+    //autoPan:false
+//});
+}
+
+
+export function resetHighlightedMarker() {
+
+
+    if (!highlightedMarker) {
+        return;
+    }
+
+    const markerElement = highlightedMarker.getElement();
+
+    if (markerElement) {
+        
+        markerElement.classList.remove('highlight')
+    }
+        
+    highlightedMarker.closePopup();
+
+    highlightedMarker = null;
 }
 
 
@@ -48,11 +108,17 @@ export function renderMarkers(
 ) {
     
     markersLayer.clearLayers();
+    stationMarkers.clear();
 
     stations.forEach(station => {
 
         
         const rate = getAvailabilityRate(
+            station,
+            displayMode
+        );
+
+        const color = getAvailabilityColor(
             station,
             displayMode
         );
@@ -64,14 +130,20 @@ export function renderMarkers(
                 station.longitude
             ],
             {
-                icon:createIcon(
+                icon:createIcon(color)
+                /*icon:createIcon(
                     getAvailabilityColor(
                         station,
                         displayMode
                     )
-                )
+                )*/
             }
+            
         );
+        
+        marker.options.originalColor = color;
+        marker.options.stationId = station.id;
+        marker.options.station = station;
 
         marker.bindPopup(`
             <strong>${station.name}</strong><br>
@@ -79,7 +151,7 @@ export function renderMarkers(
             🅿️ ${station.docks} places
         `);
 
-
+        
 
 
 
@@ -88,11 +160,6 @@ export function renderMarkers(
             
             navigation.restoreAfterSearch(station);
 
-            /*map.once('moveend', () => {
-                navigation.saveUserView();
-                console.log('vue enregistré', navigation.saveUserView)
-            });*/
-            
             setOpenedStation(station.id);
         
             clearCurrentFilteredStations();
@@ -113,8 +180,11 @@ export function renderMarkers(
 
             //actions.clearSearchState?.();
         });
-            
+
+        stationMarkers.set(station.id, marker);
         markersLayer.addLayer(marker);
+
+        
 
         // 👇 restaure le popup après changement de mode a verif
         if (getOpenedStation() == station.id) {
@@ -136,3 +206,7 @@ export function renderMarkers(
         }
     });
 }
+
+window.highlightMarker = highlightMarker;
+window.resetHighlightedMarker = resetHighlightedMarker;
+console.log("highlightMarker exposé");

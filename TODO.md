@@ -33,6 +33,17 @@ v0.3.0 - Carte + UX en cours
 
 ## 🔜 En cours
 
+✨ Idées UX
+
+☑️ Badge popup selon mode
+☑️ Hover desktop liste → marker
+☑️ Footer
+☑️ Responsive mobile
+☑️ Animation sélection station
+☑️ Favoris (V2)
+☑️ Géolocalisation (V2)
+☑️ Itinéraires (V4)
+
 ### Recherche stations
 
 * [ ] Tri alphabétique
@@ -108,6 +119,7 @@ v0.3.0 - Carte + UX en cours
 * [ ] Historique des trajets
 * [ ] Alertes disponibilité station favorite
 * [ ] Mode mobile avancé type application de mobilité
+* [ ] itineraire adresse astation / trajet complet velib gps ( bike mode)
 
 ---
 

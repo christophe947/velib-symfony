@@ -45,52 +45,67 @@ export function showStationList(
     
             </div>
     
-            `)
-            .join('');
+        `)
+        .join('');
     
             container.querySelectorAll('.station-item').forEach(item => {
     
+                const station = stations.find(
+                    s => s.id == item.dataset.id
+                );
+                
+                if (!station) return;
+
+                item.addEventListener('mouseenter', () => {
+                    /*hoverTimeout = setTimeout(() => {
+
+                        highlightMarker(station.id);
+
+                    }, 300);*/
+                    highlightMarker(station.id);
+                });
+
+                item.addEventListener('mouseleave', () => {
+                    resetHighlightedMarker();
+                });
+
                 item.addEventListener('pointerdown', () => {
     
-        const station = stations.find(
-            s => s.id == item.dataset.id
-        );
-    
-        if (!station) return;
-    
-    
-    container.innerHTML = "";
-    
-    const searchInput = document.getElementById('station-search');
-    
-    if (searchInput) {
-        
-        searchInput.value = "";
-    }
-    
-    console.log("focus suite a click station liste");
-    
-    setOpenedStation(station.id);
-    navigation.focusStation(station);
+                    container.innerHTML = "";
+                    
+                    const searchInput = document.getElementById('station-search');
+                    
+                    if (searchInput) {
+                        
+                        searchInput.value = "";
+                    }
+                    
+                    console.log("focus suite a click station liste");
+                    
+                    setOpenedStation(station.id);
+                    navigation.focusStation(station);
 
-    renderMarkers(
-    map,
-    markersLayer,
-    stations,
-    displayMode,
-    updateStationPanel,
-    false,
-    actions
-); 
-        updateStationPanel(station);
+                    renderMarkers(
+                        map,
+                        markersLayer,
+                        stations,
+                        displayMode,
+                        updateStationPanel,
+                        false,
+                        actions
+                    );
+
+                    updateStationPanel(station);
         
-      
-        actions.endSearch?.();
+                    actions.endSearch?.();
         //actions.clearSearchState?.();
     
-    });
+                });
+                
             });
 }
+
+
 
 let searchTimeout = null;
 setCurrentFilteredStations(null);
@@ -202,6 +217,7 @@ export function initSearch(options) {
     // 1) Enter
     searchInput.addEventListener('keydown', (e) => {
         //a chaque letre le mode move from programme activé
+        //test a enlever peu etre
          navigation.startProgrammaticMove();
          console.log("tappe lettre");
 
@@ -272,17 +288,9 @@ searchInput.addEventListener('input', () => {
 
         if (!value.trim()) {   
             //important pour reset lors du switch par exemple un affichage complet et non filtré avec 4 stations
-            //currentFilteredStations = null;
-            
             setCurrentFilteredStations(null);
 
-            /*const container = document.getElementById('station-results');
-
-if (container) {
-    container.innerHTML = "";
-}*/
-
-            console.log(navigation.mode);
+            console.log('mode de nav : ', navigation.mode);
 
             if (navigation.mode !== "savedView") {            
                 console.log("search vide sans vue enregistre");
@@ -292,7 +300,7 @@ if (container) {
 
                 //return;
             } else {
-                
+                console.log('devrai juste restaure')
                 navigation.restoreUserView();
             }
             
@@ -367,6 +375,8 @@ if (container) {
                     station.longitude
                 ])
             );
+
+            navigation.startProgrammaticMove();
 
             map.flyToBounds(bounds, {
                 padding: [40,40],
