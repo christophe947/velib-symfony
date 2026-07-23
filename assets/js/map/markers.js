@@ -164,7 +164,8 @@ export function renderMarkers(
         
             //clearCurrentFilteredStations();
             //actions.clearCurrentFilteredStations2?.();
-            actions.setCurrentFilteredStations?.(null);
+            //actions.setCurrentFilteredStations?.(null);
+            setCurrentFilteredStations(null);
             //actions.clearSearch?.();
         
             renderMarkers(

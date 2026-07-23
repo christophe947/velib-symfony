@@ -13,9 +13,7 @@ import {
     setOpenedStation,
     getOpenedStation,
     setSearching,
-    getSearching,
-    setCurrentFilteredStations,
-    getCurrentFilteredStations,
+    //getSearching,
     setDisplayMode,
     getDisplayMode
 } from './state.js';
@@ -38,16 +36,7 @@ if (typeof selectedStation !== 'undefined' && selectedStation !== null) {
 
 const actions = {
 
-    setOpenedStation,
-
-    clearSearchState,
-    // TEST
-    setCurrentFilteredStations,
-
-    //clearCurrentFilteredStations,
-
-    //clearCurrentFilteredStations2,
-
+    
     startSearch: () => {
         setSearching(true);
     },
@@ -58,7 +47,7 @@ const actions = {
         clearSearchState();
     },
 
-    getSearching,
+    //getSearching,
 
 
     getAllStations: () => stations,

@@ -4,7 +4,8 @@ import { showStationList } from './searchResults.js';
 import {
     setCurrentFilteredStations,
     getCurrentFilteredStations,
-    getDisplayMode
+    getDisplayMode,
+    getSearching
 } from './state.js';
 import {
     highlightMarker,
@@ -125,8 +126,6 @@ export function initSearch(options) {
 
 searchInput.addEventListener('input', () => {
 
-     //actions.startSearch();
-
     if (searchTimeout) {
         clearTimeout(searchTimeout);
     }
@@ -154,9 +153,6 @@ searchInput.addEventListener('input', () => {
                 navigation.restoreUserView();
             }
             
-            
-            
-            
             clearSearchState?.();
 
             renderMarkers(
@@ -173,15 +169,11 @@ searchInput.addEventListener('input', () => {
         }
 
 
-        if (!actions.getSearching?.()) {
+        if (!getSearching?.()) {
             console.log("search en cour");
-   
-
-    // a verifier
-    actions.startSearch();
-    
-
-       }
+            // a verifier
+            actions.startSearch();
+        }
 
         
 
