@@ -1,6 +1,6 @@
 import L from 'leaflet';
 import { navigation } from './navigation.js';
-import { clearCurrentFilteredStations } from './search.js';
+//import { clearCurrentFilteredStations } from './search.js';
 //import { getCurrentFilteredStations } from './search.js';
 import {
     getAvailabilityRate,
@@ -9,7 +9,9 @@ import {
 import {
     setOpenedStation,
     getOpenedStation,
-    getDisplayMode
+    getDisplayMode,
+    setCurrentFilteredStations,
+    //clearCurrentFilteredStations2
 } from './state.js';
 
 
@@ -161,7 +163,8 @@ export function renderMarkers(
             setOpenedStation(station.id);
         
             //clearCurrentFilteredStations();
-            actions.clearCurrentFilteredStations?.();
+            //actions.clearCurrentFilteredStations2?.();
+            actions.setCurrentFilteredStations?.(null);
             //actions.clearSearch?.();
         
             renderMarkers(

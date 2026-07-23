@@ -1,16 +1,14 @@
 import L from 'leaflet';
-import { updateStationPanel } from './stationPanel.js';
-import { updateLegend } from './legend.js';
-import { renderMarkers} from './markers.js';
-import { createMap } from './map.js';
 import { initDisplayMode } from './displayMode.js';
-import { showStationList,
-     initSearch,
-      cancelSearch,
-      clearSearchState,
-      clearCurrentFilteredStations
-} from './search.js';
+import { updateLegend } from './legend.js';
+import { createMap } from './map.js';
+import { renderMarkers} from './markers.js';
 import { navigation } from './navigation.js';
+import { 
+    clearSearchState,
+    initSearch
+} from './search.js';
+import { showStationList } from './searchResults.js';
 import {
     setOpenedStation,
     getOpenedStation,
@@ -21,6 +19,7 @@ import {
     setDisplayMode,
     getDisplayMode
 } from './state.js';
+import { updateStationPanel } from './stationPanel.js';
 
 
 let bikesButton;
@@ -42,8 +41,12 @@ const actions = {
     setOpenedStation,
 
     clearSearchState,
+    // TEST
+    setCurrentFilteredStations,
 
-    clearCurrentFilteredStations,
+    //clearCurrentFilteredStations,
+
+    //clearCurrentFilteredStations2,
 
     startSearch: () => {
         setSearching(true);
@@ -115,20 +118,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     
 
-
-
 const searchInput = document.getElementById('station-search');
 
            
-
-
-
 if (mapElement) {
 
     
-
     const mapInstance = createMap();
-
 
     map = mapInstance.map;
     //console.log('map');
@@ -179,14 +175,6 @@ initDisplayMode({
             }
             console.log("move from code ");
             return;
-            /*if (navigation.saveAfterProgrammaticMove) {
-
-                navigation.saveUserView();
-                navigation.saveAfterProgrammaticMove = false;
-
-            }*/
-
-            
             
         } 
         navigation.saveUserView(); 
