@@ -172,7 +172,7 @@ class NavigationManager {
 
 
     // a verif
-    if (this.userView) {
+    /*if (this.userView) {
 
         console.log("RESTORE USER VIEW test existence");
 
@@ -185,7 +185,7 @@ class NavigationManager {
                 animate:false
             }
         );
-    }
+    }*/
 }
 
 }

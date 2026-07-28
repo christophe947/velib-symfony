@@ -13,9 +13,9 @@ import {
     setOpenedStation,
     getOpenedStation,
     setSearching,
-    //getSearching,
     setDisplayMode,
-    getDisplayMode
+    getDisplayMode,
+    getSearching
 } from './state.js';
 import { updateStationPanel } from './stationPanel.js';
 
@@ -25,14 +25,14 @@ let docksButton;
 let mapElement;
 let map;
 let markersLayer;
+
 let fromCard = false;
-
-
-
 
 if (typeof selectedStation !== 'undefined' && selectedStation !== null) {
     fromCard = true;
 }
+
+
 
 const actions = {
 
@@ -46,13 +46,14 @@ const actions = {
         //test
         clearSearchState();
     },
-
+    isSearching() {
+        return getSearching();
+    },
     //getSearching,
-
-
     getAllStations: () => stations,
 };
  
+
 function fitStationsBounds(list) {
 
     if (!list.length) return;
@@ -107,92 +108,101 @@ document.addEventListener('DOMContentLoaded', () => {
 
     
 
-const searchInput = document.getElementById('station-search');
+    const searchInput = document.getElementById('station-search');
 
-           
-if (mapElement) {
-
-    
-    const mapInstance = createMap();
-
-    map = mapInstance.map;
-    //console.log('map');
-    markersLayer = mapInstance.markersLayer;
-
-
-    navigation.init(map);
-
-    navigation.initDefaultView();
-
-
-    initSearch({
-    stations,
-    map,
-    markersLayer,
-    getDisplayMode,
-    updateStationPanel,
-    renderMarkers,
-    setOpenedStation,
-    clearSearchState,
-    actions,
-    fitStationsBounds
-    
-});
-
-initDisplayMode({
-    map,
-    markersLayer,
-    stations,
-    renderMarkers,
-    updateStationPanel,
-    updateLegend,
-    actions
-});
-
-    map.on('moveend', () => {
-
-        if (navigation.isProgrammatic()) {
-
-            const saveAfter = navigation.saveAfterProgrammaticMove;
-
-            navigation.endProgrammaticMove();
-
-            if (saveAfter) {
-
-                navigation.saveUserView();
-                
-            }
-            console.log("move from code ");
-            return;
             
-        } 
-        navigation.saveUserView(); 
+    if (mapElement) {
 
-        console.log("move from user");
-    });
+        
+        const mapInstance = createMap();
+
+        map = mapInstance.map;
+        //console.log('map');
+        markersLayer = mapInstance.markersLayer;
+
+
+        navigation.init(map);
+
+        navigation.initDefaultView();
+
+
+        initSearch({
+            stations,
+            map,
+            markersLayer,
+            getDisplayMode,
+            updateStationPanel,
+            renderMarkers,
+            setOpenedStation,
+            clearSearchState,
+            actions,
+            fitStationsBounds
+        });
+
+        initDisplayMode({
+            map,
+            markersLayer,
+            stations,
+            renderMarkers,
+            updateStationPanel,
+            updateLegend,
+            actions
+        });
+
+
+        map.on('moveend', () => {
+
+            console.log(actions.isSearching?.());
+
+            if (navigation.isProgrammatic()) {
+                //console.log(actions.getSearching?.());
+                const saveAfter = navigation.saveAfterProgrammaticMove;
+
+                navigation.endProgrammaticMove();
+
+                if (actions.isSearching?.()) {
+                    console.log("move pendant recherche");
+                    return;
+                }
+
+                if (saveAfter) {
+                    navigation.saveUserView();
+                }
+
+                console.log("move from code ");
+                return;
+            } 
+            if (actions.isSearching?.()) {
+                console.log("move manuel pendant recherche");
+                return;
+            }
+            navigation.saveUserView(); 
+
+            console.log("move from user");
+        });
 
 
 
-    if (fromCard) {
+        if (fromCard) {
 
-        setOpenedStation(
-            selectedStation.id ?? selectedStation
+            setOpenedStation(
+                selectedStation.id ?? selectedStation
+            );
+        }
+
+        renderMarkers(
+            map,
+            markersLayer,
+            stations,
+            //displayMode,
+            getDisplayMode(),
+            updateStationPanel,
+            true,
+            actions
         );
-    }
 
-    renderMarkers(
-        map,
-        markersLayer,
-        stations,
-        //displayMode,
-        getDisplayMode(),
-        updateStationPanel,
-        true,
-        actions
-    );
-
-    updateLegend(map, getDisplayMode());
-};
+        updateLegend(map, getDisplayMode());
+    };
 
 });
     

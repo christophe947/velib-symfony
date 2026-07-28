@@ -1,7 +1,5 @@
 import L from 'leaflet';
 import { navigation } from './navigation.js';
-//import { clearCurrentFilteredStations } from './search.js';
-//import { getCurrentFilteredStations } from './search.js';
 import {
     getAvailabilityRate,
     getAvailabilityColor
@@ -10,8 +8,7 @@ import {
     setOpenedStation,
     getOpenedStation,
     getDisplayMode,
-    setCurrentFilteredStations,
-    //clearCurrentFilteredStations2
+    setCurrentFilteredStations
 } from './state.js';
 
 
@@ -73,9 +70,8 @@ export function highlightMarker(stationId) {
         }
 
     });
-    //navigation.startProgrammaticMove(true);
+
     marker.openPopup();
-    
 }
 
 
@@ -89,9 +85,9 @@ export function resetHighlightedMarker() {
     .getPopup()
     ?.getElement();
 
-if (popupElement) {
-    popupElement.classList.remove('highlight');
-}
+    if (popupElement) {
+        popupElement.classList.remove('highlight');
+    }
 
     const markerElement = highlightedMarker.getElement();
 
@@ -162,9 +158,6 @@ export function renderMarkers(
 
             setOpenedStation(station.id);
         
-            //clearCurrentFilteredStations();
-            //actions.clearCurrentFilteredStations2?.();
-            //actions.setCurrentFilteredStations?.(null);
             setCurrentFilteredStations(null);
             //actions.clearSearch?.();
         
@@ -209,7 +202,3 @@ export function renderMarkers(
         }
     });
 }
-
-//window.highlightMarker = highlightMarker;
-//window.resetHighlightedMarker = resetHighlightedMarker;
-//console.log("highlightMarker exposé");
