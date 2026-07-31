@@ -2,6 +2,7 @@ import L from 'leaflet';
 import { initDisplayMode } from './displayMode.js';
 import { updateLegend } from './legend.js';
 import { createMap } from './map.js';
+import { initMapEvents } from './mapEvents.js';
 import { renderMarkers} from './markers.js';
 import { navigation } from './navigation.js';
 import { 
@@ -43,13 +44,13 @@ const actions = {
 
     endSearch: () => {
         setSearching(false);
-        //test
         clearSearchState();
     },
+
     isSearching() {
         return getSearching();
     },
-    //getSearching,
+
     getAllStations: () => stations,
 };
  
@@ -95,35 +96,26 @@ function fitStationsBounds(list) {
 
 document.addEventListener('DOMContentLoaded', () => {
 
-    const searchForm = document.getElementById('station-search-form');
-
-    if (searchForm) {
-        searchForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            return false;
-        });
-    }
-
     mapElement = document.getElementById('map');
-
-    
-
-    const searchInput = document.getElementById('station-search');
-
-            
+        
     if (mapElement) {
 
-        
         const mapInstance = createMap();
 
         map = mapInstance.map;
-        //console.log('map');
+       
         markersLayer = mapInstance.markersLayer;
 
 
         navigation.init(map);
 
         navigation.initDefaultView();
+
+        initMapEvents(
+            map,
+            navigation,
+            actions
+        );
 
 
         initSearch({
@@ -150,39 +142,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
 
-        map.on('moveend', () => {
-
-            console.log(actions.isSearching?.());
-
-            if (navigation.isProgrammatic()) {
-                //console.log(actions.getSearching?.());
-                const saveAfter = navigation.saveAfterProgrammaticMove;
-
-                navigation.endProgrammaticMove();
-
-                if (actions.isSearching?.()) {
-                    console.log("move pendant recherche");
-                    return;
-                }
-
-                if (saveAfter) {
-                    navigation.saveUserView();
-                }
-
-                console.log("move from code ");
-                return;
-            } 
-            if (actions.isSearching?.()) {
-                console.log("move manuel pendant recherche");
-                return;
-            }
-            navigation.saveUserView(); 
-
-            console.log("move from user");
-        });
-
-
-
         if (fromCard) {
 
             setOpenedStation(
@@ -194,7 +153,6 @@ document.addEventListener('DOMContentLoaded', () => {
             map,
             markersLayer,
             stations,
-            //displayMode,
             getDisplayMode(),
             updateStationPanel,
             true,
