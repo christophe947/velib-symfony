@@ -7,7 +7,6 @@ import {
 import {
     setOpenedStation,
     getOpenedStation,
-    getDisplayMode,
     setCurrentFilteredStations
 } from './state.js';
 
@@ -16,7 +15,7 @@ const stationMarkers = new Map();
 
 let highlightedMarker = null;
 
-function createIcon(color, size = 20) {
+function createIcon(color) {
 
     return L.divIcon({
 
@@ -48,7 +47,6 @@ export function highlightMarker(stationId) {
     highlightedMarker = marker;
     marker.setZIndexOffset(1000);
 
-
     const markerElement = marker.getElement();
 
     if (markerElement) {
@@ -64,11 +62,8 @@ export function highlightMarker(stationId) {
             .getElement();
 
         if (popupElement) {
-            
            popupElement.classList.add('highlight');
-           console.log('popupElement trouvé', popupElement);
         }
-
     });
 
     marker.openPopup();
@@ -117,18 +112,11 @@ export function renderMarkers(
 
     stations.forEach(station => {
 
-        
-        const rate = getAvailabilityRate(
-            station,
-            displayMode
-        );
-
         const color = getAvailabilityColor(
             station,
             displayMode
         );
         
-
         const marker = L.marker(
             [
                 station.latitude,
@@ -137,7 +125,6 @@ export function renderMarkers(
             {
                 icon:createIcon(color)
             }
-            
         );
         
         marker.options.originalColor = color;
@@ -151,7 +138,6 @@ export function renderMarkers(
         `);
 
         
-
         marker.on('click',()=>{
     
             navigation.restoreAfterSearch(station);
@@ -159,8 +145,7 @@ export function renderMarkers(
             setOpenedStation(station.id);
         
             setCurrentFilteredStations(null);
-            //actions.clearSearch?.();
-        
+         
             renderMarkers(
                 map,
                 markersLayer,
@@ -174,14 +159,13 @@ export function renderMarkers(
             updateStationPanel(station);
 
             actions.endSearch?.();
-
         });
+
 
         stationMarkers.set(station.id, marker);
         markersLayer.addLayer(marker);
 
         
-
         // 👇 restaure le popup après changement de mode a verif
         if (getOpenedStation() == station.id) {
 

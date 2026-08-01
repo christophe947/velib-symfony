@@ -3,23 +3,12 @@ import { navigation } from './navigation.js';
 import { showStationList } from './searchResults.js';
 import {
     setCurrentFilteredStations,
-    //getCurrentFilteredStations,
     getDisplayMode,
-    //getSearching
 } from './state.js';
-import {
-    highlightMarker,
-    resetHighlightedMarker
-} from './markers.js';
-
-
-let searchTimeout = null;
-
 
 
 
 export function clearSearchState() {
-    console.log("CLEAR SEARCH");
     
     setCurrentFilteredStations(null);
     
@@ -37,7 +26,6 @@ export function clearSearchState() {
 }
 
 
-
 function restoreSearchMapView() {
 
     if (navigation.mode !== "savedView") {
@@ -52,8 +40,6 @@ function restoreSearchMapView() {
 
 function handleSearchBlur() {
 
-    console.log("BLUR SEARCH");
-
     setTimeout(() => {
 
         const container =
@@ -66,14 +52,17 @@ function handleSearchBlur() {
     }, 200);
 }
 
-function handleSearchFocus(searchInput,
+
+function handleSearchFocus(
+    searchInput,
     stations,
     map,
     markersLayer,
     updateStationPanel,
     renderMarkers,
     setOpenedStation,
-    actions) {
+    actions
+) {
 
     const value = searchInput.value.toLowerCase();
 
@@ -97,9 +86,8 @@ function handleSearchFocus(searchInput,
 
 }
 
-function handleSearchKeydown(e) {
 
-    //navigation.startProgrammaticMove();
+function handleSearchKeydown(e) {
 
     console.log("tappe lettre");
 
@@ -107,7 +95,6 @@ function handleSearchKeydown(e) {
         e.preventDefault();
         e.stopPropagation();
     }
-
 }
 
 
@@ -169,52 +156,37 @@ function updateSearchResults(
 }
 
 
-
 export function initSearch(options) {
 
    const {
     stations,
     map,
     markersLayer,
-    //getDisplayMode,
     updateStationPanel,
     renderMarkers,
     setOpenedStation,
-    clearSearchState,
-    actions,
-    //fitStationsBounds
+    actions
 } = options;
-
 
     const searchInput =
         document.getElementById('station-search');
 
-        
     if (!searchInput) {
         return;
     }
 
-
     // 1) Enter
     searchInput.addEventListener('keydown', (e) => {
-        
        handleSearchKeydown(e);
-
     });
-
 
     // 2) Blur
     searchInput.addEventListener('blur', () => {
-
         handleSearchBlur();
-
     });
-
 
     // 3) Focus
     searchInput.addEventListener('focus', () => {
-        console.log("FOCUS SEARCH");
-
         handleSearchFocus(
             searchInput,
             stations,
@@ -227,15 +199,13 @@ export function initSearch(options) {
         );
     });
 
-
-
     searchInput.addEventListener('input', () => {
-
-        if (searchTimeout) {
+        // debounce à réintroduire pour recherche API externe
+        /*if (searchTimeout) {
             clearTimeout(searchTimeout);
         }
 
-        searchTimeout = setTimeout(() => {
+        searchTimeout = setTimeout(() => {*/
 
             const value = searchInput.value.toLowerCase();
 
@@ -243,8 +213,6 @@ export function initSearch(options) {
 
                 actions.endSearch();
                 
-                //clearSearchState();
-
                 restoreSearchMapView();
 
                 renderMarkers(
@@ -260,8 +228,6 @@ export function initSearch(options) {
             }
 
             if (!actions.isSearching?.()) {
-                console.log("search en cour");
-                // a verifier
                 actions.startSearch();
             }
 
@@ -275,9 +241,6 @@ export function initSearch(options) {
                 setOpenedStation,
                 actions
             );
-
-        }, 400);
-
+        /*}, 400);*/
     });
-
 }

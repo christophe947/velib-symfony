@@ -21,7 +21,6 @@ class NavigationManager {
         this.isProgrammaticMove = false;
 
         this.saveAfterProgrammaticMove = false;
-
     }
 
 
@@ -29,8 +28,8 @@ class NavigationManager {
 
         this.isProgrammaticMove = true;
         this.saveAfterProgrammaticMove = saveAfter;
-
     }
+
 
     endProgrammaticMove() {
         this.isProgrammaticMove = false;
@@ -42,12 +41,8 @@ class NavigationManager {
         return this.isProgrammaticMove;
     }
 
-
     
-
-
     init(map) {
-
         this.map = map;
     }
 
@@ -68,12 +63,6 @@ class NavigationManager {
 
     saveUserView() {
 
-        console.log(
-        "SAVE USER VIEW",
-        this.map.getZoom(),
-        this.map.getCenter()
-    );
-
         this.userView = {
             center: [
                 this.map.getCenter().lat,
@@ -86,7 +75,7 @@ class NavigationManager {
 
 
     restoreUserView() {
-        console.log("USER VIEW", this.userView);
+
         if (!this.userView) {
             this.initDefaultView();
         
@@ -104,6 +93,7 @@ class NavigationManager {
         );
     }
 
+
     focusStation(station) {
 
         this.focusView = {
@@ -116,10 +106,7 @@ class NavigationManager {
 
         this.mode = "focus";
 
-        
         this.startProgrammaticMove(true);
-
-        
 
         this.map.flyTo(
             this.focusView.center,
@@ -129,6 +116,7 @@ class NavigationManager {
             }
         );
     }
+
     //click sur un marker après une recherche on centre et ajuste le zoom changer le nom de fonction ex adapt zoom after click station
     restoreAfterSearch(station) {
 
@@ -142,7 +130,6 @@ class NavigationManager {
             zoom: this.defaultZoom
         };
 
-        //this.startProgrammaticMove();
         this.startProgrammaticMove(true);
 
         if (currentZoom <= this.defaultView.zoom) {
@@ -169,25 +156,7 @@ class NavigationManager {
         
         return;
     }
-
-
-    // a verif
-    /*if (this.userView) {
-
-        console.log("RESTORE USER VIEW test existence");
-
-        this.startProgrammaticMove();
-
-        this.map.setView(
-            this.userView.center,
-            this.userView.zoom,
-            {
-                animate:false
-            }
-        );
-    }*/
 }
-
 }
 
 export const navigation = new NavigationManager();

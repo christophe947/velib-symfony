@@ -2,15 +2,9 @@ import L from 'leaflet';
 import { getAvailabilityLegend } from './availability.js';
 
 let legend = null;
-//let displayMode = localStorage.getItem('mapMode') || 'bikes';
 
 
-/*function getLegendTitle(displayMode) {
 
-    return displayMode === 'bikes'
-        ? 'Disponibilité vélos'
-        : 'Places disponibles';
-}*/
 
 function getLegendTitle(displayMode) {
 
@@ -18,14 +12,6 @@ function getLegendTitle(displayMode) {
         ? '🚲 Disponibilité vélos'
         : '🅿️ Places disponibles';
 }
-/*function getModeLabel(displayMode) {
-
-    return displayMode === 'bikes'
-        ? 'vélos disponibles'
-        : 'places disponibles';
-}*/
-
-
 
 
 export function updateLegend(map, displayMode) {

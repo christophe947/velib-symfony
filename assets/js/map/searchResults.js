@@ -1,3 +1,4 @@
+import { getAvailabilityColor } from './availability.js';
 import { navigation } from './navigation.js';
 import {
     highlightMarker,
@@ -25,25 +26,35 @@ export function showStationList(
             return;
         }
     
-        container.innerHTML = list.slice(0,20).map(station => `
-    
-            <div 
-                class="mb-3 station-item"
-                data-id="${station.id}"
-                style="cursor:pointer">
-    
-                <strong>
-                    ${station.name}
-                </strong>
-    
-                <br>
-    
-                🚲 ${station.bikes}
-                🅿️ ${station.docks}
-    
-            </div>
-    
-        `)
+        container.innerHTML = list.slice(0,20).map(station => {
+
+            const color = getAvailabilityColor(station, displayMode);
+            
+            return `
+                <div 
+                    class="mb-3 station-item"
+                    data-id="${station.id}"
+                    style="cursor:pointer">
+        
+                    <span 
+                        class="station-status-dot"
+                        style="background:${color}">
+                    </span>
+                    &nbsp
+                    <strong>
+                        ${station.name}
+                    </strong>
+
+                    <br>
+                    &nbsp &nbsp &nbsp
+        
+                    🚲 ${station.bikes}
+                    &nbsp
+                    🅿️ ${station.docks}
+        
+                </div>
+            `; 
+        })
         .join('');
     
             container.querySelectorAll('.station-item').forEach(item => {
