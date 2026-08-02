@@ -16,6 +16,7 @@
 }
 
 #station-panel {
+    /*border: 1px solid #100f0f;*/
 
     max-height: 220px;
     min-height:180px;
@@ -42,7 +43,7 @@
     background: white;
     z-index: 1000;
 
-    max-height: 300px;
+    max-height: 55vh;
     overflow-y: auto;
 
     border-radius: 8px;
@@ -70,10 +71,19 @@
 .map-layout {
     height: 70vh;
 }
-
+/*
 
 .map-layout .card {
     height: 100%;
+}*/
+
+.map-layout .card {
+    height:100%;
+}
+.map-layout .col-lg-4,
+.map-layout .col-lg-8 {
+    height:100%;
+    /*border: 3px solid #ff0000;*/
 }
 
 
@@ -139,3 +149,59 @@
     opacity:0.925;
 
 }
+
+
+@media (max-width:990px){
+
+    #station-panel {
+
+        min-height:120px;
+        max-height:180px;
+
+    }
+
+    .map-layout{
+        height:auto;
+        margin-bottom:0.75em;
+    }
+
+    .map-layout .col-lg-8 {
+        height:auto;
+    }
+
+    .map-container {
+        height: calc(100dvh - 320px);
+        min-height:400px;
+        
+        
+    }
+    
+    #map {
+        height:100%;
+    }
+
+}
+
+
+@media (max-width:576px){
+
+    .map-container {
+        height: calc(100dvh - 280px);
+        min-height:450px;
+        
+    }
+
+    .btn-group {
+        width:100%;
+    }
+
+    .btn-group .btn {
+        flex:1;
+    }
+
+    #station-results {
+        max-height:220px;
+    }
+
+}
+

@@ -32,59 +32,59 @@
     </div>
 
     <!--<div id="map" class="map-container"></div>-->
-    <div class="row map-layout">
+    <div class="row map-layout g-3">
 
         <div class="col-lg-4 mb-3">
 
-    <div class="card shadow-sm">
+            <div class="card shadow-sm">
 
-    <div class="card-body">
+                <div class="card-body">
 
-        <div class="search-container">
+                    <div class="search-container">
 
-    <form id="station-search-form">
-        <input 
-            id="station-search"
-            type="search"
-            class="form-control"
-            placeholder="Rechercher une station..."
-            autocomplete="off">
-    </form>
-    
-    <br>
-
-
-    <div id="station-results"></div>
-
-</div>
+                        <form id="station-search-form" class="mb-3">
+                            <input 
+                                id="station-search"
+                                type="search"
+                                class="form-control"
+                                placeholder="Rechercher une station..."
+                                autocomplete="off">
+                        </form>
+                        
+                        
 
 
-<div id="station-panel">
+                        <div id="station-results"></div>
 
-    <h4>Station</h4>
+                    </div>
 
-    <p class="text-muted">
-        Cliquez sur une station sur la carte
-    </p>
 
-</div>
+                    <div id="station-panel">
 
-    </div>
+                        <h4>Station</h4>
 
-</div>
+                        <p class="text-muted">
+                            Cliquez sur une station sur la carte
+                        </p>
 
-</div>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
         
     
 
-    <div class="col-lg-8">
+        <div class="col-lg-8">
 
-        <div id="map" class="map-container">>
+            <div id="map" class="map-container">
+            </div>
+
         </div>
 
     </div>
-
-</div>
 
     <script>
         window.stations = {{ stations|json_encode|raw }};

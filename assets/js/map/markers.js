@@ -170,14 +170,14 @@ export function renderMarkers(
         if (getOpenedStation() == station.id) {
 
             if (shouldZoom) {
-
-                map.setView(
+                navigation.focusStation(station);
+                /*map.setView(
                     [
                         station.latitude,
                         station.longitude
                     ],
                     16
-                );
+                );*/
             }
 
             updateStationPanel(station);

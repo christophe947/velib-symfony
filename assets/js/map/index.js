@@ -60,7 +60,6 @@ document.addEventListener('DOMContentLoaded', () => {
        
         markersLayer = mapInstance.markersLayer;
 
-
         navigation.init(map);
 
         navigation.initDefaultView();
