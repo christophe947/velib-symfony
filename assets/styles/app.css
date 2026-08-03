@@ -1,5 +1,13 @@
 @import "../vendor/bootstrap/dist/css/bootstrap.min.css";
 
+footer img {
+    transition: transform .2s ease;
+}
+
+footer img:hover {
+    transform: scale(1.15);
+}
+
 .map-legend {
     background: rgba(255,255,255,0.95);
     padding: 12px;
