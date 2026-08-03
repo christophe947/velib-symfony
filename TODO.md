@@ -129,3 +129,92 @@ Projet portfolio Symfony moderne.
 
 Objectif long terme :
 Créer un assistant Vélib complet combinant données temps réel, carte interactive, géolocalisation et calcul d'itinéraires.
+
+
+
+🚲 Vélib Tracker
+Version actuelle
+
+v1.0.0 - Prêt pour le déploiement
+
+✅ V1.0 terminée
+Projet
+ Symfony 8
+ Git (develop / feature)
+ Bootstrap
+ Leaflet
+ Architecture JS modulaire
+ Déploiement GitHub
+API
+ Connexion API Vélib
+ VelibApiService
+ Récupération des stations
+Carte
+ Carte Leaflet
+ Marqueurs personnalisés
+ Couleurs selon le pourcentage de disponibilité
+ Deux modes :
+🚲 Prendre
+🅿️ Rendre
+ Légende dynamique
+ Synchronisation carte ↔ panneau station
+ Synchronisation recherche ↔ carte
+ Animation de sélection
+ Hover desktop recherche → marqueur
+ Responsive desktop/mobile
+Recherche
+ Recherche instantanée
+ Recherche par nom
+ Recherche par adresse API
+Interface
+ Page d'accueil
+ Navigation active
+ Footer
+ Panneau d'informations station
+
+🚀 V1.1
+Données
+ Reverse geocoding
+ Cache des adresses
+ Affichage des vélos :
+électriques ⚡
+mécaniques 🚲
+ Rafraîchissement automatique des disponibilités
+Recherche
+ Recherche par adresse complète
+ Recherche par arrondissement
+ Recherche par ville
+
+🚀 V1.2
+ Géolocalisation utilisateur
+ Stations proches
+ Carte plein écran
+ PWA
+
+🚀 V1.3
+ Docker
+ Déploiement Docker
+ CI/CD GitHub Actions
+
+🚀 V2
+ Comptes utilisateurs
+ Favoris
+ Synchronisation des favoris
+ Statistiques
+ Historique
+ 
+🚀 V3 — Assistant mobilité
+ Recherche par destination
+ Géocodage adresse → GPS
+ Recherche des meilleures stations
+ Classement intelligent
+ Calcul d'itinéraires
+ Marche + Vélib + marche
+ Affichage complet dans Leaflet
+💡 Idées à conserver
+ Hover sur les marqueurs (desktop uniquement selon le niveau de zoom)
+ Popups légers au survol
+ Optimisations des performances
+ Animations UI
+ Mode sombre
+ Tests automatisés
