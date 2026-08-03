@@ -58,6 +58,54 @@
     {% block body %}{% endblock %}
 </main>
 
+<footer class="border-top mt-5 py-4">
+    <div class="container text-center">
+
+        <div class="mb-2">
+            🚲 <strong>Velib Tracker</strong>
+        </div>
+
+        <div class="small text-muted mb-3">
+            Visualisation des disponibilités Vélib' en temps réel
+        </div>
+
+        <div class="small mb-3">
+            Contact :
+            <a href="mailto:support@velib-tracker.fr">
+                support@velib-tracker.fr
+            </a>
+        </div>
+
+        <div class="small text-secondary mt-3">
+
+            <div class="mb-2">
+                Réalisé avec
+            </div>
+
+            <div class="d-flex justify-content-center align-items-center gap-4">
+
+                <img src="{{ asset('images/symfony_logo.svg') }}"
+                     alt="Symfony"
+                     height="28">
+
+                <img src="{{ asset('images/bootstrap_logo.svg') }}"
+                     alt="Bootstrap"
+                     height="28">
+
+                <img src="{{ asset('images/leaflet_logo.svg') }}"
+                     alt="Leaflet"
+                     height="28">
+
+            </div>
+
+        </div>
+
+        <div class="small text-secondary mt-3">
+            © {{ "now"|date("Y") }} Velib Tracker
+        </div>
+
+    </div>
+</footer>
 
 {% block javascripts %}
 {% endblock %}
