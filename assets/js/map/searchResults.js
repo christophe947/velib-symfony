@@ -74,9 +74,52 @@ export function showStationList(
                     resetHighlightedMarker();
                 });
 
-                item.addEventListener('pointerdown', () => {
-    
-                    container.innerHTML = "";
+                let startY = 0;
+
+item.addEventListener('pointerdown', (e) => {
+    startY = e.clientY;
+});
+
+
+item.addEventListener('pointerup', (e) => {
+
+    const diff = Math.abs(e.clientY - startY);
+
+    // Si le doigt a bougé, c'est un scroll
+    if (diff > 10) {
+        return;
+    }
+
+    // Sinon c'est une sélection
+    container.innerHTML = "";
+
+    const searchInput = document.getElementById('station-search');
+
+    if (searchInput) {
+        searchInput.value = "";
+    }
+
+    setOpenedStation(station.id);
+
+    navigation.focusStation(station);
+
+    renderMarkers(
+        map,
+        markersLayer,
+        stations,
+        displayMode,
+        updateStationPanel,
+        false,
+        actions
+    );
+
+    updateStationPanel(station);
+
+    actions.endSearch?.();
+
+});
+
+                /*item.addEventListener('pointerdown', () => {
                     
                     const searchInput = document.getElementById('station-search');
                     
@@ -103,9 +146,11 @@ export function showStationList(
                     updateStationPanel(station);
         
                     actions.endSearch?.();
+
+                    container.innerHTML = "";
         //actions.clearSearchState?.();
     
-                });
+                });*/
                 
             });
 }
