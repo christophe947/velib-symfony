@@ -76,61 +76,31 @@ export function showStationList(
 
                 let startY = 0;
 
-item.addEventListener('pointerdown', (e) => {
-    startY = e.clientY;
-});
+                item.addEventListener('pointerdown', (e) => {
+                    startY = e.clientY;
+                });
 
 
-item.addEventListener('pointerup', (e) => {
+                item.addEventListener('pointerup', (e) => {
 
-    const diff = Math.abs(e.clientY - startY);
+                    const diff = Math.abs(e.clientY - startY);
 
-    // Si le doigt a bougé, c'est un scroll
-    if (diff > 10) {
-        return;
-    }
+                    // Si le doigt a bougé, c'est un scroll
+                    if (diff > 10) {
+                        return;
+                    }
 
-    // Sinon c'est une sélection
-    container.innerHTML = "";
+                    // Sinon c'est une sélection
+                    container.innerHTML = "";
 
-    const searchInput = document.getElementById('station-search');
-
-    if (searchInput) {
-        searchInput.value = "";
-    }
-
-    setOpenedStation(station.id);
-
-    navigation.focusStation(station);
-
-    renderMarkers(
-        map,
-        markersLayer,
-        stations,
-        displayMode,
-        updateStationPanel,
-        false,
-        actions
-    );
-
-    updateStationPanel(station);
-
-    actions.endSearch?.();
-
-});
-
-                /*item.addEventListener('pointerdown', () => {
-                    
                     const searchInput = document.getElementById('station-search');
-                    
+
                     if (searchInput) {
-                        
                         searchInput.value = "";
                     }
-                    
-                    console.log("focus suite a click station liste");
-                    
+
                     setOpenedStation(station.id);
+
                     navigation.focusStation(station);
 
                     renderMarkers(
@@ -144,13 +114,12 @@ item.addEventListener('pointerup', (e) => {
                     );
 
                     updateStationPanel(station);
-        
+
                     actions.endSearch?.();
 
-                    container.innerHTML = "";
-        //actions.clearSearchState?.();
-    
-                });*/
+                });
+
+                
                 
             });
 }
