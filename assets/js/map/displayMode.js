@@ -58,7 +58,7 @@ export function initDisplayMode(options) {
 
     bikesButton?.addEventListener('click', () => {
 
-        navigation.startProgrammaticMove();
+        //navigation.startProgrammaticMove();
 
         setDisplayMode('bikes');
 
@@ -88,7 +88,7 @@ export function initDisplayMode(options) {
 
     docksButton?.addEventListener('click', () => {
 
-        navigation.startProgrammaticMove();
+        //navigation.startProgrammaticMove();
 
         setDisplayMode('docks');
 

@@ -135,10 +135,12 @@ export function renderMarkers(
             <strong>${station.name}</strong><br>
             🚲 ${station.bikes} vélos<br>
             🅿️ ${station.docks} places
-        `);
+        `, {
+            autoPan: false
+        });
 
         
-        marker.on('click',()=>{
+        marker.on('click', () => {
     
             navigation.restoreAfterSearch(station);
 
@@ -161,8 +163,8 @@ export function renderMarkers(
             actions.endSearch?.();
         });
 
-
         stationMarkers.set(station.id, marker);
+
         markersLayer.addLayer(marker);
 
         
@@ -170,14 +172,7 @@ export function renderMarkers(
         if (getOpenedStation() == station.id) {
 
             if (shouldZoom) {
-                navigation.focusStation(station);
-                /*map.setView(
-                    [
-                        station.latitude,
-                        station.longitude
-                    ],
-                    16
-                );*/
+                navigation.focusStation(station);  
             }
 
             updateStationPanel(station);
