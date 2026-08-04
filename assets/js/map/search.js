@@ -49,7 +49,7 @@ function handleSearchBlur() {
             container.innerHTML = "";
         }
 
-    }, 200);
+    }, 400);
 }
 
 

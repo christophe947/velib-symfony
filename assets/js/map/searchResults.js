@@ -74,30 +74,18 @@ export function showStationList(
                     resetHighlightedMarker();
                 });
 
-                let startY = 0;
+                item.addEventListener('click', () => {
 
-                item.addEventListener('pointerdown', (e) => {
-                    startY = e.clientY;
-                });
-
-
-                item.addEventListener('pointerup', (e) => {
-
-                    const diff = Math.abs(e.clientY - startY);
-
-                    // Si le doigt a bougé, c'est un scroll
-                    if (diff > 10) {
-                        return;
-                    }
-
-                    // Sinon c'est une sélection
                     container.innerHTML = "";
 
-                    const searchInput = document.getElementById('station-search');
+                    const searchInput =
+                        document.getElementById('station-search');
 
                     if (searchInput) {
                         searchInput.value = "";
                     }
+
+                    resetHighlightedMarker();
 
                     setOpenedStation(station.id);
 
@@ -116,10 +104,9 @@ export function showStationList(
                     updateStationPanel(station);
 
                     actions.endSearch?.();
-
+            
                 });
-
                 
-                
+            
             });
 }
