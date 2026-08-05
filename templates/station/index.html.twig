@@ -1,145 +1,149 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Velib Tracker - Stations{% endblock %}
+{% block title %}
+    Liste des stations Vélib | Velib Tracker
+{% endblock %}
+
+{% block meta_description %}
+    Recherchez rapidement une station Vélib et consultez sa disponibilité.
+{% endblock %}
 
 {% block body %}
 
-<div class="container mt-4">
+    <div class="container mt-4">
 
-    <h1>🚲 Stations Vélib</h1>
+        <h1>🚲 Stations Vélib</h1>
 
-    
-    <br>
+        <br>
         
-
         <div class="mb-4">
             <input
-    type="text"
-    id="station-search"
-    autofocus
-    class="form-control"
-    placeholder="🔎 Rechercher une station..."
-    value="{{ search|default('') }}"
->
+                type="text"
+                id="station-search"
+                autofocus
+                class="form-control"
+                placeholder="🔎 Rechercher une station..."
+                value="{{ search|default('') }}"
+            >
         </div>
 
 
-    <div class="row">
+        <div class="row">
 
-        {% for station in stations %}
+            {% for station in stations %}
 
-            <div class="col-md-4 mb-3 station-card" data-station-name="{{ station.name|lower }}" data-station-address="{{ station.address|default('')|lower }}">
+                <div class="col-md-4 mb-3 station-card" data-station-name="{{ station.name|lower }}" data-station-address="{{ station.address|default('')|lower }}">
 
-                <div class="card shadow">
+                    <div class="card shadow">
 
-                    <div class="card-body">
+                        <div class="card-body">
 
-                        <h5 class="card-title">
-                            {{ station.name }}
-                        </h5>
+                            <h5 class="card-title">
+                                {{ station.name }}
+                            </h5>
 
-                        {% if station.bikes == 0 %}
-                            <span class="badge text-bg-secondary">
-                                🚲 Aucun vélo
-                            </span>
-                        {% elseif station.bikes < 5 %}
-                            <span class="badge text-bg-warning">
-                                🚲 Peu de vélos
-                            </span>
-                        {% else %}
-                            <span class="badge text-bg-success">
-                                🚲 Vélos disponibles
-                            </span>
-                        {% endif %}
+                            {% if station.bikes == 0 %}
+                                <span class="badge text-bg-secondary">
+                                    🚲 Aucun vélo
+                                </span>
+                            {% elseif station.bikes < 5 %}
+                                <span class="badge text-bg-warning">
+                                    🚲 Peu de vélos
+                                </span>
+                            {% else %}
+                                <span class="badge text-bg-success">
+                                    🚲 Vélos disponibles
+                                </span>
+                            {% endif %}
 
-                        {% if station.docks == 0 %}
-                            <span class="badge text-bg-secondary">
-                                🅿️ Aucune borne libre
-                            </span>
-                        {% elseif station.docks < 5 %}
-                            <span class="badge text-bg-warning">
-                                🅿️ Peu de places
-                            </span>
-                        {% else %}
-                            <span class="badge text-bg-primary">
-                                🅿️ Bornes disponibles
-                            </span>
-                        {% endif %}
+                            {% if station.docks == 0 %}
+                                <span class="badge text-bg-secondary">
+                                    🅿️ Aucune borne libre
+                                </span>
+                            {% elseif station.docks < 5 %}
+                                <span class="badge text-bg-warning">
+                                    🅿️ Peu de places
+                                </span>
+                            {% else %}
+                                <span class="badge text-bg-primary">
+                                    🅿️ Bornes disponibles
+                                </span>
+                            {% endif %}
 
-                        <!--<span class="badge text-bg-success">
-                            🚲 {{ station.rentalStatus }}
-                        </span>-->
+                            <!--<span class="badge text-bg-success">
+                                🚲 {{ station.rentalStatus }}
+                            </span>-->
 
-                        <!--<span class="badge text-bg-primary">
-                            🅿️ {{ station.returnStatus }}
-                        </span>-->
+                            <!--<span class="badge text-bg-primary">
+                                🅿️ {{ station.returnStatus }}
+                            </span>-->
 
-                        <p class="mt-3">
-                            📍 {{ station.address }}
-                        </p>
+                            <p class="mt-3">
+                                📍 {{ station.address }}
+                            </p>
 
-                        <a href="{{ path('app_map', {station: station.id}) }}" class="btn btn-primary btn-sm">
-                            🗺️ Voir sur la carte
-                        </a>
+                            <a href="{{ path('app_map', {station: station.id}) }}" class="btn btn-primary btn-sm">
+                                🗺️ Voir sur la carte
+                            </a>
 
-                        <hr>
+                            <hr>
 
-                        <p>
-                            🚲 Vélos disponibles :
-                            <strong>{{ station.bikes }}</strong>
-                        </p>
+                            <p>
+                                🚲 Vélos disponibles :
+                                <strong>{{ station.bikes }}</strong>
+                            </p>
 
-                        <p>
-                            🅿️ Bornes libres :
-                            <strong>{{ station.docks }}</strong>
-                        </p>
+                            <p>
+                                🅿️ Bornes libres :
+                                <strong>{{ station.docks }}</strong>
+                            </p>
+
+                        </div>
 
                     </div>
 
                 </div>
 
-            </div>
-
             
 
-        {% endfor %}
+            {% endfor %}
+
+        </div>
+
+        <nav>
+
+            <ul class="pagination justify-content-center">
+
+                {% if currentPage > 1 %}
+                    <li class="page-item">
+                        <a class="page-link"
+                        href="{{ path('app_stations', {page: currentPage - 1}) }}">
+                            ‹
+                        </a>
+                    </li>
+                {% endif %}
+
+
+                <li class="page-item active">
+                    <span class="page-link">
+                        {{ currentPage }}
+                    </span>
+                </li>
+
+
+                {% if currentPage < totalPages %}
+                    <li class="page-item">
+                        <a class="page-link"
+                        href="{{ path('app_stations', {page: currentPage + 1}) }}">
+                            ›
+                        </a>
+                    </li>
+                {% endif %}
+
+            </ul>
+
+        </nav>
 
     </div>
-
-    <nav>
-
-<ul class="pagination justify-content-center">
-
-    {% if currentPage > 1 %}
-        <li class="page-item">
-            <a class="page-link"
-               href="{{ path('app_stations', {page: currentPage - 1}) }}">
-                ‹
-            </a>
-        </li>
-    {% endif %}
-
-
-    <li class="page-item active">
-        <span class="page-link">
-            {{ currentPage }}
-        </span>
-    </li>
-
-
-    {% if currentPage < totalPages %}
-        <li class="page-item">
-            <a class="page-link"
-               href="{{ path('app_stations', {page: currentPage + 1}) }}">
-                ›
-            </a>
-        </li>
-    {% endif %}
-
-</ul>
-
-</nav>
-
-</div>
 
 {% endblock %}

@@ -3,8 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}{% endblock %}</title>
 
+    <title>{% block title %}Velib Tracker - Disponibilité des stations Vélib en temps réel{% endblock %}</title>
+    <meta name="description" content=" {% block meta_description %} Consultez la disponibilité des stations Vélib en temps réel grâce à une carte interactive{% endblock %}">
+    <meta name="robots" content="index, follow">
+    <meta name="author" content="Christophe Gobet">
+    <meta name="theme-color" content="#198754">
+    <!-- Open Graph -->
+    <meta property="og:title" content="Velib Tracker">
+    <meta property="og:description" content="Consultez la disponibilité des stations Vélib en temps réel grâce à une carte interactive.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://velib-tracker.fr">
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
     {% block stylesheets %}
         {{ importmap('app') }}
     {% endblock %}
