@@ -55,7 +55,7 @@ class NavigationManager {
             this.defaultView.center,
             this.defaultView.zoom,
             {
-                duration: 0.8
+                duration: 1.25
             }
         );
     }
@@ -88,7 +88,7 @@ class NavigationManager {
             this.userView.center,
             this.userView.zoom,
             {
-                duration: 0.8
+                duration: 1.25
             }
         );
     }
@@ -112,7 +112,7 @@ class NavigationManager {
             this.focusView.center,
             this.focusView.zoom,
             {
-            duration: 0.8
+            duration: 1.75
             }
         );
     }
@@ -138,7 +138,7 @@ class NavigationManager {
             this.focusView.center,
             this.comfortZoom,
             {
-                duration: 0.8
+                duration: 1.25
             }
         );
 
@@ -150,7 +150,7 @@ class NavigationManager {
             this.focusView.center,
             currentZoom,
             {
-                duration: 0.8
+                duration: 1.25
             }
         );
         
