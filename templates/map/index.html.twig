@@ -10,13 +10,11 @@
 
 {% block body %}
 
+
 <div class="container-fluid mt-3">
 
-    <div class="mb-3 ">
-        <h1 class="h3 mb-1"><!-- 🗺️ --> Carte des stations</h1>
-    </div>
-
-    <div class="d-flex justify-content-center mb-3">
+    
+    <div class="d-flex justify-content-center mb-3 mt-3">
 
         <div class="btn-group" role="group">
             <button 
@@ -38,7 +36,7 @@
     <!--<div id="map" class="map-container"></div>-->
     <div class="row map-layout g-3">
 
-        <div class="col-lg-4 mb-3">
+        <div class="col-lg-4 mb-3 map-search-panel">
 
             <div class="card shadow-sm">
 
@@ -63,15 +61,45 @@
                     </div>
 
 
-                    <div id="station-panel">
+                    <div
+                        id="station-panel"
+                        class="offcanvas offcanvas-bottom station-offcanvas"
+                        tabindex="-1"
+                        aria-labelledby="station-panel-title">
 
-                        <h2>Station</h2>
+                        <div class="offcanvas-header station-panel-header">
 
-                        <p class="text-muted">
-                            Cliquez sur une station sur la carte
-                        </p>
+                            <div class="station-panel-handle" aria-hidden="true"></div>
+
+
+<div class="station-panel-title-row">
+                            <h2
+                                id="station-panel-title"
+                                class="offcanvas-title">
+                                Station
+                            </h2>
+
+                            <button
+                                type="button"
+                                class="btn-close"
+                                data-bs-dismiss="offcanvas"
+                                aria-label="Fermer">
+                            </button>
+                            </div>
+
+                        </div>
+
+                        <div class="offcanvas-body">
+
+                            <p class="text-muted">
+                                Cliquez sur une station sur la carte
+                            </p>
+
+                        </div>
 
                     </div>
+
+
 
                 </div>
 

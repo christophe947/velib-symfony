@@ -1,5 +1,6 @@
 @import "../vendor/bootstrap/dist/css/bootstrap.min.css";
 
+
 footer img {
     transition: transform .2s ease;
 }
@@ -24,108 +25,78 @@ footer img:hover {
 }
 
 #station-panel {
-    /*border: 1px solid #100f0f;*/
-
     max-height: 220px;
     min-height:180px;
     overflow-y: auto;
-
 }
 
 .station-info h4 {
     font-size: 1.1rem;
 }
 
-
 .search-container {
     position: relative;
 }
-
 
 #station-results {
     position: absolute;
     top: 100%;
     left: 0;
     right: 0;
-
     background: white;
     z-index: 1000;
-
     max-height: 55vh;
     overflow-y: auto;
-
     border-radius: 8px;
-
+    opacity: 0.925;
     box-shadow: 0 5px 15px rgba(0,0,0,.15);
 }
-
 
 .station-item {
     padding: 10px;
     border-bottom: 1px solid #eee;
 }
 
-
 .station-item:hover {
     background: #f5f5f5;
-}
-
-.station-item:hover{
-
-    background:#f5f5f5;
-
 }
 
 .map-layout {
     height: 70vh;
 }
-/*
-
-.map-layout .card {
-    height: 100%;
-}*/
 
 .map-layout .card {
     height:100%;
 }
+
 .map-layout .col-lg-4,
 .map-layout .col-lg-8 {
     height:100%;
-    /*border: 3px solid #ff0000;*/
 }
-
 
 #map {
     height: 100%;
 }
 
-
 .legend-color {
-
     width: 14px;
     height: 14px;
     border-radius: 50%;
     display: inline-block;
     margin-right: 8px;
-
 }
 
-
 .legend-item {
-
     display:flex;
     align-items:center;
     margin-bottom:5px;
-
 }
 
 .marker-dot {
-
     width:20px;
     height:20px;
     border-radius:50%;
     border:3px solid white;
-
     transition:
         transform 0.25s ease,
         opacity 0.25s ease;
@@ -138,78 +109,158 @@ footer img:hover {
     border-radius: 50%;
     margin-right: 8px;
     vertical-align: middle;
-
     border: 2px solid white;
-
     box-shadow:
         0 0 0 2px rgba(0,0,0,0.25),
         0 2px 5px rgba(0,0,0,0.35);
 }
 
-
 .station-marker.highlight .marker-dot {
-
     transform:scale(1.5);
 }
 
 .leaflet-popup.highlight .leaflet-popup-content-wrapper {
-
     opacity:0.925;
+}
 
+#station-panel .btn-close {
+    display: none;
 }
 
 
-@media (max-width:990px){
 
-    #station-panel {
 
-        min-height:120px;
-        max-height:180px;
 
-    }
 
-    .map-layout{
-        height:auto;
-        margin-bottom:0.75em;
-    }
+@media (max-width: 990px) {
 
-    .map-layout .col-lg-8 {
-        height:auto;
+    
+    main {
+        width: 100%;
+        margin: 0;
+        padding: 0;
     }
 
     .map-container {
-        height: calc(100dvh - 320px);
-        min-height:400px;
-        
-        
+        width: 100%;
+        margin: 0;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    main .container-fluid {
+        padding-left: 0;
+        padding-right: 0;
+        margin-top: 0 !important;
+    }
+
+    .map-layout {
+        position: relative;
+        width: 100%;
+        height: 70vh;
+        margin: 0;
+        padding: 0;
+    }
+
+    .map-search-panel {
+        position: absolute;
+        top: -5px;
+        left: 0;
+        width: 100%;
+        z-index: 1000;
+        pointer-events: none;
+    }
+
+    .map-search-panel .card {
+        height: auto;
+        background: transparent;
+        border: none;
+        box-shadow: none;
+    }
+
+    .map-search-panel .card-body {
+        padding: 5px 10px 10px !important;
+    }
+
+
+    .map-search-panel input,
+    .map-search-panel #station-results,
+    .map-search-panel button,
+    .map-search-panel form {
+        pointer-events: auto;
+    }
+
+
+    .map-layout > .col-lg-8 {
+        width: 100%;
+        height: 100%;
+        padding: 0;
+        margin: 0;
+    }
+
+    .map-container {
+        width: 100%;
+        height: 100%;
+    }
+
+    #map {
+        height: 100%;   
+    }
+
+    .leaflet-top.leaflet-left {
+        top: auto;
+        bottom: 20px;
+    }
+
+    .offcanvas-backdrop {
+        opacity: 0.20 !important;
     }
     
-    #map {
-        height:100%;
+    .btn-close {
+        width: 30px;
+        height: 30px;
     }
 
+    #station-panel .btn-close {
+        display: block !important;
+    }
+
+    body.station-panel-open .leaflet-bottom.leaflet-right, body.station-panel-open .leaflet-top.leaflet-left {
+        display: none;
+    }
+
+    #station-panel .btn-close {
+        display: none;
+    }
+
+
+     .station-panel-header {
+        display: block;
+        padding-top: 8px;
+        z-index: 1001;
+    }
+
+    .station-panel-handle {
+        width: 42px;
+        height: 5px;
+        margin: 0 auto 12px;
+        border-radius: 999px;
+        background: #ccc;
+    }
+
+    .station-panel-title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    
+     #station-panel.offcanvas {
+        transition:
+            transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+
+
+    
+    
 }
-
-
-@media (max-width:576px){
-
-    .map-container {
-        height: calc(100dvh - 280px);
-        min-height:450px;
-        
-    }
-
-    .btn-group {
-        width:100%;
-    }
-
-    .btn-group .btn {
-        flex:1;
-    }
-
-    #station-results {
-        max-height:220px;
-    }
-
-}
-

@@ -6,6 +6,7 @@ let displayMode = 'bikes';
 
 let isSearching = false;
 
+let stationPanelClosed = false;
 
 
 // ====================
@@ -72,4 +73,20 @@ export function setSearching(value) {
 export function getSearching() {
 
     return isSearching;
+}
+
+
+
+// ====================
+// Offcanvas closed state
+// ====================
+
+
+
+export function setStationPanelClosed(value) {
+    stationPanelClosed = value;
+}
+
+export function getStationPanelClosed() {
+    return stationPanelClosed;
 }

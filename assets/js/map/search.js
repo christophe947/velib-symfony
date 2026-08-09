@@ -200,6 +200,8 @@ export function initSearch(options) {
     });
 
     searchInput.addEventListener('input', () => {
+
+       
         // debounce à réintroduire pour recherche API externe
         /*if (searchTimeout) {
             clearTimeout(searchTimeout);

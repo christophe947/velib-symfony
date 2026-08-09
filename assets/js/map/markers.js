@@ -7,7 +7,9 @@ import {
 import {
     setOpenedStation,
     getOpenedStation,
-    setCurrentFilteredStations
+    setCurrentFilteredStations,
+    setStationPanelClosed,
+    getStationPanelClosed
 } from './state.js';
 
 
@@ -106,7 +108,7 @@ export function renderMarkers(
     shouldZoom = false,
     actions = {}
 ) {
-    
+
     markersLayer.clearLayers();
     stationMarkers.clear();
 
@@ -145,6 +147,8 @@ export function renderMarkers(
             navigation.restoreAfterSearch(station);
 
             setOpenedStation(station.id);
+
+            setStationPanelClosed(false);
         
             setCurrentFilteredStations(null);
          
@@ -172,12 +176,14 @@ export function renderMarkers(
         if (getOpenedStation() == station.id) {
 
             if (shouldZoom) {
-                navigation.focusStation(station);  
+                navigation.focusStation(station);
             }
-
-            updateStationPanel(station);
-
+            
             marker.openPopup();
+
+            if (!getStationPanelClosed()) {
+                updateStationPanel(station);
+            }
         }
     });
 }
