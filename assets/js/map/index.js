@@ -15,6 +15,7 @@ import {
     getSearching
 } from './state.js';
 import { updateStationPanel } from './stationPanel.js';
+import '../responsive.js';
 
 
 let mapElement;

@@ -182,11 +182,16 @@ export function initSearch(options) {
 
     // 2) Blur
     searchInput.addEventListener('blur', () => {
+         searchInput.closest('.mobile-search')
+        ?.classList.remove('expanded');
         handleSearchBlur();
     });
 
     // 3) Focus
     searchInput.addEventListener('focus', () => {
+
+        searchInput.closest('.mobile-search')
+    ?.classList.add('expanded');
         handleSearchFocus(
             searchInput,
             stations,

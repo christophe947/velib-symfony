@@ -6,8 +6,8 @@ class NavigationManager {
 
         this.mode = "default";
 
-        this.defaultZoom = 13;
-        this.comfortZoom = 14;
+        this.defaultZoom = 14;
+        this.comfortZoom = 15;
 
         this.defaultView = {
             center: [48.8566, 2.3522],

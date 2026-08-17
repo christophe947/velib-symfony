@@ -1,8 +1,4 @@
-import { Offcanvas } from 'bootstrap';
-import { 
-    setOpenedStation,
-    setStationPanelClosed
- } from './state.js';
+import { setStationPanelClosed } from './state.js';
 
 
 export function updateStationPanel(station) {
@@ -14,49 +10,20 @@ export function updateStationPanel(station) {
     }
 
     // Initialisation unique du comportement responsive du panneau.
-     
-    if (!panel.dataset.responsiveInitialized) {
-
-        const mediaQuery = window.matchMedia('(min-width: 990px)');
-
-        function handleMediaQueryChange(e) {
-
-            if (e.matches) {
-                // Grand écran
-                panel.classList.remove('offcanvas', 'offcanvas-bottom', 'station-offcanvas');
-            } 
-        }
-
-        // État initial
-        handleMediaQueryChange(mediaQuery);
-
-        // Si la fenêtre change de taille
-        mediaQuery.addEventListener('change', handleMediaQueryChange);
-
-        panel.dataset.responsiveInitialized = 'true';
-    }
+      
 
     // Initialisation unique des événements Bootstrap Offcanvas.
     
     if (!panel.dataset.initialized) {
-
-        panel.addEventListener('show.bs.offcanvas', () => {
-
-            document.body.classList.add('station-panel-open');
-        });
-
-
-        panel.addEventListener('hidden.bs.offcanvas', () => {
-
-            document.body.classList.remove('station-panel-open');
-            //document.activeElement?.blur();
-        });
 
         const closeButton = panel.querySelector('.btn-close');
 
         if (closeButton) {
 
             closeButton.addEventListener('click', () => {
+
+                panel.classList.remove('is-open');
+                document.body.classList.remove('station-panel-open');
                 setStationPanelClosed(true);
             });
         }
@@ -68,8 +35,7 @@ export function updateStationPanel(station) {
      
     const title = document.getElementById('station-panel-title');
 
-    const body = panel.querySelector('.offcanvas-body');
-
+    const body = panel.querySelector('.station-panel-body');
 
     if (!title || !body) {
         return;
@@ -103,10 +69,8 @@ export function updateStationPanel(station) {
     const mediaQuery = window.matchMedia('(min-width: 990px)');
 
     if (!mediaQuery.matches) {
-
-        const offcanvas = Offcanvas.getOrCreateInstance(panel, { focus: false });
-
-        offcanvas.show();
+        document.body.classList.add('station-panel-open');
+        panel.classList.add('is-open');
     }
 }
 

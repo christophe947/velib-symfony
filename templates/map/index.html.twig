@@ -14,7 +14,7 @@
 <div class="container-fluid mt-3">
 
     
-    <div class="d-flex justify-content-center mb-3 mt-3">
+    <div class="d-flex justify-content-center mb-3 mt-3 mode-buttons">
 
         <div class="btn-group" role="group">
             <button 
@@ -44,7 +44,7 @@
 
                     <div class="search-container">
 
-                        <form id="station-search-form" class="mb-3">
+                        <form id="station-search-form" class="mb-3 mobile-search">
                             <input 
                                 id="station-search"
                                 type="search"
@@ -63,11 +63,11 @@
 
                     <div
                         id="station-panel"
-                        class="offcanvas offcanvas-bottom station-offcanvas"
+                        class="station-bottom-sheet"
                         tabindex="-1"
                         aria-labelledby="station-panel-title">
 
-                        <div class="offcanvas-header station-panel-header">
+                        <div class=" station-panel-header">
 
                             <div class="station-panel-handle" aria-hidden="true"></div>
 
@@ -75,21 +75,20 @@
 <div class="station-panel-title-row">
                             <h2
                                 id="station-panel-title"
-                                class="offcanvas-title">
+                                class="">
                                 Station
                             </h2>
 
                             <button
                                 type="button"
                                 class="btn-close"
-                                data-bs-dismiss="offcanvas"
                                 aria-label="Fermer">
                             </button>
                             </div>
 
                         </div>
 
-                        <div class="offcanvas-body">
+                        <div class="station-panel-body">
 
                             <p class="text-muted">
                                 Cliquez sur une station sur la carte
