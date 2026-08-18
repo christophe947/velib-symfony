@@ -219,6 +219,7 @@ export function initSearch(options) {
             if (!value.trim()) {   
 
                 actions.endSearch();
+                document.body.classList.remove('search-active');
                 
                 restoreSearchMapView();
 
@@ -236,6 +237,7 @@ export function initSearch(options) {
 
             if (!actions.isSearching?.()) {
                 actions.startSearch();
+                document.body.classList.add('search-active');
             }
 
             updateSearchResults(

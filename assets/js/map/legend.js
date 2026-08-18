@@ -10,7 +10,9 @@ function getLegendTitle(displayMode) {
 
     return displayMode === 'bikes'
         ? '🚲 Disponibilité vélos'
-        : '🅿️ Places disponibles';
+        : displayMode === 'electric'
+            ? '⚡ Disponibilité électrique'
+            : '🅿️ Places disponibles';
 }
 
 

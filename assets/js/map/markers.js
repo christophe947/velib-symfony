@@ -136,6 +136,8 @@ export function renderMarkers(
         marker.bindPopup(`
             <strong>${station.name}</strong><br>
             🚲 ${station.bikes} vélos<br>
+            ⚡ ${station.electricBikes} électriques<br>
+            🔧 ${station.mechanicalBikes} mécaniques<br>
             🅿️ ${station.docks} places
         `, {
             autoPan: false

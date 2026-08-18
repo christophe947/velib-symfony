@@ -22,6 +22,9 @@ export function initDisplayMode(options) {
     const bikesButton =
         document.getElementById('mode-bikes');
 
+    const electricButton =
+        document.getElementById('mode-electric');
+
 
     const docksButton =
         document.getElementById('mode-docks');
@@ -30,12 +33,30 @@ export function initDisplayMode(options) {
 
     function updateModeButtons() {
 
-        if (!bikesButton || !docksButton) {
+        if (!bikesButton || !docksButton || !electricButton) {
             return;
         }
 
+        const mode = getDisplayMode();
 
-        if (getDisplayMode() === 'bikes') {
+        bikesButton.className =
+            mode === 'bikes'
+                ? 'btn btn-primary active mode-bikes'
+                : 'btn btn-outline-primary mode-bikes';
+
+        electricButton.className =
+            mode === 'electric'
+                ? 'btn btn-primary active mode-electric'
+                : 'btn btn-outline-primary mode-electric';
+
+        docksButton.className =
+            mode === 'docks'
+                ? 'btn btn-primary active mode-docks'
+                : 'btn btn-outline-primary mode-docks';
+        
+
+
+        /*if (getDisplayMode() === 'bikes') {
 
             bikesButton.className =
                 'btn btn-primary active';
@@ -51,11 +72,13 @@ export function initDisplayMode(options) {
             bikesButton.className =
                 'btn btn-outline-primary';
 
-        }
+        }*/
     }
 
 
+    
 
+    
     bikesButton?.addEventListener('click', () => {
 
         //navigation.startProgrammaticMove();
@@ -84,6 +107,32 @@ export function initDisplayMode(options) {
 
     });
 
+    
+
+    electricButton?.addEventListener('click', () => {
+
+        setDisplayMode('electric');
+
+        updateModeButtons();
+
+        renderMarkers(
+            map,
+            markersLayer,
+            getCurrentFilteredStations() ?? stations,
+            getDisplayMode(),
+            updateStationPanel,
+            false,
+            actions
+        );
+
+        updateLegend(
+            map,
+            getDisplayMode()
+        );
+    });
+
+    
+    
 
 
     docksButton?.addEventListener('click', () => {

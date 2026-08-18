@@ -10,10 +10,7 @@ export function updateStationPanel(station) {
     }
 
     // Initialisation unique du comportement responsive du panneau.
-      
-
-    // Initialisation unique des événements Bootstrap Offcanvas.
-    
+          
     if (!panel.dataset.initialized) {
 
         const closeButton = panel.querySelector('.btn-close');
@@ -53,6 +50,16 @@ export function updateStationPanel(station) {
             <p>
                 🚲 <strong>${station.bikes}</strong>
                 vélos disponibles
+            </p>
+
+            <p>
+                ⚡ <strong>${station.electricBikes}</strong>
+                vélos électriques
+            </p>
+
+            <p>
+                🔧 <strong>${station.mechanicalBikes}</strong>
+                vélos mécaniques
             </p>
 
             <p>

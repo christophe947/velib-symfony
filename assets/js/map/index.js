@@ -3,6 +3,7 @@ import { updateLegend } from './legend.js';
 import { createMap } from './map.js';
 import { initMapEvents } from './mapEvents.js';
 import { renderMarkers} from './markers.js';
+import { initMobileModeSelector } from './mobileModeSelector.js';
 import { navigation } from './navigation.js';
 import { 
     clearSearchState,
@@ -82,6 +83,8 @@ document.addEventListener('DOMContentLoaded', () => {
             actions
         });
 
+        initMobileModeSelector();
+
         initDisplayMode({
             map,
             markersLayer,
@@ -91,6 +94,8 @@ document.addEventListener('DOMContentLoaded', () => {
             updateLegend,
             actions
         });
+
+        
 
         if (fromCard) {
             setOpenedStation(

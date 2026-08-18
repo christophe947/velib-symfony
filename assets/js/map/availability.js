@@ -1,12 +1,29 @@
 import { AVAILABILITY } from './constants.js';
 
+function getAvailableValue(station, mode) {
+
+    if (mode === 'bikes') {
+        return station.bikes;
+    }
+
+    if (mode === 'electric') {
+        return station.electricBikes;
+    }
+
+    if (mode === 'docks') {
+        return station.docks;
+    }
+
+    return 0;
+}
 
 export function getAvailabilityRate(station, mode) {
 
-    const available =
-        mode === 'bikes'
+    
+    const available = getAvailableValue(station, mode);
+        /*mode === 'bikes'
             ? station.bikes
-            : station.docks;
+            : station.docks;*/
 
 
     if (!station.capacity) {
@@ -22,11 +39,12 @@ export function getAvailabilityRate(station, mode) {
 
 
 export function getAvailabilityColor(station, mode) {
+    
 
-    const available =
-        mode === 'bikes'
+    const available = getAvailableValue(station, mode);
+        /*mode === 'bikes'
             ? station.bikes
-            : station.docks;
+            : station.docks;*/
 
 
     const rate =

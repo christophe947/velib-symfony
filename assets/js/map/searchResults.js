@@ -104,6 +104,7 @@ export function showStationList(
                     updateStationPanel(station);
 
                     actions.endSearch?.();
+                    document.body.classList.remove('search-active');
             
                 });
                 

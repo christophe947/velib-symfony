@@ -65,7 +65,24 @@ class VelibApiService
 
         $stations = [];
 
+        
+
         foreach ($status['data']['stations'] as $station) {
+
+
+            $mechanicalBikes = 0;
+            $electricBikes = 0;
+
+            foreach ($station['num_bikes_available_types'] as $type) {
+
+                if (isset($type['mechanical'])) {
+                    $mechanicalBikes = $type['mechanical'];
+                }
+
+                if (isset($type['ebike'])) {
+                    $electricBikes = $type['ebike'];
+                }
+            }
 
             $id = $station['station_id'];
 
@@ -77,6 +94,8 @@ class VelibApiService
                 'longitude' => $stationsInfo[$id]['lon'] ?? null,
                 'capacity' => $stationsInfo[$id]['capacity'] ?? 0,
                 'bikes' => $station['num_bikes_available'],
+                'mechanicalBikes' => $mechanicalBikes,
+                'electricBikes' => $electricBikes,
                 'docks' => $station['num_docks_available'],
                 'rentalStatus' => $this->getRentalStatus(
                     $station['num_bikes_available']
@@ -88,7 +107,7 @@ class VelibApiService
 
             
         }
-
+        
 
         return $stations;
     }
