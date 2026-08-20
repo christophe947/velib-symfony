@@ -10,38 +10,48 @@
 
 {% block body %}
 
-
 <div class="container-fluid mt-3">
 
-    
     <div class="d-flex justify-content-center mb-3 mt-3 mode-buttons">
 
         <div class="btn-group" role="group">
-            <button 
+
+            <button
                 id="mode-bikes"
                 class="btn btn-primary active mode-bikes"
                 aria-label="bouton pour afficher les stations avec vélos disponibles">
                 🚲 Prendre
             </button>
 
-            <button 
+            <button
                 id="mode-electric"
                 class="btn btn-outline-primary mode-electric"
                 aria-label="bouton pour afficher les stations avec vélos électriques disponibles">
                 ⚡ Électrique
             </button>
 
-            <button 
+            <button
                 id="mode-docks"
                 class="btn btn-outline-primary mode-docks"
                 aria-label="bouton pour afficher les stations avec places disponibles">
                 🅿️ Rendre
             </button>
+
         </div>
+
     </div>
 
-    <!--<div id="map" class="map-container"></div>-->
+
+    <!-- ========================================================= -->
+    <!-- MAP LAYOUT -->
+    <!-- ========================================================= -->
+
     <div class="row map-layout g-3">
+
+
+        <!-- ===================================================== -->
+        <!-- COLONNE GAUCHE -->
+        <!-- ===================================================== -->
 
         <div class="col-lg-4 mb-3 map-search-panel">
 
@@ -51,24 +61,50 @@
 
                     <div class="search-container">
 
-                        <form id="station-search-form" class="mb-3 mobile-search">
 
-                            <span class="mobile-search-icon" aria-hidden="true">
-                                <svg viewBox="0 0 24 24" fill="none">
-                                    <circle cx="11" cy="11" r="6.5"></circle>
-                                    <path d="M16 16L21 21"></path>
+                        <!-- Recherche -->
+
+                        <form
+                            id="station-search-form"
+                            class="mb-3 mobile-search">
+
+                            <span
+                                class="mobile-search-icon"
+                                aria-hidden="true">
+
+                                <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none">
+
+                                    <circle
+                                        cx="11"
+                                        cy="11"
+                                        r="6.5">
+                                    </circle>
+
+                                    <path
+                                        d="M16 16L21 21">
+                                    </path>
+
                                 </svg>
+
                             </span>
 
-                            <input 
+                            <input
                                 id="station-search"
                                 type="search"
                                 class="form-control"
                                 placeholder="Rechercher une station..."
                                 autocomplete="off">
+
                         </form>
 
-                        <div id="mobile-mode-selector" class="mobile-mode-selector">
+
+                        <!-- Sélecteur mobile -->
+
+                        <div
+                            id="mobile-mode-selector"
+                            class="mobile-mode-selector">
 
                             <button
                                 type="button"
@@ -77,6 +113,7 @@
                                 aria-expanded="false">
                                 🚲
                             </button>
+
 
                             <div class="mobile-mode-options">
 
@@ -107,74 +144,112 @@
                             </div>
 
                         </div>
-                        
-                        
 
+
+                        <!-- Résultats -->
 
                         <div id="station-results"></div>
 
                     </div>
 
 
-                    <div
-                        id="station-panel"
-                        class="station-bottom-sheet"
-                        tabindex="-1"
-                        aria-labelledby="station-panel-title">
+                    <!-- ================================================= -->
+                    <!-- BOTTOM SHEET — STRUCTURE ORIGINALE -->
+                    <!-- ================================================= -->
 
-                        <div class=" station-panel-header">
+                    <div class="station-panel-wrapper">
 
-                            <div class="station-panel-handle" aria-hidden="true"></div>
+                        <div
+                            id="station-panel"
+                            class="station-bottom-sheet"
+                            tabindex="-1"
+                            aria-labelledby="station-panel-title">
 
 
-<div class="station-panel-title-row">
-                            <h2
-                                id="station-panel-title"
-                                class="">
-                                Station
-                            </h2>
+                            <div class="station-panel-header">
 
-                            <button
-                                type="button"
-                                class="btn-close"
-                                aria-label="Fermer">
-                            </button>
+                                <div
+                                    class="station-panel-handle"
+                                    aria-hidden="true">
+                                </div>
+
+
+                                <div class="station-panel-title-row">
+
+                                    <h2 id="station-panel-title">
+                                        Station
+                                    </h2>
+
+
+                                    <button
+                                        type="button"
+                                        class="btn-close"
+                                        aria-label="Fermer">
+                                    </button>
+
+                                </div>
+
                             </div>
 
-                        </div>
 
-                        <div class="station-panel-body">
+                            <div class="station-panel-body">
 
-                            <p class="text-muted">
-                                Cliquez sur une station sur la carte
-                            </p>
+                                <p class="text-muted">
+                                    Cliquez sur une station sur la carte
+                                </p>
+
+                            </div>
+
 
                         </div>
 
                     </div>
-
-
 
                 </div>
 
             </div>
 
         </div>
-        
-    
+
+
+        <!-- ===================================================== -->
+        <!-- CARTE -->
+        <!-- ===================================================== -->
 
         <div class="col-lg-8">
 
-            <div id="map" class="map-container">
+            <div
+                id="map"
+                class="map-container">
             </div>
 
         </div>
 
+
+        <!-- ===================================================== -->
+        <!-- GLASS INDÉPENDANT -->
+        <!-- ===================================================== 
+
+        <div
+            id="station-panel-glass"
+            class="station-panel-glass"
+            aria-hidden="true">
+        </div> -->
+
+
     </div>
 
+
+    <!-- ========================================================= -->
+    <!-- DONNÉES JAVASCRIPT -->
+    <!-- ========================================================= -->
+
     <script>
+
         window.stations = {{ stations|json_encode|raw }};
+
         const selectedStation = {{ selectedStation|json_encode|raw }};
+
     </script>
 
 </div>
