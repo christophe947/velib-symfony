@@ -1,5 +1,6 @@
 const navbar = document.querySelector('.navbar');
 const stationPanel = document.getElementById('station-panel');
+const map = document.getElementById('map');
 
 
 function updateNavbarHeight() {
@@ -11,6 +12,18 @@ function updateNavbarHeight() {
     document.documentElement.style.setProperty(
         '--navbar-height',
         `${navbar.offsetHeight}px`
+    );
+}
+//calcule de map pour positionner attribution sous nav
+function getMapHeight() {
+
+    if (!map) {
+        return;
+    }
+
+     document.documentElement.style.setProperty(
+        '--map-height',
+        `${map.offsetHeight}px`
     );
 }
 
@@ -62,7 +75,9 @@ function updateResponsiveLayout() {
 
     updateNavbarHeight();
     updateStationPanelDimensions();
+    getMapHeight();
 
+   
 }
 
 updateResponsiveLayout();

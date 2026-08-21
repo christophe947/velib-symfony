@@ -68,6 +68,13 @@ export function highlightMarker(stationId) {
         }
     });
 
+    const popup = marker.getPopup();
+
+    if (popup) {
+        popup.options.autoPan = true;
+        popup.options.autoPanPadding = L.point(40, 40);
+    }
+
     marker.openPopup();
 }
 
@@ -94,6 +101,11 @@ export function resetHighlightedMarker() {
     }
 
     highlightedMarker.setZIndexOffset(0);
+    const popup = highlightedMarker.getPopup();
+
+    if (popup) {
+        popup.options.autoPan = false;
+    }
     highlightedMarker.closePopup();
     highlightedMarker = null;
 }

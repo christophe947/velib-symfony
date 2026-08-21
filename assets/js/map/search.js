@@ -139,20 +139,30 @@ function updateSearchResults(
 
     if (filtered.length) {
 
-        const bounds = L.latLngBounds(
-            filtered.map(station => [
-                station.latitude,
-                station.longitude
-            ])
-        );
+    const bounds = L.latLngBounds(
+        filtered.map(station => [
+            station.latitude,
+            station.longitude
+        ])
+    );
 
-        navigation.startProgrammaticMove();
+    const boundsZoom = map.getBoundsZoom(bounds);
 
-        map.flyToBounds(bounds, {
-            padding: [40, 40],
+    const targetZoom = Math.max(
+        boundsZoom,
+        13
+    );
+
+    navigation.startProgrammaticMove();
+
+    map.flyTo(
+        bounds.getCenter(),
+        targetZoom,
+        {
             duration: 0.5
-        });
-    }
+        }
+    );
+}
 }
 
 
@@ -184,6 +194,7 @@ export function initSearch(options) {
     searchInput.addEventListener('blur', () => {
          searchInput.closest('.mobile-search')
         ?.classList.remove('expanded');
+        document.body.classList.remove('search-active');
         handleSearchBlur();
     });
 
@@ -192,6 +203,7 @@ export function initSearch(options) {
 
         searchInput.closest('.mobile-search')
     ?.classList.add('expanded');
+    document.body.classList.add('search-active');
         handleSearchFocus(
             searchInput,
             stations,

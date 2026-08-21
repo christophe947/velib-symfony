@@ -68,6 +68,20 @@ export function showStationList(
                 item.addEventListener('mouseenter', () => {
                     
                     highlightMarker(station.id);
+
+                    const latLng = [
+                        station.latitude,
+                        station.longitude
+                    ];
+
+                    const bounds = map.getBounds();
+
+                    if (!bounds.contains(latLng)) {
+                        map.panTo(latLng, {
+                            animate: true,
+                            duration: 0.5
+                        });
+                    }
                 });
 
                 item.addEventListener('mouseleave', () => {

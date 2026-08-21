@@ -101,7 +101,8 @@ class NavigationManager {
                 station.latitude,
                 station.longitude
             ],
-            zoom: 15
+            //zoom: 15
+            zoom: this.comfortZoom
         };
 
         this.mode = "focus";

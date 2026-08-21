@@ -158,6 +158,36 @@ footer img:hover {
 
 @media (max-width: 990px) {
 
+    .leaflet-container .leaflet-control-attribution {
+        
+       
+         background: rgba(255, 255, 255, 0.22) !important;
+
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+
+        border: 1px solid rgba(255, 255, 255, 0.45) !important;
+
+        border-radius: 10px;
+
+        box-shadow:
+            0 5px 18px rgba(0, 0, 0, 0.15) !important;
+           
+    }
+
+    
+
+    
+        .leaflet-container .leaflet-control-attribution {
+            transform: translateY(
+            calc(-1 * var(--map-height) + 17px)
+        );
+    
+    }
+
+
+    
+
 .navbar .navbar-collapse {
         position: absolute;
         top: 100%;
@@ -519,6 +549,26 @@ footer img:hover {
        calc((var(--station-panel-height) - var(--station-panel-content-height) + var(--drag-offset)) )
     ) !important;
 }
+
+
+
+    body.search-active .station-bottom-sheet {
+        transform: translateY(100%) !important;
+    }
+
+
+
+    body.search-active .leaflet-control-zoom,
+    body.search-active .map-legend {
+        transform: translateY(var(--station-panel-content-height));
+        transition: transform 0.35s ease;
+    }
+
+    .leaflet-container .leaflet-control-zoom {
+        transform: translateY(-9px);
+        transition: transform 0.35s ease;
+    }
+
 
 .station-panel-wrapper {
      --drag-offset: 0px;

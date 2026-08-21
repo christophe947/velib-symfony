@@ -39,6 +39,31 @@ export function initDisplayMode(options) {
 
         const mode = getDisplayMode();
 
+        const mobileModeTrigger =
+            document.querySelector('.mobile-mode-trigger');
+
+        if (mobileModeTrigger) {
+
+            const icons = {
+                bikes: '🚲',
+                electric: '⚡',
+                docks: '🅿️'
+            };
+
+            mobileModeTrigger.textContent =
+                icons[mode] ?? '🚲';
+
+            mobileModeTrigger.classList.remove(
+                'mode-bikes',
+                'mode-electric',
+                'mode-docks'
+            );
+
+            mobileModeTrigger.classList.add(
+                `mode-${mode}`
+            );
+        }
+
         bikesButton.className =
             mode === 'bikes'
                 ? 'btn btn-primary active mode-bikes'
