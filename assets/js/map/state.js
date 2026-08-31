@@ -8,6 +8,8 @@ let isSearching = false;
 
 let stationPanelClosed = false;
 
+let mapBackground = 'watercolor';
+
 
 // ====================
 // Opened station
@@ -74,6 +76,21 @@ export function getSearching() {
 
     return isSearching;
 }
+
+
+
+
+
+
+export function setMapBackground(background) {
+    mapBackground = background;
+}
+
+export function getMapBackground() {
+    return mapBackground;
+}
+
+
 
 
 

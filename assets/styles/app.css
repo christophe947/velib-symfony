@@ -153,10 +153,44 @@ footer img:hover {
     display: none;
 }
 
+.map-background-control {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
 
+.map-background-button {
+    width: 46px;
+    height: 46px;
+    padding: 0;
+    border: 1px solid rgba(0, 0, 0, .2);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.20);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow:
+        0 8px 25px rgba(0, 0, 0, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15rem;
+    cursor: pointer;
+}
 
 
 @media (max-width: 990px) {
+
+    .map-background-button {
+        
+     position: fixed !important;
+    top: 186px;
+    left: 87%;
+    right: auto !important;
+    margin: 0 !important;
+    transform: translateX(-50%);
+        
+       
+}
 
     .leaflet-container .leaflet-control-attribution {
         
@@ -178,12 +212,12 @@ footer img:hover {
     
 
     
-        .leaflet-container .leaflet-control-attribution {
+        /*.leaflet-container .leaflet-control-attribution {
             transform: translateY(
             calc(-1 * var(--map-height) + 17px)
         );
     
-    }
+    }*/
 
 
     
@@ -340,7 +374,7 @@ footer img:hover {
 
         padding: 7px 9px;
 
-        background: rgba(255, 255, 255, 0.22);
+        background: rgba(255, 255, 255, 0.32);
 
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);

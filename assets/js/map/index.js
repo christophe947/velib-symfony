@@ -1,6 +1,7 @@
 import { initDisplayMode } from './displayMode.js';
 import { updateLegend } from './legend.js';
 import { createMap } from './map.js';
+import { initMapBackground } from './mapBackground.js';
 import { initMapEvents } from './mapEvents.js';
 import { renderMarkers} from './markers.js';
 import { initMobileModeSelector } from './mobileModeSelector.js';
@@ -93,6 +94,13 @@ document.addEventListener('DOMContentLoaded', () => {
             updateStationPanel,
             updateLegend,
             actions
+        });
+
+        initMapBackground({
+            map,
+            standardLayer: mapInstance.standardLayer,
+            watercolorLayer: mapInstance.watercolorLayer,
+            labelsLayer: mapInstance.labelsLayer
         });
 
         

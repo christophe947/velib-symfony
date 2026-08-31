@@ -109,22 +109,22 @@ class NavigationManager {
 
         this.startProgrammaticMove(true);
 
-        this.map.setView(
+        /*this.map.setView(
             this.focusView.center,
             this.focusView.zoom,
             {
                 animate: true,
                 duration: 1.75
             }
-        );
+        );*/
 
-        /*this.map.flyTo(
+        this.map.flyTo(
             this.focusView.center,
             this.focusView.zoom,
             {
             duration: 1.75
             }
-        );*/
+        );
     }
 
     //click sur un marker après une recherche on centre et ajuste le zoom changer le nom de fonction ex adapt zoom after click station
