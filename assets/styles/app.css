@@ -180,6 +180,12 @@ footer img:hover {
 
 @media (max-width: 990px) {
 
+    html,
+    body {
+        height: 100%;
+        overflow: hidden;
+    }
+
     .map-background-button {
         
      position: fixed !important;

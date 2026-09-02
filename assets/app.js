@@ -11,6 +11,10 @@ import 'leaflet/dist/leaflet.min.css';
 
 import './js/map/index.js';
 
+if (document.getElementById('maplibre-map')) {
+    import('./maplibre/app.js');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
 
     const searchInput = document.getElementById('station-search');

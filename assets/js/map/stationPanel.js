@@ -46,8 +46,11 @@ export function updateStationPanel(station) {
     let startOffset = 0;
     let hasDragged = false;
     let wasOpen = false;
+    let isDragging = false;
 
     handle.addEventListener('pointerdown', (event) => {
+
+        isDragging = true;
 
         wasOpen = panel.classList.contains('is-open');
 
@@ -68,6 +71,10 @@ export function updateStationPanel(station) {
 
 
     handle.addEventListener('pointermove', (event) => {
+
+        if (!isDragging) {
+            return;
+        }
 
         const deltaY = event.clientY - startY;
 
@@ -105,6 +112,12 @@ export function updateStationPanel(station) {
     });
 
     handle.addEventListener('pointerup', () => {
+
+        if (!isDragging) {
+            return;
+        }
+
+    isDragging = false;
 
     if (!hasDragged) {
         panel.classList.remove('is-dragging');
@@ -196,6 +209,18 @@ export function updateStationPanel(station) {
         { once: true }
     );
 
+});
+
+handle.addEventListener('pointercancel', () => {
+
+    isDragging = false;
+
+    panel.classList.remove('is-dragging');
+
+    panel.style.setProperty(
+        '--drag-offset',
+        '0px'
+    );
 });
 
 /*

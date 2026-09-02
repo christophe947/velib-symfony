@@ -1,5 +1,25 @@
 {
   "dependencies": {
-    "leaflet": "^1.9.4"
-  }
+    "leaflet": "^1.9.4",
+    "maplibre-gl": "^6.6.0"
+  },
+  "name": "velib-symfony",
+  "version": "1.0.0",
+  "description": "Application web permettant de consulter la disponibilité des stations Vélib en temps réel grâce à une carte interactive.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/christophe947/velib-symfony.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/christophe947/velib-symfony/issues"
+  },
+  "homepage": "https://github.com/christophe947/velib-symfony#readme"
 }

@@ -2,7 +2,8 @@ framework:
     asset_mapper:
         # The paths to make available to the asset mapper.
         paths:
-            - assets/
+            assets/: ''
+            node_modules/maplibre-gl/dist/: 'maplibre'
         missing_import_mode: strict
 
 when@prod:
