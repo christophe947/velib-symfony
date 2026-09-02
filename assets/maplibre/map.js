@@ -1,4 +1,4 @@
-import * as maplibregl from '/maplibre/dist/maplibre-gl.mjs';
+import * as maplibregl from '/maplibre-assets/maplibre-gl.mjs';
 
 import { stationsToGeoJSON } from './stations.js';
 import { addStationLayer } from './stationLayer.js';
