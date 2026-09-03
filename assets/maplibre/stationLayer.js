@@ -1,4 +1,7 @@
 import { AVAILABILITY } from './constants.js';
+import { setSelectedStation,
+    subscribeToSelectedStation
+ } from './state.js';
 
 
 export function addStationLayer(map, displayMode = 'bikes') {
@@ -73,6 +76,64 @@ export function addStationLayer(map, displayMode = 'bikes') {
         paint: {
             'text-color': '#ffffff'
         }
+    });
+
+    map.addLayer({
+        id: 'station-selected',
+        type: 'circle',
+        source: 'stations',
+        minzoom: 13,
+
+        filter: [
+            '==',
+            ['to-string', ['get', 'id']],
+            ''
+        ],
+
+        paint: {
+            'circle-radius': 15,
+            'circle-color': 'transparent',
+            'circle-stroke-width': 3,
+            'circle-stroke-color': '#ffd43b'
+        }
+    });
+
+    subscribeToSelectedStation(station => {
+
+        if (!station) {
+            map.setFilter(
+                'station-selected',
+                [
+                    '==',
+                    ['to-string', ['get', 'id']],
+                    ''
+                ]
+            );
+
+            return;
+        }
+
+        map.setFilter(
+            'station-selected',
+            [
+                '==',
+                ['to-string', ['get', 'id']],
+                String(station.id)
+            ]
+        );
+    });
+
+
+
+    map.on('click', 'stations', event => {
+
+        const feature = event.features?.[0];
+
+        if (!feature) {
+            return;
+        }
+
+        setSelectedStation(feature.properties);
     });
 
 

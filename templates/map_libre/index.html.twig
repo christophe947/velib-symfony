@@ -2,6 +2,8 @@
 
 {% block title %}MapLibre Prototype{% endblock %}
 
+{% block body_class %}maplibre-page{% endblock %}
+
 {% block stylesheets %}
     {{ parent() }}
 
@@ -12,6 +14,11 @@
 {% block body %}
 
     <div id="maplibre-map"></div>
+
+    <div id="station-content">
+        <h2>Station Vélib</h2>
+        <p>Le panneau est prêt.</p>
+    </div>
 
     <script>
         window.stations = {{ stations|json_encode|raw }};
