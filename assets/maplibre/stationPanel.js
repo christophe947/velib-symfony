@@ -34,7 +34,7 @@ export function initStationPanel() {
 
                     middle: {
                         enabled: true,
-                        height: 320,
+                        height: 200,
                         bounce: true
                     },
 

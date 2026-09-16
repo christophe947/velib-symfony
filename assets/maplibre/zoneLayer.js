@@ -55,7 +55,15 @@ export function addZoneLayer(
         minzoom: 10.5,
 
         paint: {
-            'circle-radius': 22,
+            'circle-radius': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                
+                10, 15,
+                12, 18,
+                13, 22
+            ],
             'circle-color': '#0d6efd',
             'circle-stroke-width': 3,
             'circle-stroke-color': '#ffffff'

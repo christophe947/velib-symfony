@@ -11,6 +11,7 @@ import {
 import { addZoneLayer } from './zoneLayer.js';
 import { addCommuneLayer } from './communeLayer.js';
 
+
 export function createMap() {
 
     const map = new maplibregl.Map({
@@ -24,6 +25,7 @@ export function createMap() {
 
 
     const stations = window.stations ?? [];
+
 
     const geoJSON = stationsToGeoJSON(stations);
 

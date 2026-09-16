@@ -15,6 +15,43 @@
 
     <div id="maplibre-map"></div>
 
+    <div id="map-search">
+
+        <div id="map-search-bar">
+
+            <span id="map-search-icon">⌕</span>
+
+            <input
+                id="map-search-input"
+                type="search"
+                placeholder="Rechercher un lieu, une station..."
+                autocomplete="off"
+            >
+
+            <button
+                id="map-search-clear"
+                type="button"
+                aria-label="Effacer la recherche"
+                hidden
+            >
+                ×
+            </button>
+
+            <button
+                id="map-search-location"
+                type="button"
+                aria-label="Ma position"
+                title="Ma position"
+            >
+                📍
+            </button>
+
+        </div>
+
+        <div id="map-search-results"></div>
+
+    </div>
+
     <div id="station-content">
         <h2>Station Vélib</h2>
         <p>Le panneau est prêt.</p>

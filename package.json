@@ -1,5 +1,7 @@
 {
   "dependencies": {
+    "cupertino-pane": "^1.5.4",
+    "fuse.js": "^7.5.0",
     "leaflet": "^1.9.4",
     "maplibre-gl": "^6.6.0"
   },

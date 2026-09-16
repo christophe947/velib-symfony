@@ -20,25 +20,191 @@
     overflow: hidden;
 }
 
+
+/* =========================
+   Recherche carte
+   ========================= */
+
+#map-search {
+    position: fixed;
+
+    top: 63px;
+    left: 12px;
+    right: 12px;
+
+    width: auto;
+
+    z-index: 1000;
+}
+
+#map-search-bar {
+    display: flex;
+    align-items: center;
+
+    height: 50px;
+
+    padding: 0 10px 0 14px;
+
+    background: rgba(255, 255, 255, 0.94);
+
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    border-radius: 16px;
+
+    box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.18);
+
+    backdrop-filter: blur(10px);
+}
+
+#map-search-icon {
+    flex-shrink: 0;
+
+    margin-right: 10px;
+
+    font-size: 22px;
+    line-height: 1;
+}
+
+#map-search-input {
+    flex: 1;
+
+    min-width: 0;
+
+    border: none;
+    outline: none;
+
+    background: transparent;
+
+    font-size: 16px;
+    color: #212529;
+}
+
+#map-search-input::placeholder {
+    color: #6c757d;
+}
+
+#map-search-clear,
+#map-search-location {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    flex-shrink: 0;
+
+    width: 36px;
+    height: 36px;
+
+    margin-left: 4px;
+
+    border: none;
+    border-radius: 50%;
+
+    background: transparent;
+
+    cursor: pointer;
+
+    transition:
+        background 0.15s ease,
+        transform 0.15s ease;
+}
+
+#map-search-clear {
+    font-size: 24px;
+    color: #6c757d;
+}
+
+#map-search-location {
+    font-size: 17px;
+}
+
+#map-search-clear:hover,
+#map-search-location:hover {
+    background: rgba(0, 0, 0, 0.07);
+}
+
+#map-search-clear:active,
+#map-search-location:active {
+    transform: scale(0.92);
+}
+
+
+/* =========================
+   Résultats
+   ========================= */
+
+#map-search-results {
+    display: none;
+
+    margin-top: 8px;
+
+    overflow: hidden;
+
+    background: rgba(255, 255, 255, 0.96);
+
+    border-radius: 16px;
+
+    box-shadow:
+        0 8px 28px rgba(0, 0, 0, 0.18);
+
+    backdrop-filter: blur(10px);
+}
+
+.search-result {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+
+    padding: 11px 16px;
+
+    cursor: pointer;
+
+    transition: background 0.15s ease;
+}
+
+.search-result strong {
+    font-weight: 500;
+}
+
+.search-result small {
+    color: #6c757d;
+    font-size: 13px;
+}
+
+.search-result:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+
+/* =========================
+   Desktop
+   ========================= */
+
 @media (min-width: 768px) {
-    
-    
+
+    /* Panneau station */
 
     #station-content {
         text-align: center !important;
+
         position: fixed;
+
         top: 80px;
         left: 20px;
+
         width: 360px;
         max-height: calc(100vh - 100px);
+
         padding: 20px;
 
         background: #ffffff;
+
         border-radius: 16px;
 
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18);
+        box-shadow:
+            0 8px 30px rgba(0, 0, 0, 0.18);
 
-        transform: translateX(calc(-100% - 30px));
+        transform:
+            translateX(calc(-100% - 30px));
 
         transition:
             transform 0.3s ease;
@@ -49,5 +215,29 @@
     #station-content.is-open {
         transform: translateX(0);
     }
-}
 
+
+    /* Recherche desktop */
+
+    #map-search {
+        top: 70px;
+        left: 50%;
+        right: auto;
+
+        width: min(520px, calc(100% - 40px));
+
+        transform: translateX(-50%);
+    }
+
+    #map-search-bar {
+        height: 52px;
+
+        padding-left: 16px;
+
+        border-radius: 18px;
+    }
+
+    #map-search-input {
+        font-size: 15px;
+    }
+}
