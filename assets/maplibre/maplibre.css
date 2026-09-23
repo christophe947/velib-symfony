@@ -319,3 +319,22 @@
         font-size: 15px;
     }
 }
+
+@media (max-width: 767.98px) {
+
+    #main-navbar {
+        display: none;
+    }
+
+    .maplibre-page main {
+        height: 100dvh;
+    }
+
+    .maplibre-page #maplibre-map {
+        height: 100%;
+    }
+
+    #map-search {
+        top: 12px;
+    }
+}
