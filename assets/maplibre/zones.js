@@ -280,3 +280,84 @@ function isPointInsideBounds(
         latitude <= bounds.maxLat
     );
 }
+
+
+
+
+
+export function findZoneByQuery(
+    zones,
+    query
+) {
+    const arrondissement = extractArrondissementNumber(
+        query
+    );
+
+    if (!arrondissement) {
+        return null;
+    }
+
+    return zones.features.find(zone => {
+
+        return Number(
+            zone.properties?.c_ar
+        ) === arrondissement;
+    });
+}
+
+
+function extractArrondissementNumber(query) {
+
+    const normalizedQuery = query
+        .toLowerCase()
+        .trim();
+
+    const match = normalizedQuery.match(
+        /(?:paris\s*)?(\d{1,2})(?:er|e|eme|ème)?(?:\s*ardt)?$/
+    );
+
+    if (!match) {
+        return null;
+    }
+
+    const number = Number(match[1]);
+
+    if (
+        number < 1 ||
+        number > 20
+    ) {
+        return null;
+    }
+
+    return number;
+}
+
+export function getStationsForZone(
+    zone,
+    stations
+) {
+    if (!zone) {
+        return [];
+    }
+
+    const bounds = getGeometryBounds(
+        zone.geometry
+    );
+
+    return stations.filter(station => {
+
+        if (!isPointInsideBounds(
+            station.longitude,
+            station.latitude,
+            bounds
+        )) {
+            return false;
+        }
+
+        return isPointInsideGeometry(
+            station.longitude,
+            station.latitude,
+            zone.geometry
+        );
+    });
+}
