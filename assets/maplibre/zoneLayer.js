@@ -46,6 +46,30 @@ export function addZoneLayer(
         data: zonePoints
     });
 
+    map.addLayer({
+        id: 'arrondissement-count-shadow',
+        type: 'circle',
+        source: 'arrondissement-points',
+        maxzoom: 13,
+        minzoom: 10.5,
+
+        paint: {
+        'circle-radius': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+
+            10, 19,
+            12, 22,
+            13, 27
+        ],
+        'circle-color': '#000000',
+        'circle-opacity': 0.70,
+        'circle-blur': 0.6,
+        'circle-translate': [0, 4]
+    }
+    });
+
     // Cercle bleu
     map.addLayer({
         id: 'arrondissement-count',

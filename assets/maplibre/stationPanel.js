@@ -34,13 +34,13 @@ export function initStationPanel() {
 
                     middle: {
                         enabled: true,
-                        height: 200,
+                        height: 160,
                         bounce: true
                     },
 
                     bottom: {
                         enabled: true,
-                        height: 80
+                        height: 60
                     }
                 }
             }

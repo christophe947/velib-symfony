@@ -18,6 +18,13 @@ import {
 } from './locationSearch.js';
 
 
+function looksLikeAddress(query) {
+
+    return /^\d+\s+/.test(
+        query.trim()
+    );
+}
+
 export async function initSearch() {
 
     const input = document.getElementById(
@@ -192,19 +199,26 @@ export async function initSearch() {
             // Recherche directe de stations
             // ---------------------------------
 
-            const matches = fuse.search(query);
+            const isAddress = looksLikeAddress(query);
 
-            const filteredMatches =
-                filterSearchResults(
-                    matches,
-                    query
-                );
+            let directStations = [];
 
-            const directStations =
-                filteredMatches
-                    .slice(0, 8)
-                    .map(result => result.item);
+            if (!isAddress) {
 
+                const matches =
+                    fuse.search(query);
+
+                const filteredMatches =
+                    filterSearchResults(
+                        matches,
+                        query
+                    );
+
+                directStations =
+                    filteredMatches
+                        .slice(0, 8)
+                        .map(result => result.item);
+            }
 
             // ---------------------------------
             // Recherche autour d'une adresse
@@ -363,35 +377,31 @@ export async function initSearch() {
             // ---------------------------------
 
             results.innerHTML = `
+                <div class="search-standard-results">
+                    ${
+                        directStations.length
+                            ? `
+                                <div class="search-results-section-title">
+                                    Stations correspondantes
+                                </div>
 
-                ${
-                    directStations.length
-                        ? `
-                            <div
-                                class="search-results-section-title"
-                            >
-                                Stations correspondantes
-                            </div>
+                                ${directResults}
+                            `
+                            : ''
+                    }
 
-                            ${directResults}
-                        `
-                        : ''
-                }
+                    ${
+                        nearbyOnly.length
+                            ? `
+                                <div class="search-results-section-title">
+                                    Stations à proximité
+                                </div>
 
-                ${
-                    nearbyOnly.length
-                        ? `
-                            <div
-                                class="search-results-section-title"
-                            >
-                                Stations à proximité
-                            </div>
-
-                            ${nearbyResults}
-                        `
-                        : ''
-                }
-
+                                ${nearbyResults}
+                            `
+                            : ''
+                    }
+                </div>
             `;
 
             results.style.display = 'block';

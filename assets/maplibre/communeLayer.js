@@ -131,6 +131,36 @@ export function addCommuneLayer(
         data: communePoints
     });
 
+
+    map.addLayer({
+        id: 'commune-count-shadow',
+        type: 'circle',
+        source: 'commune-points',
+        maxzoom: 13,
+        minzoom: 10.5,
+
+        filter: [
+            '!=',
+            ['get', 'code'],
+            '75056'
+        ],
+
+        paint: {
+        'circle-radius': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+
+            10, 19,
+            12, 22,
+            13, 27
+        ],
+        'circle-color': '#000000',
+        'circle-opacity': 0.70,
+        'circle-blur': 0.6,
+        'circle-translate': [0, 4]
+    }
+    });
     // Rond bleu clair
     map.addLayer({
         id: 'commune-count',
