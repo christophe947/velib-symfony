@@ -1,39 +1,33 @@
 import Fuse from '/maplibre-assets/fuse.mjs';
 
 import {
-    filterSearchResults
+    loadArrondissements,
+    loadCommunes,
+    countStationsByZone,
+    getStationsForZone,
+} from './zones.js';
+
+import {
+    classifySearch,
+} from './searchIntent.js';
+
+import {
+    rankStationResults,
+    renderAreaResults,
+    renderSearchResults,
 } from './searchResults.js';
 
 import {
-    loadArrondissements,
-    countStationsByZone,
-    findZoneByQuery,
-    getStationsForZone
-} from './zones.js';
-
-import { getAvailabilityColor } from './availability.js';
-
-import {
-    searchNearbyStations
+    searchNearbyStations,
 } from './locationSearch.js';
 
+import { initGeolocation } from './geolocation.js';
 
-function looksLikeAddress(query) {
 
-    return /^\d+\s+/.test(
-        query.trim()
-    );
-}
-
-export async function initSearch() {
-
-    const input = document.getElementById(
-        'map-search-input'
-    );
-
-    const results = document.getElementById(
-        'map-search-results'
-    );
+export async function initSearch(map) {
+    const input = document.getElementById('map-search-input');
+    const results = document.getElementById('map-search-results');
+    const clearButton = document.getElementById('map-search-clear');
 
     if (!input || !results) {
         return;
@@ -41,456 +35,192 @@ export async function initSearch() {
 
     const stations = window.stations ?? [];
 
-    let searchTimeout = null;
+    const [zonesData, communesData] = await Promise.all([
+        loadArrondissements(),
+        loadCommunes(),
+    ]);
 
-    const zones = await loadArrondissements();
-
-    const zonesWithStations = countStationsByZone(
-        zones,
+    const zones = countStationsByZone(
+        zonesData,
         stations
-    );
+    ).features;
 
-    const fuse = new Fuse(
-        stations,
-        {
-            keys: [
-                'name',
-                'address'
-            ],
+    const communes = communesData.features ?? [];
 
-            threshold: 0.35
+    const searchableStations = stations.map(station => ({
+        station,
+        searchText: [
+            station.name,
+            station.address,
+        ]
+            .filter(Boolean)
+            .join(' ')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase(),
+    }));
+
+    const fuse = new Fuse(searchableStations, {
+        keys: ['searchText'],
+        threshold: 0.28,
+        ignoreLocation: true,
+        minMatchCharLength: 3,
+    });
+
+    let debounceTimer = null;
+    let searchVersion = 0;
+    let displayedStations = [];
+
+    // Un seul gestionnaire de clic pour tous les résultats.
+    results.addEventListener('click', event => {
+        const resultElement = event.target.closest(
+            '[data-station-index]'
+        );
+
+        if (!resultElement) {
+            return;
         }
-    );
+
+        const index = Number(
+            resultElement.dataset.stationIndex
+        );
+
+        const station = displayedStations[index];
+
+        if (!station) {
+            return;
+        }
+
+        results.innerHTML = '';
+        results.style.display = 'none';
+
+        document.dispatchEvent(
+            new CustomEvent('station:selected', {
+                detail: station,
+            })
+        );
+    });
 
     input.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
 
-        clearTimeout(searchTimeout);
+        const version = ++searchVersion;
+        const query = input.value
+            .replace(/\s+/g, ' ')
+            .trim();
 
-        searchTimeout = setTimeout(async () => {
+        if (clearButton) {
+            clearButton.hidden = query.length === 0;
+        }
 
-            const query = input.value.trim();
+        if (!query) {
+            results.innerHTML = '';
+            results.style.display = 'none';
+            displayedStations = [];
+            return;
+        }
 
-            if (!query) {
-                results.innerHTML = '';
-                results.style.display = 'none';
+        debounceTimer = setTimeout(async () => {
+            const intent = classifySearch(
+                query,
+                zones,
+                communes
+            );
+
+            // Une commune ou un arrondissement affiche toutes ses stations.
+            if (intent.type === 'area') {
+                const areaStations = getStationsForZone(
+                    intent.area,
+                    stations
+                );
+
+                displayedStations = renderAreaResults(
+                    results,
+                    intent.label,
+                    areaStations
+                );
 
                 return;
             }
 
-            // ---------------------------------
-            // Recherche par arrondissement
-            // ---------------------------------
+            // Les correspondances de stations apparaissent immédiatement.
+            const directStations = intent.type === 'address'
+                ? []
+                : rankStationResults(
+                    fuse,
+                    stations,
+                    query
+                );
 
-            const zone = findZoneByQuery(
-                zonesWithStations,
-                query
-            );
-
-            if (zone) {
-
-                const stationsInZone =
-                    getStationsForZone(
-                        zone,
-                        stations
-                    );
-
-                const stationCount =
-                    stationsInZone.length;
-
-                const stationResults =
-                    stationsInZone
-                        .map((station, index) => {
-
-                            const availabilityColor =
-                                getAvailabilityColor(
-                                    station,
-                                    'bikes'
-                                );
-
-                            return `
-                                <div
-                                    class="search-result search-zone-station"
-                                    data-station-index="${index}"
-                                >
-                                    <div
-                                        class="search-zone-station-main"
-                                    >
-
-                                        <span
-                                            class="search-availability-dot search-availability-${availabilityColor}"
-                                        ></span>
-
-                                        <strong>
-                                            ${station.name}
-                                        </strong>
-
-                                        <span
-                                            class="search-zone-station-count"
-                                        >
-                                            ${station.bikes ?? 0}
-                                        </span>
-
-                                    </div>
-
-                                    <small>
-                                        ${station.address ?? ''}
-                                    </small>
-                                </div>
-                            `;
-                        })
-                        .join('');
-
+            if (directStations.length > 0) {
+                displayedStations = renderSearchResults(
+                    results,
+                    directStations,
+                    []
+                );
+            } else {
                 results.innerHTML = `
-                    <div class="search-result search-zone-result">
-                        <strong>
-                            📍 ${zone.properties?.l_ar}
-                        </strong>
-
-                        <small>
-                            Arrondissement · ${stationCount} stations Vélib'
-                        </small>
-                    </div>
-
-                    <div class="search-zone-stations">
-                        ${stationResults}
+                    <div class="search-results-section-title">
+                        Recherche des lieux et stations proches…
                     </div>
                 `;
 
                 results.style.display = 'block';
+                displayedStations = [];
+            }
 
-                results
-                    .querySelectorAll('.search-zone-station')
-                    .forEach(resultElement => {
+            // Cherche ensuite le lieu (adresse, gare, métro ou place)
+            // et les stations Vélib proches.
+            const locationGroups = await searchNearbyStations(
+                intent.query ?? query,
+                intent.type,
+                stations
+            );
 
-                        resultElement.addEventListener(
-                            'click',
-                            () => {
-
-                                const index = Number(
-                                    resultElement.dataset.stationIndex
-                                );
-
-                                const station =
-                                    stationsInZone[index];
-
-                                if (!station) {
-                                    return;
-                                }
-
-                                results.innerHTML = '';
-                                results.style.display = 'none';
-
-                                document.dispatchEvent(
-                                    new CustomEvent(
-                                        'station:selected',
-                                        {
-                                            detail: station
-                                        }
-                                    )
-                                );
-                            }
-                        );
-                    });
-
+            // Ignore une réponse d’une saisie plus ancienne.
+            if (version !== searchVersion) {
                 return;
             }
 
-            // ---------------------------------
-            // Recherche directe de stations
-            // ---------------------------------
-
-            const isAddress = looksLikeAddress(query);
-
-            let directStations = [];
-
-            if (!isAddress) {
-
-                const matches =
-                    fuse.search(query);
-
-                const filteredMatches =
-                    filterSearchResults(
-                        matches,
-                        query
-                    );
-
-                directStations =
-                    filteredMatches
-                        .slice(0, 8)
-                        .map(result => result.item);
-            }
-
-            // ---------------------------------
-            // Recherche autour d'une adresse
-            // ou d'un lieu
-            // ---------------------------------
-
-            const nearbyStations =
-                await searchNearbyStations(
-                    query,
-                    stations
-                );
-
-
-            // ---------------------------------
-            // Suppression des doublons
-            // ---------------------------------
-
-            const directStationIds =
-                new Set(
-                    directStations.map(
-                        station => String(station.id)
-                    )
-                );
-
-            const nearbyOnly =
-                nearbyStations.filter(
-                    station =>
-                        !directStationIds.has(
-                            String(station.id)
-                        )
-                );
-
-
-            // ---------------------------------
-            // Aucun résultat
-            // ---------------------------------
-
-            if (
-                !directStations.length &&
-                !nearbyOnly.length
-            ) {
-
-                results.innerHTML = '';
-                results.style.display = 'none';
-
-                return;
-            }
-
-
-            // ---------------------------------
-            // Résultats directs
-            // ---------------------------------
-
-            const directResults =
-                directStations
-                    .map((station, index) => {
-
-                        const availabilityColor =
-                            getAvailabilityColor(
-                                station,
-                                'bikes'
-                            );
-
-                        return `
-                            <div
-                                class="search-result search-direct-station"
-                                data-direct-index="${index}"
-                            >
-
-                                <div
-                                    class="search-zone-station-main"
-                                >
-
-                                    <span
-                                        class="search-availability-dot search-availability-${availabilityColor}"
-                                    ></span>
-
-                                    <strong>
-                                        ${station.name}
-                                    </strong>
-
-                                    <span
-                                        class="search-zone-station-count"
-                                    >
-                                        ${station.bikes ?? 0}
-                                    </span>
-
-                                </div>
-
-                                <small>
-                                    ${station.address ?? ''}
-                                </small>
-
-                            </div>
-                        `;
-                    })
-                    .join('');
-
-
-            // ---------------------------------
-            // Stations proches
-            // ---------------------------------
-
-            const nearbyResults =
-                nearbyOnly
-                    .map(station => {
-
-                        const availabilityColor =
-                            getAvailabilityColor(
-                                station,
-                                'bikes'
-                            );
-
-                        return `
-                            <div
-                                class="search-result search-nearby-station"
-                                data-station-id="${station.id}"
-                            >
-
-                                <div
-                                    class="search-nearby-station-main"
-                                >
-
-                                    <span
-                                        class="search-availability-dot search-availability-${availabilityColor}"
-                                    ></span>
-
-                                    <strong>
-                                        ${station.name}
-                                    </strong>
-
-                                    <span
-                                        class="search-nearby-bikes"
-                                    >
-                                        ${station.bikes ?? 0}
-                                    </span>
-
-                                </div>
-
-                                <small
-                                    class="search-nearby-distance"
-                                >
-                                    ${Math.round(
-                                        station.distance
-                                    )} m
-                                </small>
-
-                            </div>
-                        `;
-                    })
-                    .join('');
-
-
-            // ---------------------------------
-            // Construction de la liste
-            // ---------------------------------
-
-            results.innerHTML = `
-                <div class="search-standard-results">
-                    ${
-                        directStations.length
-                            ? `
-                                <div class="search-results-section-title">
-                                    Stations correspondantes
-                                </div>
-
-                                ${directResults}
-                            `
-                            : ''
-                    }
-
-                    ${
-                        nearbyOnly.length
-                            ? `
-                                <div class="search-results-section-title">
-                                    Stations à proximité
-                                </div>
-
-                                ${nearbyResults}
-                            `
-                            : ''
-                    }
-                </div>
-            `;
-
-            results.style.display = 'block';
-
-
-            // ---------------------------------
-            // Clic sur une station directe
-            // ---------------------------------
-
-            results
-                .querySelectorAll(
-                    '.search-direct-station'
+            const directIds = new Set(
+                directStations.map(station =>
+                    String(station.id)
                 )
-                .forEach(resultElement => {
+            );
 
-                    resultElement.addEventListener(
-                        'click',
-                        () => {
+            const cleanGroups = locationGroups
+                .map(group => ({
+                    ...group,
+                    stations: group.stations.filter(
+                        station =>
+                            !directIds.has(String(station.id))
+                    ),
+                }))
+                .filter(group => group.stations.length > 0);
 
-                            const index = Number(
-                                resultElement.dataset.directIndex
-                            );
-
-                            const station =
-                                directStations[index];
-
-                            if (!station) {
-                                return;
-                            }
-
-                            results.innerHTML = '';
-                            results.style.display = 'none';
-
-                            document.dispatchEvent(
-                                new CustomEvent(
-                                    'station:selected',
-                                    {
-                                        detail: station
-                                    }
-                                )
-                            );
-                        }
-                    );
-                });
-
-
-            // ---------------------------------
-            // Clic sur une station proche
-            // ---------------------------------
-
-            results
-                .querySelectorAll(
-                    '.search-nearby-station'
-                )
-                .forEach(resultElement => {
-
-                    resultElement.addEventListener(
-                        'click',
-                        () => {
-
-                            const stationId =
-                                resultElement.dataset.stationId;
-
-                            const station =
-                                nearbyOnly.find(
-                                    station =>
-                                        String(station.id)
-                                        === stationId
-                                );
-
-                            if (!station) {
-                                return;
-                            }
-
-                            results.innerHTML = '';
-                            results.style.display = 'none';
-
-                            document.dispatchEvent(
-                                new CustomEvent(
-                                    'station:selected',
-                                    {
-                                        detail: station
-                                    }
-                                )
-                            );
-                        }
-                    );
-                });
-
+            displayedStations = renderSearchResults(
+                results,
+                directStations,
+                cleanGroups
+            );
         }, 300);
     });
+
+    clearButton?.addEventListener('click', () => {
+        input.value = '';
+        input.dispatchEvent(new Event('input'));
+        input.focus();
+    });
+
+    initGeolocation({
+        map,
+        stations,
+        results,
+        input,
+        onDisplayedStations: stationsToDisplay => {
+            displayedStations = stationsToDisplay;
+        },
+    });
 }
+
+    

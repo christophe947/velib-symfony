@@ -7,7 +7,8 @@ const map = createMap();
 
 initStationPanel();
 
-initSearch();
+//initSearch();
+initSearch(map);
 
 document.addEventListener(
     'station:selected',
