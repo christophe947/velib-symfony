@@ -21,7 +21,9 @@ export function stationsToGeoJSON(stations) {
                 electricBikes: station.electricBikes,
                 mechanicalBikes: station.mechanicalBikes,
                 docks: station.docks,
-                capacity: station.capacity
+                capacity: station.capacity,
+                latitude: station.latitude,
+                longitude: station.longitude
             }
         }))
     };

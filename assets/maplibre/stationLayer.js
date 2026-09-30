@@ -64,8 +64,8 @@ export function addStationLayer(map, displayMode = 'bikes') {
                 ['linear'],
                 ['zoom'],
 
-                13, 36,
-                15, 38,
+                13, 34,
+                15, 36,
                 17, 40
             ],
             'circle-color': '#fff200',
