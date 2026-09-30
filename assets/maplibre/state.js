@@ -31,3 +31,23 @@ export function subscribeToSelectedStation(listener) {
         listeners.delete(listener);
     };
 }
+
+let displayMode = 'bikes';
+
+const displayModeSubscribers = [];
+
+export function setDisplayMode(mode) {
+
+    displayMode = mode;
+
+    displayModeSubscribers.forEach(callback => {
+        callback(displayMode);
+    });
+}
+
+export function subscribeToDisplayMode(callback) {
+
+    displayModeSubscribers.push(callback);
+
+    callback(displayMode);
+}

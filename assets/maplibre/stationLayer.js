@@ -1,10 +1,11 @@
 import { AVAILABILITY } from './constants.js';
 import { setSelectedStation,
-    subscribeToSelectedStation
+    subscribeToSelectedStation,
+    subscribeToDisplayMode
  } from './state.js';
 
 
-export function addStationLayer(map, displayMode = 'bikes') {
+function getDisplayProperties(displayMode) {
 
     const availableProperty = displayMode === 'electric'
         ? 'electricBikes'
@@ -12,12 +13,7 @@ export function addStationLayer(map, displayMode = 'bikes') {
             ? 'docks'
             : 'bikes';
 
-
-    const available = [
-        'get',
-        availableProperty
-    ];
-
+    const available = ['get', availableProperty];
 
     const rate = [
         '/',
@@ -25,24 +21,28 @@ export function addStationLayer(map, displayMode = 'bikes') {
         ['get', 'capacity']
     ];
 
-
     const colorExpression = [
         'case',
-
-        ['==', available, 0],
-        'gray',
-
-        ['<=', available, AVAILABILITY.MIN_RED],
-        'red',
-
-        ['<=', available, AVAILABILITY.MIN_ORANGE],
-        'orange',
-
-        ['>=', rate, AVAILABILITY.GOOD],
-        'green',
-
+        ['==', available, 0], 'gray',
+        ['<=', available, AVAILABILITY.MIN_RED], 'red',
+        ['<=', available, AVAILABILITY.MIN_ORANGE], 'orange',
+        ['>=', rate, AVAILABILITY.GOOD], 'green',
         'orange'
     ];
+
+    return {
+        availableProperty,
+        colorExpression
+    };
+}
+
+
+export function addStationLayer(map, displayMode = 'bikes') {
+
+    const {
+        availableProperty,
+        colorExpression
+    } = getDisplayProperties(displayMode);
 
 
     map.addLayer({
@@ -176,6 +176,26 @@ export function addStationLayer(map, displayMode = 'bikes') {
         }
     });
 
+    subscribeToDisplayMode(mode => {
+
+        const {
+            availableProperty,
+            colorExpression
+        } = getDisplayProperties(mode);
+
+        map.setPaintProperty(
+            'stations',
+            'circle-color',
+            colorExpression
+        );
+
+        map.setLayoutProperty(
+            'station-count',
+            'text-field',
+            ['get', availableProperty]
+        );
+
+    });
 
     subscribeToSelectedStation(station => {
 
