@@ -38,6 +38,8 @@ export function initStationPanel() {
                 parentElement: 'body',
                 initialBreak: 'bottom',
                 showCloseButton: false,
+                dragByCursor: true,
+                clickBottomOpen: false,
 
                 breaks: {
                     top: {
@@ -54,7 +56,7 @@ export function initStationPanel() {
 
                     bottom: {
                         enabled: true,
-                        height: 80
+                        height: 70
                     }
                 }
             }
@@ -223,7 +225,9 @@ function initModeSelector() {
 
     buttons.forEach(button => {
 
-        button.addEventListener('click', () => {
+        button.addEventListener('click', event => {
+
+            event.stopPropagation();
 
             const mode = button.dataset.mode;
 
@@ -232,7 +236,7 @@ function initModeSelector() {
             }
 
             currentMode = mode;
-            
+
             setDisplayMode(mode);
 
             buttons.forEach(item => {
