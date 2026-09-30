@@ -4,6 +4,7 @@ import { findNearbyStations } from './nearbyStations.js';
 import { renderSearchResults } from './searchResults.js';
 
 let userMarker = null;
+let userPosition = null;
 
 export function initGeolocation({
     map,
@@ -51,6 +52,11 @@ export function initGeolocation({
 
                 const latitude = position.coords.latitude;
                 const longitude = position.coords.longitude;
+
+                userPosition = {
+                    latitude,
+                    longitude,
+                };
 
                 map.flyTo({
                     center: [longitude, latitude],
@@ -103,6 +109,37 @@ export function initGeolocation({
                     </div>
                 `;
                 results.style.display = 'block';
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 60000,
+            }
+        );
+    });
+}
+
+
+export function requestUserPosition() {
+    return new Promise((resolve, reject) => {
+
+        if (!navigator.geolocation) {
+            reject(new Error('Geolocation unavailable'));
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            position => {
+
+                userPosition = {
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude,
+                };
+
+                resolve(userPosition);
+            },
+            error => {
+                reject(error);
             },
             {
                 enableHighAccuracy: true,
