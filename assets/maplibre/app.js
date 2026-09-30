@@ -5,7 +5,8 @@ import { setSelectedStation } from './state.js';
 
 const map = createMap();
 
-initStationPanel();
+//initStationPanel();
+initStationPanel(map);
 
 //initSearch();
 initSearch(map);

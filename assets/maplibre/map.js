@@ -68,3 +68,42 @@ export function createMap() {
     return map;
 
 }
+
+
+
+
+export function drawWalkingRoute(map, coordinates) {
+
+    const sourceId = 'walking-route';
+    const layerId = 'walking-route';
+
+    if (map.getSource(sourceId)) {
+        map.removeLayer(layerId);
+        map.removeSource(sourceId);
+    }
+
+    map.addSource(sourceId, {
+        type: 'geojson',
+
+        data: {
+            type: 'Feature',
+            geometry: {
+                type: 'LineString',
+                coordinates
+            }
+        }
+    });
+
+    map.addLayer({
+        id: layerId,
+        type: 'line',
+
+        source: sourceId,
+
+        paint: {
+            'line-color': '#198754',
+            'line-width': 5,
+            'line-opacity': 0.9
+        }
+    });
+}

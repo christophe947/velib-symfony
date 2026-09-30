@@ -4,8 +4,12 @@ import {
     subscribeToSelectedStation,
     setDisplayMode
  } from './state.js';
-
-
+import { requestUserPosition } from './geolocation.js';
+import {
+    getWalkingRoute,
+    decodePolyline
+} from './routing.js';
+import { drawWalkingRoute } from './map.js';
 
 let pane = null;
 let element = null;
@@ -16,7 +20,7 @@ const mobileQuery = window.matchMedia(
 
 let currentMode = 'bikes';
 
-export function initStationPanel() {
+export function initStationPanel(map) {
 
     element = document.querySelector(
         '#station-content'
@@ -71,8 +75,10 @@ export function initStationPanel() {
         // Desktop : panneau classique
         element.classList.add('is-open');
     }
-
-    subscribeToSelectedStation(updateStationPanel);
+    subscribeToSelectedStation(
+        station => updateStationPanel(station, map)
+    );
+    //subscribeToSelectedStation(updateStationPanel, map);
 }
 
 function renderModeSelector() {
@@ -122,7 +128,7 @@ function renderEmptyPanel() {
     initModeSelector();
 }
 
-function updateStationPanel(station) {
+function updateStationPanel(station, map) {
 
     if (!station || !element) {
         return;
@@ -161,11 +167,7 @@ function updateStationPanel(station) {
 
             </div>
 
-            <button
-                type="button"
-                class="station-panel-join"
-                disabled
-            >
+            <button type="button" class="station-panel-join">
                 Rejoindre
             </button>
 
@@ -173,7 +175,46 @@ function updateStationPanel(station) {
 
         </div>
     `;
+
+    const joinButton = element.querySelector(
+        '.station-panel-join'
+    );
+
+    joinButton?.addEventListener('click', async () => {
+
+        try {
+
+            const userPosition = await requestUserPosition();
+
+            const route = await getWalkingRoute(
+                userPosition,
+                {
+                    latitude: station.latitude,
+                    longitude: station.longitude
+                }
+            );
+
+            const coordinates = decodePolyline(
+                route.legs[0].shape
+            );
+
+            drawWalkingRoute(
+                map,
+                coordinates
+            );
+
+        } catch (error) {
+
+            console.error(
+                'Impossible de calculer l’itinéraire :',
+                error
+            );
+        }
+    });
+
+
     initModeSelector();
+
 
     if (mobileQuery.matches && pane) {
 
