@@ -182,9 +182,9 @@ export function addCommuneLayer(
                 ['linear'],
                 ['zoom'],
 
-                10, 15,
-                12, 18,
-                13, 22
+                10, 12,
+                12, 15,
+                13, 19
             ],
             'circle-color': '#4dabf7',
             'circle-stroke-width': 3,
