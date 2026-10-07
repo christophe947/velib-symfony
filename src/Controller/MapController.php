@@ -11,6 +11,15 @@ use App\Service\VelibApiService;
 final class MapController extends AbstractController
 {
     #[Route('/carte', name: 'app_map')]
+    public function index(): Response { 
+        return $this->redirectToRoute( 
+            'app_maplibre', 
+            [], 
+            Response::HTTP_MOVED_PERMANENTLY 
+        ); 
+    }
+
+    /*#[Route('/carte', name: 'app_map')]
     public function index(Request $request, VelibApiService $velibApiService): Response
     {
         $selectedStation = $request->query->get('station');
@@ -20,7 +29,7 @@ final class MapController extends AbstractController
             'stations' => $stations,
             'selectedStation' => $selectedStation
         ]);
-    }
+    }*/
 
 
 }

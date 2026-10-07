@@ -6,6 +6,24 @@ import { renderSearchResults } from './searchResults.js';
 let userMarker = null;
 let userPosition = null;
 
+export function showUserMarker(map, position) {
+
+    userMarker?.remove();
+
+    userMarker = new maplibregl.Marker({
+        color: '#2563eb',
+    })
+        .setLngLat([
+            position.longitude,
+            position.latitude
+        ])
+        .setPopup(
+            new maplibregl.Popup({ offset: 25 })
+                .setText('Votre position')
+        )
+        .addTo(map);
+}
+
 export function initGeolocation({
     map,
     stations,
@@ -63,7 +81,12 @@ export function initGeolocation({
                     zoom: 15,
                 });
 
-                userMarker?.remove();
+                showUserMarker(map, {
+                    latitude,
+                    longitude
+                });
+
+                /*userMarker?.remove();
 
                 userMarker = new maplibregl.Marker({
                     color: '#2563eb',
@@ -73,7 +96,7 @@ export function initGeolocation({
                         new maplibregl.Popup({ offset: 25 })
                             .setText('Votre position')
                     )
-                    .addTo(map);
+                    .addTo(map);*/
 
                 const nearbyStations = findNearbyStations(
                     latitude,

@@ -4,12 +4,21 @@ import {
     subscribeToSelectedStation,
     setDisplayMode
  } from './state.js';
-import { requestUserPosition } from './geolocation.js';
+import { 
+    requestUserPosition,
+    showUserMarker
+ } from './geolocation.js';
 import {
     getWalkingRoute,
     decodePolyline
 } from './routing.js';
-import { drawWalkingRoute } from './map.js';
+import { 
+    drawWalkingRoute,
+    fitWalkingRoute,
+    showDestinationMarker
+ } from './map.js';
+
+
 
 let pane = null;
 let element = null;
@@ -19,6 +28,53 @@ const mobileQuery = window.matchMedia(
 );
 
 let currentMode = 'bikes';
+
+async function updateMiddleHeight(height) {
+
+    if (!pane) {
+        return;
+    }
+
+    pane.settings.breaks.middle.height = height;
+
+    // Recalcule réellement les breakpoints internes
+    await pane.breakpoints.buildBreakpoints(
+        pane.settings.breaks,
+        0,
+        false
+    );
+
+    // Le nouveau middle devient le breakpoint courant
+    pane.breakpoints.currentBreakpoint =
+        pane.breakpoints.breaks.middle;
+
+    pane.breakpoints.prevBreakpoint = 'middle';
+
+    // Position visuelle
+    await pane.moveToHeight(height);
+}
+
+async function updateBottomHeight(height) {
+
+    if (!pane) {
+        return;
+    }
+
+    pane.settings.breaks.bottom.height = height;
+
+    await pane.breakpoints.buildBreakpoints(
+        pane.settings.breaks,
+        0,
+        false
+    );
+
+    pane.breakpoints.currentBreakpoint =
+        pane.breakpoints.breaks.bottom;
+
+    pane.breakpoints.prevBreakpoint = 'bottom';
+
+    await pane.moveToHeight(height);
+}
 
 export function initStationPanel(map) {
 
@@ -54,7 +110,7 @@ export function initStationPanel(map) {
 
                     middle: {
                         enabled: true,
-                        height: 275,
+                        height: 270,
                         bounce: true
                     },
 
@@ -116,6 +172,8 @@ function renderModeSelector() {
     `;
 }
 
+
+
 function renderEmptyPanel() {
 
     element.innerHTML = `
@@ -126,7 +184,27 @@ function renderEmptyPanel() {
         </div>
     `;
     initModeSelector();
+
+    if (pane) {
+        requestAnimationFrame(() => {
+
+            const content = element.querySelector(
+                '.station-panel-empty'
+            );
+
+            if (!content) {
+                return;
+            }
+
+            const bottomHeight =
+                content.getBoundingClientRect().height;
+
+            updateBottomHeight(bottomHeight);
+        });
+    }
 }
+
+
 
 function updateStationPanel(station, map) {
 
@@ -167,6 +245,8 @@ function updateStationPanel(station, map) {
 
             </div>
 
+            <div class="station-panel-route-summary"></div>
+
             <button type="button" class="station-panel-join">
                 Rejoindre
             </button>
@@ -176,15 +256,46 @@ function updateStationPanel(station, map) {
         </div>
     `;
 
+    if (mobileQuery.matches && pane) {
+
+        const title = element.querySelector(
+            '.station-panel-title'
+        );
+
+        if (title) {
+
+            const bottomHeight =
+                title.getBoundingClientRect().height + 30;
+
+            updateBottomHeight(bottomHeight);
+        }
+    }
+
     const joinButton = element.querySelector(
         '.station-panel-join'
     );
 
+    const routeSummary = element.querySelector(
+        '.station-panel-route-summary'
+    );
+
     joinButton?.addEventListener('click', async () => {
+
+        joinButton.disabled = true;
+
+        joinButton.innerHTML = `
+            <span
+                class="spinner-border spinner-border-sm me-2"
+                aria-hidden="true"
+            ></span>
+            Calcul de l'itinéraire…
+        `;
 
         try {
 
             const userPosition = await requestUserPosition();
+
+            showUserMarker(map, userPosition);
 
             const route = await getWalkingRoute(
                 userPosition,
@@ -192,6 +303,14 @@ function updateStationPanel(station, map) {
                     latitude: station.latitude,
                     longitude: station.longitude
                 }
+            );
+
+            const distance = formatDistance(
+                route.summary.length
+            );
+
+            const duration = formatDuration(
+                route.summary.time
             );
 
             const coordinates = decodePolyline(
@@ -203,12 +322,50 @@ function updateStationPanel(station, map) {
                 coordinates
             );
 
+            fitWalkingRoute(
+                map,
+                coordinates
+            );
+
+            showDestinationMarker(map, {
+                latitude: station.latitude,
+                longitude: station.longitude
+            });
+
+            
+
+            if (routeSummary) {
+                routeSummary.innerHTML = `
+                    <span>📍 ${distance}</span>
+                    <span>🚶 ${duration}</span>
+                `;
+
+                routeSummary.style.display = 'flex';
+
+                if (pane && mobileQuery.matches) {
+
+                    const content = element.querySelector(
+                        '.station-panel-content'
+                    );
+
+                    if (content) {
+                        const middleHeight =
+                            content.getBoundingClientRect().height;
+
+                        updateMiddleHeight(middleHeight);
+                    }
+                }
+            }
+
         } catch (error) {
 
             console.error(
                 'Impossible de calculer l’itinéraire :',
                 error
             );
+        } finally {
+            joinButton.disabled = false;
+            joinButton.textContent = 'Rejoindre';
         }
     });
 
@@ -218,11 +375,20 @@ function updateStationPanel(station, map) {
 
     if (mobileQuery.matches && pane) {
 
+        const content = element.querySelector(
+            '.station-panel-content'
+        );
+
         pane.present({
             animate: true
         });
 
-        pane.moveToBreak('middle');
+        if (content) {
+            const middleHeight =
+                content.getBoundingClientRect().height;
+
+            updateMiddleHeight(middleHeight);
+        }
 
         return;
     }
@@ -294,3 +460,32 @@ function initModeSelector() {
 
     updateIndicator();
 }
+
+function formatDistance(kilometers) {
+
+    const meters = Math.round(kilometers * 1000);
+
+    if (meters < 1000) {
+        return `${meters} m`;
+    }
+
+    return `${kilometers.toFixed(1)} km`;
+}
+
+function formatDuration(seconds) {
+
+    const minutes = Math.round(seconds / 60);
+
+    if (minutes < 60) {
+        return `${minutes} min`;
+    }
+
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+
+    return remainingMinutes > 0
+        ? `${hours} h ${remainingMinutes}`
+        : `${hours} h`;
+}
+
+

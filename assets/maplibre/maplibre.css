@@ -272,7 +272,7 @@
    ========================= */
 
 .station-panel-content {
-    padding: 8px 20px 24px;
+    padding: 3px 20px 24px;
     text-align: center;
 }
 
@@ -342,6 +342,17 @@
     opacity: 0.65;
 }
 
+.station-panel-route-summary {
+    display: none;
+    justify-content: center;
+    gap: 24px;
+    margin-top: -8px;
+    margin-bottom: 14px;
+    color: #495057;
+    font-size: 14px;
+    font-weight: 600;
+}
+
 .station-panel-empty {
     display: flex;
     justify-content: center;
@@ -394,6 +405,33 @@
         transform 0.25s ease,
         width 0.25s ease;
 }
+
+/* =========================
+   Marker itineraire
+   ========================= */
+
+.destination-marker {
+    position: relative;
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background: #9fcfb9;
+    border: 4px solid #ffffff;
+    border-radius: 50%;
+
+    box-shadow: 0 2px 8px rgb(0 0 0 / 25%);
+
+    font-size: 20px;
+    line-height: 1;
+}
+
+.destination-marker span {
+    transform: translateY(-2px);
+}
+
 
 /*.station-panel-mode-selector button.active::after {
     content: "";
@@ -493,6 +531,10 @@
         border-top: 1px solid rgba(255, 255, 255, 0.7);
         box-shadow:
             0 -8px 30px rgba(0, 0, 0, 0.16);
+
+        left: 8px !important;
+        right: 8px !important;
+        width: auto !important;
     }
 
     .destroy-button {

@@ -11,6 +11,7 @@ import {
 import { addZoneLayer } from './zoneLayer.js';
 import { addCommuneLayer } from './communeLayer.js';
 
+let destinationMarker = null;
 
 export function createMap() {
 
@@ -106,4 +107,56 @@ export function drawWalkingRoute(map, coordinates) {
             'line-opacity': 0.9
         }
     });
+}
+
+
+export function fitWalkingRoute(map, coordinates) {
+
+    if (!coordinates?.length) {
+        return;
+    }
+
+    const bounds = new maplibregl.LngLatBounds();
+
+    coordinates.forEach(coordinate => {
+        bounds.extend(coordinate);
+    });
+
+    map.fitBounds(bounds, {
+        padding: {
+            top: 120,
+            bottom: 310,
+            left: 40,
+            right: 40
+        },
+        duration: 800,
+        maxZoom: 17
+    });
+}
+
+
+export function showDestinationMarker(map, position) {
+
+    destinationMarker?.remove();
+
+    const element = document.createElement('div');
+
+    element.className = 'destination-marker';
+
+    element.innerHTML = `
+        <span>🚲</span>
+    `;
+
+    destinationMarker = new maplibregl.Marker({
+        element
+    })
+        .setLngLat([
+            position.longitude,
+            position.latitude
+        ])
+        .setPopup(
+            new maplibregl.Popup({ offset: 25 })
+                .setText('Station Vélib')
+        )
+        .addTo(map);
 }

@@ -101,6 +101,19 @@ export async function initSearch(map) {
         );
     });
 
+    
+    // Ferme la liste si l'utilisateur clique en dehors de la recherche.
+    document.addEventListener('click', event => {
+
+        if (!event.target.closest('#map-search')) {
+            results.innerHTML = '';
+            results.style.display = 'none';
+            displayedStations = [];
+        }
+
+    });
+
+
     input.addEventListener('input', () => {
         clearTimeout(debounceTimer);
 
