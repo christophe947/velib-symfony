@@ -172,3 +172,34 @@ export function requestUserPosition() {
         );
     });
 }
+
+
+export function startWatchingPosition(onPosition, onError) {
+
+    if (!navigator.geolocation) {
+        onError?.(
+            new Error('Geolocation unavailable')
+        );
+        return null;
+    }
+
+    return navigator.geolocation.watchPosition(
+        position => {
+
+            const userPosition = {
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude
+            };
+
+            onPosition?.(userPosition);
+        },
+        error => {
+            onError?.(error);
+        },
+        {
+            enableHighAccuracy: true,
+            maximumAge: 1000,
+            timeout: 10000
+        }
+    );
+}

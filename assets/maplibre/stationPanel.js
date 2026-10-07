@@ -6,7 +6,8 @@ import {
  } from './state.js';
 import { 
     requestUserPosition,
-    showUserMarker
+    showUserMarker,
+    startWatchingPosition
  } from './geolocation.js';
 import {
     getWalkingRoute,
@@ -22,6 +23,8 @@ import {
 
 let pane = null;
 let element = null;
+let navigationStarted = false;
+let positionWatchId = null;
 
 const mobileQuery = window.matchMedia(
     '(max-width: 767px)'
@@ -281,7 +284,53 @@ function updateStationPanel(station, map) {
 
     joinButton?.addEventListener('click', async () => {
 
+
+    if (navigationStarted) {
+        return;
+    }
+
+    if (joinButton.textContent.trim() === 'Démarrer') {
+
+        navigationStarted = true;
+
         joinButton.disabled = true;
+        joinButton.textContent = 'Démarrage…';
+
+        positionWatchId = startWatchingPosition(
+            position => {
+
+                showUserMarker(map, position);
+
+                console.log(
+                    'Nouvelle position GPS :',
+                    position
+                );
+            },
+            error => {
+
+                console.error(
+                    'Erreur GPS :',
+                    error
+                );
+            }
+        );
+
+        joinButton.disabled = false;
+        joinButton.textContent = 'Navigation en cours';
+
+        return;
+    }
+
+    joinButton.disabled = true;
+
+    joinButton.innerHTML = `
+        <span
+            class="spinner-border spinner-border-sm me-2"
+            aria-hidden="true"
+        ></span>
+        Calcul de l'itinéraire…
+    `;
+        /*joinButton.disabled = true;
 
         joinButton.innerHTML = `
             <span
@@ -289,7 +338,7 @@ function updateStationPanel(station, map) {
                 aria-hidden="true"
             ></span>
             Calcul de l'itinéraire…
-        `;
+        `;*/
 
         try {
 
@@ -332,6 +381,9 @@ function updateStationPanel(station, map) {
                 longitude: station.longitude
             });
 
+            navigationStarted = false;
+
+            joinButton.textContent = 'Démarrer';
             
 
             if (routeSummary) {
@@ -365,8 +417,12 @@ function updateStationPanel(station, map) {
             );
         } finally {
             joinButton.disabled = false;
-            joinButton.textContent = 'Rejoindre';
-        }
+
+            joinButton.textContent =
+                navigationStarted
+                    ? 'Navigation en cours'
+                    : 'Démarrer';
+                }
     });
 
 
