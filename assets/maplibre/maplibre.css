@@ -266,7 +266,6 @@
 
 
 
-
 /* =========================
    Panneau station
    ========================= */
@@ -404,6 +403,21 @@
     transition:
         transform 0.25s ease,
         width 0.25s ease;
+}
+
+.station-panel-message {
+    margin-top: 10px;
+    margin-bottom: 5px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #fff3cd;
+    color: #664d03;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.station-panel-message[hidden] {
+    display: none;
 }
 
 /* =========================

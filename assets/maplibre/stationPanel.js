@@ -1,4 +1,4 @@
-
+import * as maplibregl from '/maplibre-assets/maplibre-gl.mjs';
 import { CupertinoPane } from 'cupertino-pane';
 import { 
     subscribeToSelectedStation,
@@ -16,21 +16,65 @@ import {
 import { 
     drawWalkingRoute,
     fitWalkingRoute,
-    showDestinationMarker
+    showDestinationMarker,
+    updateWalkingRoute
  } from './map.js';
-
-
+import {
+    setNavigationRoute,
+    updateNavigationProgress,
+    startNavigationSimulation,
+    startOffRouteSimulation
+} from './navigation.js'; 
+import {
+    setRouteSummaryCallback
+} from './routeSummary.js';
+import {
+    formatDistance,
+    formatDuration
+} from './routeFormatting.js';
 
 let pane = null;
 let element = null;
 let navigationStarted = false;
 let positionWatchId = null;
+let currentRouteCoordinates = [];
+let lastRouteProgressIndex = 0;
 
 const mobileQuery = window.matchMedia(
     '(max-width: 767px)'
 );
 
 let currentMode = 'bikes';
+
+
+
+
+/**
+ * Met à jour les informations de distance et de durée
+ * affichées dans le panneau de navigation.
+ */
+export function updateRouteSummary(distance, duration) {
+    if (!element) {
+        return;
+    }
+
+    const routeSummary = element.querySelector(
+        '.station-panel-route-summary'
+    );
+
+    if (!routeSummary) {
+        return;
+    }
+
+    routeSummary.innerHTML = `
+        <span>📍 ${distance}</span>
+        <span>🚶 ${duration}</span>
+    `;
+
+    routeSummary.style.display = 'flex';
+}
+
+
 
 async function updateMiddleHeight(height) {
 
@@ -56,8 +100,22 @@ async function updateMiddleHeight(height) {
     // Position visuelle
     await pane.moveToHeight(height);
 }
-
 async function updateBottomHeight(height) {
+
+    if (!pane) {
+        return;
+    }
+
+    pane.settings.breaks.bottom.height = height;
+
+    await pane.breakpoints.buildBreakpoints(
+        pane.settings.breaks,
+        0,
+        false
+    );
+}
+
+/*async function updateBottomHeight(height) {
 
     if (!pane) {
         return;
@@ -77,7 +135,7 @@ async function updateBottomHeight(height) {
     pane.breakpoints.prevBreakpoint = 'bottom';
 
     await pane.moveToHeight(height);
-}
+}*/
 
 export function initStationPanel(map) {
 
@@ -88,7 +146,7 @@ export function initStationPanel(map) {
     if (!element) {
         return;
     }
-
+    setRouteSummaryCallback(updateRouteSummary);
     // Le panneau vide est présent dès le lancement
     // sur mobile comme sur desktop.
     renderEmptyPanel();
@@ -103,6 +161,7 @@ export function initStationPanel(map) {
                 showCloseButton: false,
                 dragByCursor: true,
                 clickBottomOpen: false,
+                //animationDuration: 500,
 
                 breaks: {
                     top: {
@@ -209,7 +268,8 @@ function renderEmptyPanel() {
 
 
 
-function updateStationPanel(station, map) {
+
+async function updateStationPanel(station, map) {
 
     if (!station || !element) {
         return;
@@ -250,9 +310,12 @@ function updateStationPanel(station, map) {
 
             <div class="station-panel-route-summary"></div>
 
+            <div class="station-panel-message" role="status" aria-live="polite" hidden></div>
+
             <button type="button" class="station-panel-join">
                 Rejoindre
             </button>
+
 
             ${renderModeSelector()}
 
@@ -264,15 +327,16 @@ function updateStationPanel(station, map) {
         const title = element.querySelector(
             '.station-panel-title'
         );
-
+        
         if (title) {
 
             const bottomHeight =
                 title.getBoundingClientRect().height + 30;
 
-            updateBottomHeight(bottomHeight);
+            await updateBottomHeight(bottomHeight);
         }
     }
+
 
     const joinButton = element.querySelector(
         '.station-panel-join'
@@ -281,6 +345,11 @@ function updateStationPanel(station, map) {
     const routeSummary = element.querySelector(
         '.station-panel-route-summary'
     );
+
+    const routeMessage = element.querySelector(
+        '.station-panel-message'
+    );
+
 
     joinButton?.addEventListener('click', async () => {
 
@@ -300,7 +369,9 @@ function updateStationPanel(station, map) {
             position => {
 
                 showUserMarker(map, position);
-
+                //updateRouteProgress(position, map);
+                 updateNavigationProgress(position, map);
+                 
                 console.log(
                     'Nouvelle position GPS :',
                     position
@@ -330,15 +401,11 @@ function updateStationPanel(station, map) {
         ></span>
         Calcul de l'itinéraire…
     `;
-        /*joinButton.disabled = true;
-
-        joinButton.innerHTML = `
-            <span
-                class="spinner-border spinner-border-sm me-2"
-                aria-hidden="true"
-            ></span>
-            Calcul de l'itinéraire…
-        `;*/
+        
+        if (routeMessage) {
+            routeMessage.hidden = true;
+            routeMessage.textContent = '';
+        }
 
         try {
 
@@ -365,6 +432,19 @@ function updateStationPanel(station, map) {
             const coordinates = decodePolyline(
                 route.legs[0].shape
             );
+
+            //setNavigationRoute(coordinates);
+            setNavigationRoute(
+                coordinates,
+                {
+                    latitude: station.latitude,
+                    longitude: station.longitude
+                }
+            );
+            
+
+            //currentRouteCoordinates = coordinates;
+            //lastRouteProgressIndex = 0;
 
             drawWalkingRoute(
                 map,
@@ -394,11 +474,53 @@ function updateStationPanel(station, map) {
 
                 routeSummary.style.display = 'flex';
 
+
+                const simulationButton = document.createElement('button');
+
+                simulationButton.type = 'button';
+                simulationButton.textContent = '🧪 Simuler le trajet';
+                simulationButton.className = 'station-panel-simulate';
+
+                simulationButton.addEventListener('click', () => {
+
+                    simulationButton.disabled = true;
+                    simulationButton.textContent = 'Simulation en cours…';
+
+                    startNavigationSimulation(map, () => {
+                        simulationButton.disabled = false;
+                        simulationButton.textContent = '🧪 Simuler le trajet';
+                    });
+
+                });
+
+                routeSummary.after(simulationButton);
+
+
+
+                const offRouteButton = document.createElement('button');
+
+                offRouteButton.type = 'button';
+                offRouteButton.textContent = '🧭 Tester une déviation';
+                offRouteButton.className = 'station-panel-simulate';
+
+                offRouteButton.addEventListener('click', () => {
+                    startOffRouteSimulation(map);
+                });
+
+                simulationButton.after(offRouteButton);
+
+
+
                 if (pane && mobileQuery.matches) {
 
                     const content = element.querySelector(
                         '.station-panel-content'
                     );
+
+                    pane.present({
+                        animate: true
+                    });
+
 
                     if (content) {
                         const middleHeight =
@@ -415,14 +537,47 @@ function updateStationPanel(station, map) {
                 'Impossible de calculer l’itinéraire :',
                 error
             );
+
+            if (routeMessage) { 
+                routeMessage.hidden = false; 
+                if ( error instanceof Error && error.message === 'Geolocation unavailable' ) { 
+                    routeMessage.textContent = '📍 La géolocalisation n’est pas disponible sur cet appareil.';
+                } else { 
+                    routeMessage.textContent = '📍 Autorise la localisation dans ton navigateur pour calculer l’itinéraire.';
+                } 
+                if (mobileQuery.matches && pane) {
+
+                    const content = element.querySelector(
+                        '.station-panel-content'
+                    );
+
+                    pane.present({
+                        animate: true
+                    });
+
+                    if (content) {
+                        const middleHeight =
+                            content.getBoundingClientRect().height;
+
+                        updateMiddleHeight(middleHeight);
+                    }
+
+                    return;
+                }
+            }
+            
         } finally {
             joinButton.disabled = false;
 
-            joinButton.textContent =
-                navigationStarted
-                    ? 'Navigation en cours'
-                    : 'Démarrer';
-                }
+            joinButton.textContent = 
+                navigationStarted 
+                    ? 'Navigation en cours' 
+                    : routeMessage && !routeMessage.hidden
+                        ? 'Rejoindre'
+                        : joinButton.textContent === 'Démarrer'
+                            ? 'Démarrer'
+                            : 'Rejoindre';
+            }
     });
 
 
@@ -517,7 +672,7 @@ function initModeSelector() {
     updateIndicator();
 }
 
-function formatDistance(kilometers) {
+/*function formatDistance(kilometers) {
 
     const meters = Math.round(kilometers * 1000);
 
@@ -545,3 +700,4 @@ function formatDuration(seconds) {
 }
 
 
+*/

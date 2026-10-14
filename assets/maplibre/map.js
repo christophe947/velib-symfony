@@ -110,6 +110,25 @@ export function drawWalkingRoute(map, coordinates) {
 }
 
 
+export function updateWalkingRoute(map, coordinates) {
+
+    const source = map.getSource('walking-route');
+
+    if (!source || !coordinates?.length) {
+        return;
+    }
+
+    source.setData({
+        type: 'Feature',
+        geometry: {
+            type: 'LineString',
+            coordinates
+        },
+        properties: {}
+    });
+}
+
+
 export function fitWalkingRoute(map, coordinates) {
 
     if (!coordinates?.length) {
