@@ -447,6 +447,55 @@
 }
 
 
+
+
+/* Contrôle de changement de vue 2D / 3D */
+.map-view-control {
+    margin-top: 12px !important;
+    margin-right: 12px !important;
+}
+
+.map-view-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 44px;
+    height: 44px;
+
+    padding: 0;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 12px;
+
+    background: #ffffff;
+    color: #198754;
+
+    font-size: 15px;
+    font-weight: 700;
+
+    cursor: pointer;
+
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+
+    transition:
+        background-color 0.2s ease,
+        transform 0.2s ease;
+}
+
+.map-view-button:hover {
+    background: #f0fdf4;
+}
+
+.map-view-button:active {
+    transform: scale(0.94);
+}
+
+.map-view-button:focus-visible {
+    outline: 2px solid #198754;
+    outline-offset: 2px;
+}
+
+
 /*.station-panel-mode-selector button.active::after {
     content: "";
     position: absolute;
@@ -529,8 +578,18 @@
 }
 
 
+/* =========================
+   Mobile
+   ========================= */
+
 
 @media (max-width: 767.98px) {
+
+
+    .map-view-control {
+        margin-top: 80px !important;
+        margin-right: 12px !important;
+    }
 
     #station-content {
         background: transparent;

@@ -188,7 +188,9 @@ export function startWatchingPosition(onPosition, onError) {
 
             const userPosition = {
                 latitude: position.coords.latitude,
-                longitude: position.coords.longitude
+                longitude: position.coords.longitude,
+                heading: position.coords.heading,
+                speed: position.coords.speed
             };
 
             onPosition?.(userPosition);

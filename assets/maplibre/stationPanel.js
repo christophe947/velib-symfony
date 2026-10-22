@@ -17,7 +17,9 @@ import {
     drawWalkingRoute,
     fitWalkingRoute,
     showDestinationMarker,
-    updateWalkingRoute
+    updateWalkingRoute,
+    setUserFollowing,
+    recenterOnUser
  } from './map.js';
 import {
     setNavigationRoute,
@@ -36,7 +38,12 @@ import {
 let pane = null;
 let element = null;
 let navigationStarted = false;
+
 let positionWatchId = null;
+
+// Dernière position GPS connue.
+let lastKnownUserPosition = null;
+
 let currentRouteCoordinates = [];
 let lastRouteProgressIndex = 0;
 
@@ -115,27 +122,7 @@ async function updateBottomHeight(height) {
     );
 }
 
-/*async function updateBottomHeight(height) {
 
-    if (!pane) {
-        return;
-    }
-
-    pane.settings.breaks.bottom.height = height;
-
-    await pane.breakpoints.buildBreakpoints(
-        pane.settings.breaks,
-        0,
-        false
-    );
-
-    pane.breakpoints.currentBreakpoint =
-        pane.breakpoints.breaks.bottom;
-
-    pane.breakpoints.prevBreakpoint = 'bottom';
-
-    await pane.moveToHeight(height);
-}*/
 
 export function initStationPanel(map) {
 
@@ -361,9 +348,25 @@ async function updateStationPanel(station, map) {
     if (joinButton.textContent.trim() === 'Démarrer') {
 
         navigationStarted = true;
+        setUserFollowing(true);
 
         joinButton.disabled = true;
         joinButton.textContent = 'Démarrage…';
+
+        // 📍 Recentre immédiatement la carte sur la dernière position connue.
+        if (lastKnownUserPosition) {
+            showUserMarker(map, lastKnownUserPosition);
+
+            map.easeTo({
+                center: [
+                    lastKnownUserPosition.longitude,
+                    lastKnownUserPosition.latitude
+                ],
+                zoom: 17,
+                duration: 800,
+                essential: true
+            });
+        }
 
         positionWatchId = startWatchingPosition(
             position => {
@@ -389,6 +392,14 @@ async function updateStationPanel(station, map) {
         joinButton.disabled = false;
         joinButton.textContent = 'Navigation en cours';
 
+        
+        // 📱 Réduit le panneau après 2 secondes.
+        if (pane && mobileQuery.matches) {
+            setTimeout(() => {
+                pane.moveToBreak('bottom');
+            }, 2000);
+        }
+
         return;
     }
 
@@ -410,6 +421,8 @@ async function updateStationPanel(station, map) {
         try {
 
             const userPosition = await requestUserPosition();
+            
+            lastKnownUserPosition = userPosition;
 
             showUserMarker(map, userPosition);
 
@@ -672,32 +685,3 @@ function initModeSelector() {
     updateIndicator();
 }
 
-/*function formatDistance(kilometers) {
-
-    const meters = Math.round(kilometers * 1000);
-
-    if (meters < 1000) {
-        return `${meters} m`;
-    }
-
-    return `${kilometers.toFixed(1)} km`;
-}
-
-function formatDuration(seconds) {
-
-    const minutes = Math.round(seconds / 60);
-
-    if (minutes < 60) {
-        return `${minutes} min`;
-    }
-
-    const hours = Math.floor(minutes / 60);
-    const remainingMinutes = minutes % 60;
-
-    return remainingMinutes > 0
-        ? `${hours} h ${remainingMinutes}`
-        : `${hours} h`;
-}
-
-
-*/

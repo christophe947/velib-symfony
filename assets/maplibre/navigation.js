@@ -1,4 +1,7 @@
-import { updateWalkingRoute } from './map.js';
+import { 
+    updateWalkingRoute,
+    followUserPosition
+} from './map.js';
 import { showUserMarker } from './geolocation.js';
 import {
     getWalkingRoute,
@@ -195,6 +198,8 @@ export function updateNavigationProgress(position, map) {
         return;
     }
 
+    followUserPosition(map, position);
+
     let closestSegmentIndex = lastRouteProgressIndex;
     let closestDistance = Infinity;
 
@@ -276,6 +281,37 @@ export function updateNavigationProgress(position, map) {
 }
 
 
+
+/**
+ * Calcule le cap entre deux coordonnées géographiques.
+ *
+ * Les coordonnées sont au format [longitude, latitude].
+ * Le résultat est exprimé en degrés, entre 0 et 360.
+ */
+function calculateHeading(start, end) {
+    const toRadians = degrees => degrees * Math.PI / 180;
+
+    const [longitude1, latitude1] = start;
+    const [longitude2, latitude2] = end;
+
+    const lat1 = toRadians(latitude1);
+    const lat2 = toRadians(latitude2);
+    const deltaLongitude = toRadians(longitude2 - longitude1);
+
+    const y = Math.sin(deltaLongitude) * Math.cos(lat2);
+
+    const x =
+        Math.cos(lat1) * Math.sin(lat2) -
+        Math.sin(lat1) * Math.cos(lat2) *
+        Math.cos(deltaLongitude);
+
+    const heading = Math.atan2(y, x) * 180 / Math.PI;
+
+    return (heading + 360) % 360;
+}
+
+
+
 /**
  * Simule le déplacement de l'utilisateur le long de l'itinéraire.
  */
@@ -300,10 +336,29 @@ export function startNavigationSimulation(map, onFinish) {
             index = currentRouteCoordinates.length - 1;
         }
 
+        
         const [longitude, latitude] =
             currentRouteCoordinates[index];
 
-        const position = { longitude, latitude };
+        // Point suivant sur l'itinéraire pour calculer la direction.
+        const nextIndex = Math.min(
+            index + 1,
+            currentRouteCoordinates.length - 1
+        );
+
+        const heading = calculateHeading(
+            currentRouteCoordinates[index],
+            currentRouteCoordinates[nextIndex]
+        );
+
+        const position = {
+            longitude,
+            latitude,
+            heading,
+            speed: 1.4
+        };
+
+
         
         showUserMarker(map, position);
         updateNavigationProgress(position, map);
