@@ -122,7 +122,14 @@ async function recalculateNavigationRoute(position, map) {
  * Les coordonnées sont au format [longitude, latitude].
  * Le résultat est exprimé en mètres.
  */
-function calculateDistanceToSegment(
+/**
+ * Calcule la projection d'une position GPS sur un segment.
+ *
+ * Retourne :
+ * - la distance minimale en mètres ;
+ * - les coordonnées du point le plus proche sur le segment.
+ */
+function calculateProjectionOnSegment(
     position,
     start,
     end
@@ -132,8 +139,6 @@ function calculateDistanceToSegment(
     const toRadians = degrees =>
         degrees * Math.PI / 180;
 
-    // On utilise la latitude de la position GPS
-    // pour obtenir une projection locale en mètres.
     const referenceLatitude = toRadians(
         position.latitude
     );
@@ -153,39 +158,44 @@ function calculateDistanceToSegment(
         };
     };
 
-    // La position GPS devient l'origine (0, 0).
+    // Projection locale du segment en mètres.
     const a = project(start);
     const b = project(end);
 
-    // Vecteur représentant le segment AB.
     const abX = b.x - a.x;
     const abY = b.y - a.y;
 
-    // Longueur au carré du segment.
     const segmentLengthSquared =
         abX * abX + abY * abY;
 
     let t = 0;
 
     if (segmentLengthSquared > 0) {
-        // Projection de l'origine sur le segment AB.
         t = -(
             a.x * abX +
             a.y * abY
         ) / segmentLengthSquared;
 
-        // On limite la projection aux extrémités du segment.
         t = Math.max(0, Math.min(1, t));
     }
 
-    // Coordonnées du point le plus proche sur le segment.
+    // Point le plus proche de la position GPS.
     const closestX = a.x + t * abX;
     const closestY = a.y + t * abY;
 
-    return Math.hypot(
-        closestX,
-        closestY
-    );
+    // Coordonnées géographiques de ce point.
+    const coordinate = [
+        start[0] + t * (end[0] - start[0]),
+        start[1] + t * (end[1] - start[1])
+    ];
+
+    return {
+        distance: Math.hypot(
+            closestX,
+            closestY
+        ),
+        coordinate
+    };
 }
 
 /**
@@ -202,6 +212,7 @@ export function updateNavigationProgress(position, map) {
 
     let closestSegmentIndex = lastRouteProgressIndex;
     let closestDistance = Infinity;
+    let closestCoordinate = null;
 
     // On cherche le segment le plus proche,
     // sans revenir en arrière sur l'itinéraire.
@@ -213,15 +224,16 @@ export function updateNavigationProgress(position, map) {
         const start = currentRouteCoordinates[i];
         const end = currentRouteCoordinates[i + 1];
 
-        const distance = calculateDistanceToSegment(
+        const projection = calculateProjectionOnSegment(
             position,
             start,
             end
         );
 
-        if (distance < closestDistance) {
-            closestDistance = distance;
+        if (projection.distance < closestDistance) {
+            closestDistance = projection.distance;
             closestSegmentIndex = i;
+            closestCoordinate = projection.coordinate;
         }
     }
 
@@ -266,9 +278,16 @@ export function updateNavigationProgress(position, map) {
         closestSegmentIndex
     );
 
-    // On conserve uniquement la portion restante.
-    const remainingCoordinates =
-        currentRouteCoordinates.slice(
+    // Le tracé restant commence à la position projetée
+    // sur le segment le plus proche.
+    const remainingCoordinates = closestCoordinate
+        ? [
+            closestCoordinate,
+            ...currentRouteCoordinates.slice(
+                closestSegmentIndex + 1
+            )
+        ]
+        : currentRouteCoordinates.slice(
             lastRouteProgressIndex
         );
 

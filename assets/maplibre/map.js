@@ -10,6 +10,7 @@ import {
 } from './zones.js';
 import { addZoneLayer } from './zoneLayer.js';
 import { addCommuneLayer } from './communeLayer.js';
+import { getLastCompassReading } from './compass.js';
 
 //let destinationMarker = null;
 
@@ -22,6 +23,13 @@ let isNavigationActive = false;
 // État du suivi automatique de la caméra.
 let isFollowingUser = false;
 
+
+// Gestion temporaire des interactions manuelles avec la carte
+let isCameraInteractionActive = false;
+let cameraResumeTimeout = null;
+
+
+
 let lastKnownUserPosition = null;
 
 // Dernier cap GPS filtré pour l'orientation de la caméra.
@@ -32,7 +40,7 @@ const MIN_HEADING_SPEED = 0.8;
 
 // Intensité du lissage : plus la valeur est faible,
 // plus les rotations sont progressives.
-const HEADING_SMOOTHING_FACTOR = 0.25;
+const HEADING_SMOOTHING_FACTOR = 0.6;
 
 let destinationMarker = null;
 
@@ -181,13 +189,108 @@ function smoothHeading(currentHeading, targetHeading) {
 
 
 /**
+
+* Actualise directement l'orientation de la caméra
+* à partir des nouvelles mesures de la boussole.
+  */
+  export function updateCameraFromCompass(map, reading) {
+
+    if (!map || !reading) {
+        return;
+    }
+
+    // La boussole ne pilote la caméra qu'en navigation 3D.
+    if (!is3D || !isFollowingUser || isChangingView || isCameraInteractionActive) {
+        return;
+    }
+
+    // Vérifie que la mesure est récente.
+    const isReadingFresh =
+    Number.isFinite(reading.timestamp) &&
+    Date.now() - reading.timestamp < 1500;
+
+    if (!isReadingFresh) {
+    return;
+    }
+
+    const compassHeading = reading.compassHeading;
+
+    if (!Number.isFinite(compassHeading)) {
+    return;
+    }
+
+    // Le GPS reste prioritaire lorsque son cap est fiable.
+    const isGpsHeadingReliable =
+    Number.isFinite(lastKnownUserPosition?.heading) &&
+    Number.isFinite(lastKnownUserPosition?.speed) &&
+    lastKnownUserPosition.speed >= MIN_HEADING_SPEED;
+
+    if (isGpsHeadingReliable) {
+    return;
+    }
+
+    const currentBearing =
+    lastStableHeading ?? map.getBearing();
+
+    lastStableHeading = smoothHeading(
+    currentBearing,
+    compassHeading
+    );
+
+    // Met à jour uniquement l'orientation :
+    // la position reste contrôlée par le GPS.
+    map.easeTo({
+    bearing: lastStableHeading,
+    duration: 100,
+    essential: true
+    });
+    
+  }
+
+
+/**
  * Détecte les interactions manuelles avec la carte.
+ */
+/**
+ * Suspend temporairement le contrôle automatique de la caméra
+ * pendant les interactions manuelles avec la carte.
  */
 function initManualCameraControl(map) {
 
-    map.on('dragstart', () => {
-        isFollowingUser = false;
+    function suspendCameraControl() {
+        clearTimeout(cameraResumeTimeout);
+
+        console.log('Suspension caméra déclenchée', {
+        following: isFollowingUser,
+        time: new Date().toLocaleTimeString()
     });
+    
+        isCameraInteractionActive = true;
+        isFollowingUser = false;
+    }
+
+    function scheduleCameraResume() {
+        clearTimeout(cameraResumeTimeout);
+
+        cameraResumeTimeout = setTimeout(() => {
+            isCameraInteractionActive = false;
+        }, 500);
+    }
+
+    // Début des interactions tactiles
+    map.on('touchstart', suspendCameraControl);
+
+    // Fin des interactions tactiles
+    map.on('touchend', scheduleCameraResume);
+    map.on('touchcancel', scheduleCameraResume);
+
+    // Déplacement manuel
+    map.on('dragstart', suspendCameraControl);
+    map.on('dragend', scheduleCameraResume);
+
+    // Zoom manuel
+    map.on('zoomstart', suspendCameraControl);
+    map.on('zoomend', scheduleCameraResume);
 }
 
 
@@ -430,50 +533,74 @@ export function followUserPosition(map, position) {
         return;
     }
 
+
     lastKnownUserPosition = position;
 
-    // Si l'utilisateur déplace manuellement la carte,
-    // on conserve sa liberté de mouvement.
+    // Respecte le déplacement manuel de la carte.
     if (!isFollowingUser) {
         return;
     }
 
-    // Si une transition 2D/3D est en cours,
-    // on attend qu'elle se termine.
+    // Évite les mouvements concurrents pendant la transition 2D/3D.
     if (isChangingView) {
         pendingUserPosition = position;
         return;
     }
 
-    // Prépare les paramètres de déplacement de la caméra.
     const cameraOptions = {
         center: [position.longitude, position.latitude],
         duration: 450,
         essential: true
     };
-    console.log('Orientation GPS :', {
-        is3D,
-        heading: position.heading,
-        speed: position.speed
-    });
-    // L'orientation GPS est utilisée uniquement en vue 3D,
-    // lorsque l'utilisateur se déplace suffisamment.
-    if (
-        is3D &&
-        Number.isFinite(position.heading) &&
-        Number.isFinite(position.speed) &&
-        position.speed >= MIN_HEADING_SPEED
-    ) {
-        const currentBearing = lastStableHeading ?? map.getBearing();
 
-        lastStableHeading = smoothHeading(
-            currentBearing,
-            position.heading
-        );
+    // En 2D, on conserve le comportement actuel.
+    if (is3D) {
+        const isGpsHeadingReliable =
+            Number.isFinite(position.heading) &&
+            Number.isFinite(position.speed) &&
+            position.speed >= MIN_HEADING_SPEED;
 
-        cameraOptions.bearing = lastStableHeading;
+        // Le GPS reste prioritaire lorsque l'utilisateur se déplace.
+        if (isGpsHeadingReliable) {
+            const currentBearing =
+                lastStableHeading ?? map.getBearing();
+
+            lastStableHeading = smoothHeading(
+                currentBearing,
+                position.heading
+            );
+
+            cameraOptions.bearing = lastStableHeading;
+        } else {
+            // À faible vitesse, on peut utiliser la boussole.
+            const compassReading = getLastCompassReading();
+
+            const isCompassReadingFresh =
+                compassReading &&
+                Number.isFinite(compassReading.timestamp) &&
+                Date.now() - compassReading.timestamp < 2000;
+
+            const compassHeading =
+                compassReading?.compassHeading;
+
+            if (
+                isCompassReadingFresh &&
+                Number.isFinite(compassHeading)
+            ) {
+                const currentBearing =
+                    lastStableHeading ?? map.getBearing();
+
+                lastStableHeading = smoothHeading(
+                    currentBearing,
+                    compassHeading
+                );
+
+                cameraOptions.bearing = lastStableHeading;
+            }
+        }
     }
 
-    // Déplace la caméra sans modifier le zoom ni l'inclinaison.
     map.easeTo(cameraOptions);
+
+
 }

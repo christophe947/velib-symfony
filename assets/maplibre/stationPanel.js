@@ -19,7 +19,8 @@ import {
     showDestinationMarker,
     updateWalkingRoute,
     setUserFollowing,
-    recenterOnUser
+    recenterOnUser,
+    updateCameraFromCompass
  } from './map.js';
 import {
     setNavigationRoute,
@@ -34,6 +35,7 @@ import {
     formatDistance,
     formatDuration
 } from './routeFormatting.js';
+import { startCompass } from './compass.js';
 
 let pane = null;
 let element = null;
@@ -43,7 +45,7 @@ let positionWatchId = null;
 
 // Dernière position GPS connue.
 let lastKnownUserPosition = null;
-
+let lastCompassLogTime = 0;
 let currentRouteCoordinates = [];
 let lastRouteProgressIndex = 0;
 
@@ -297,6 +299,12 @@ async function updateStationPanel(station, map) {
 
             <div class="station-panel-route-summary"></div>
 
+            <div
+                class="station-panel-compass-status"
+                role="status"
+                aria-live="polite"
+            ></div>
+
             <div class="station-panel-message" role="status" aria-live="polite" hidden></div>
 
             <button type="button" class="station-panel-join">
@@ -353,11 +361,53 @@ async function updateStationPanel(station, map) {
         joinButton.disabled = true;
         joinButton.textContent = 'Démarrage…';
 
+        await startCompass(
+            reading => {
+
+                updateCameraFromCompass(map, reading);
+
+                const compassDisplay = element.querySelector(
+                '.station-panel-compass-status'
+                );
+
+
+                if (compassDisplay) {
+                    compassDisplay.textContent =
+                        reading.compassHeading !== null
+                            ? `🧭 Boussole active — Cap : ${Math.round(reading.compassHeading)}°`
+                            : '🧭 Boussole active — Cap indisponible';
+                }
+            },
+            error => {
+                const compassDisplay = element.querySelector(
+                    '.station-panel-compass-status'
+                );
+
+                if (compassDisplay) {
+                    compassDisplay.textContent =
+                        `⚠️ Boussole indisponible : ${error.message}`;
+                }
+            }
+
+
+        );
+
+
+
         // 📍 Recentre immédiatement la carte sur la dernière position connue.
         if (lastKnownUserPosition) {
+            //showUserMarker(map, lastKnownUserPosition);
             showUserMarker(map, lastKnownUserPosition);
-
-            map.easeTo({
+            recenterOnUser(map, lastKnownUserPosition);
+            setTimeout(() => { map.easeTo({ zoom: 17, duration: 800, essential: true }); }, 500);
+            /*map.once('moveend', () => { 
+                map.easeTo({ 
+                    zoom: 17, 
+                    duration: 800, 
+                    essential: true 
+                }); 
+            });*/
+            /*map.easeTo({
                 center: [
                     lastKnownUserPosition.longitude,
                     lastKnownUserPosition.latitude
@@ -365,7 +415,7 @@ async function updateStationPanel(station, map) {
                 zoom: 17,
                 duration: 800,
                 essential: true
-            });
+            });*/
         }
 
         positionWatchId = startWatchingPosition(
