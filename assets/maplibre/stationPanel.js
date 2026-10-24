@@ -354,7 +354,7 @@ async function updateStationPanel(station, map) {
     }
 
     if (joinButton.textContent.trim() === 'Démarrer') {
-
+        
         navigationStarted = true;
         setUserFollowing(true);
 
@@ -393,13 +393,15 @@ async function updateStationPanel(station, map) {
         );
 
 
-
+        
         // 📍 Recentre immédiatement la carte sur la dernière position connue.
         if (lastKnownUserPosition) {
             //showUserMarker(map, lastKnownUserPosition);
+            
             showUserMarker(map, lastKnownUserPosition);
             recenterOnUser(map, lastKnownUserPosition);
-            setTimeout(() => { map.easeTo({ zoom: 17, duration: 800, essential: true }); }, 500);
+            //setTimeout(() => { map.easeTo({ zoom: 17, duration: 800, essential: true }); }, 500);
+            ;
             /*map.once('moveend', () => { 
                 map.easeTo({ 
                     zoom: 17, 

@@ -264,7 +264,7 @@ function initManualCameraControl(map) {
         following: isFollowingUser,
         time: new Date().toLocaleTimeString()
     });
-    
+
         isCameraInteractionActive = true;
         isFollowingUser = false;
     }
@@ -494,6 +494,13 @@ export function recenterOnUser(map, position) {
     setUserFollowing(true);
 
     followUserPosition(map, position);
+    map.once('moveend', () => { 
+                map.easeTo({ 
+                    zoom: 17, 
+                    duration: 500, 
+                    essential: true 
+                }); 
+            });
 }
 
 /**
