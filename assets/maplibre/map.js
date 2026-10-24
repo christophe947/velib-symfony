@@ -494,13 +494,13 @@ export function recenterOnUser(map, position) {
     setUserFollowing(true);
 
     followUserPosition(map, position);
-    map.once('moveend', () => { 
+    /*map.once('moveend', () => { 
                 map.easeTo({ 
                     zoom: 17, 
                     duration: 500, 
                     essential: true 
                 }); 
-            });
+            });*/
 }
 
 /**
