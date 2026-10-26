@@ -200,7 +200,7 @@ function smoothHeading(currentHeading, targetHeading) {
     }
 
     // La boussole ne pilote la caméra qu'en navigation 3D.
-    if (!is3D || !isFollowingUser || isChangingView || isCameraInteractionActive) {
+    if (!is3D || !isFollowingUser || isChangingView || isCameraInteractionActive || map.isMoving()) {
         return;
     }
 
