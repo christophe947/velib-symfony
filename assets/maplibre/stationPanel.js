@@ -19,7 +19,6 @@ import {
     showDestinationMarker,
     updateWalkingRoute,
     setUserFollowing,
-    recenterOnUser,
     updateCameraFromCompass
  } from './map.js';
 import {
@@ -394,31 +393,48 @@ async function updateStationPanel(station, map) {
 
 
         
-        // 📍 Recentre immédiatement la carte sur la dernière position connue.
-        if (lastKnownUserPosition) {
-            //showUserMarker(map, lastKnownUserPosition);
-            
-            showUserMarker(map, lastKnownUserPosition);
-            recenterOnUser(map, lastKnownUserPosition);
-            //setTimeout(() => { map.easeTo({ zoom: 17, duration: 800, essential: true }); }, 500);
-            ;
-            /*map.once('moveend', () => { 
-                map.easeTo({ 
-                    zoom: 17, 
-                    duration: 800, 
-                    essential: true 
-                }); 
-            });*/
-            /*map.easeTo({
-                center: [
-                    lastKnownUserPosition.longitude,
-                    lastKnownUserPosition.latitude
-                ],
-                zoom: 17,
-                duration: 800,
-                essential: true
-            });*/
+        const waitForCameraMove = () => new Promise(resolve => {
+            if (!map.isMoving()) {
+                resolve();
+                return;
+            }
+
+            map.once('moveend', resolve);
+        });
+
+        const viewButton = map
+            .getContainer()
+            .querySelector('.map-view-button');
+
+        // Le bouton affiche « 3D » quand la carte est encore en 2D.
+        if (viewButton?.textContent.trim() === '3D') {
+            viewButton.click();
+            await waitForCameraMove();
         }
+
+        if (lastKnownUserPosition) {
+            showUserMarker(map, lastKnownUserPosition);
+        }
+
+        const cameraCenter = lastKnownUserPosition
+            ? [
+                lastKnownUserPosition.longitude,
+                lastKnownUserPosition.latitude
+            ]
+            : [
+                map.getCenter().lng,
+                map.getCenter().lat
+            ];
+
+        map.easeTo({
+            center: cameraCenter,
+            zoom: 17,
+            pitch: 55,
+            duration: 800,
+            essential: true
+        });
+
+        await waitForCameraMove();
 
         positionWatchId = startWatchingPosition(
             position => {
