@@ -19,6 +19,7 @@ import {
     showDestinationMarker,
     updateWalkingRoute,
     setUserFollowing,
+    followUserPosition,
     updateCameraFromCompass
  } from './map.js';
 import {
@@ -439,7 +440,9 @@ async function updateStationPanel(station, map) {
         positionWatchId = startWatchingPosition(
             position => {
 
+                lastKnownUserPosition = position;
                 showUserMarker(map, position);
+                followUserPosition(map, position);
                 //updateRouteProgress(position, map);
                  updateNavigationProgress(position, map);
                  

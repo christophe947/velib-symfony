@@ -288,9 +288,11 @@ function initManualCameraControl(map) {
     map.on('dragstart', suspendCameraControl);
     map.on('dragend', scheduleCameraResume);
 
-    // Zoom manuel
-    map.on('zoomstart', suspendCameraControl);
-    map.on('zoomend', scheduleCameraResume);
+    // Zoom manuel à la molette. zoomstart se déclenche aussi pour les animations programmatiques.
+    map.on('wheel', () => {
+        suspendCameraControl();
+        scheduleCameraResume();
+    });
 }
 
 

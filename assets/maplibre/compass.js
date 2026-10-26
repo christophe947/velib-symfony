@@ -4,6 +4,49 @@ let lastReading = null;
 
 let orientationHandler = null;
 
+function normalizeHeading(heading) {
+    return ((heading % 360) + 360) % 360;
+}
+
+/** Lit le cap natif de Safari ou le calcule depuis l'orientation absolue. */
+function getCompassHeading(event) {
+    if (Number.isFinite(event.webkitCompassHeading)) {
+        return normalizeHeading(event.webkitCompassHeading);
+    }
+
+    if (
+        event.absolute !== true ||
+        !Number.isFinite(event.alpha) ||
+        !Number.isFinite(event.beta) ||
+        !Number.isFinite(event.gamma)
+    ) {
+        return null;
+    }
+
+    const toRadians = Math.PI / 180;
+    const alpha = event.alpha * toRadians;
+    const beta = event.beta * toRadians;
+    const gamma = event.gamma * toRadians;
+
+    const cosAlpha = Math.cos(alpha);
+    const sinAlpha = Math.sin(alpha);
+    const sinBeta = Math.sin(beta);
+    const cosGamma = Math.cos(gamma);
+    const sinGamma = Math.sin(gamma);
+
+    const horizontalX =
+        -cosAlpha * sinGamma - sinAlpha * sinBeta * cosGamma;
+    const horizontalY =
+        -sinAlpha * sinGamma + cosAlpha * sinBeta * cosGamma;
+
+    if (Math.hypot(horizontalX, horizontalY) < 0.001) {
+        return null;
+    }
+
+    const heading = Math.atan2(horizontalX, horizontalY) / toRadians;
+    return normalizeHeading(heading);
+}
+
 /**
  * Démarre l'écoute du capteur d'orientation.
  */
@@ -50,11 +93,9 @@ export async function startCompass(onReading, onError) {
                 gamma: event.gamma,
                 absolute: event.absolute,
 
-                // Cap magnétique fourni notamment par iOS Safari.
-                compassHeading:
-                    Number.isFinite(event.webkitCompassHeading)
-                        ? event.webkitCompassHeading
-                        : null,
+                // Safari fournit un cap natif; les autres navigateurs
+                // peuvent fournir l'orientation absolue via alpha/beta/gamma.
+                compassHeading: getCompassHeading(event),
 
                 screenOrientation:
                     screen.orientation?.angle ??
