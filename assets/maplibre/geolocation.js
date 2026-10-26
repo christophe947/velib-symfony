@@ -37,7 +37,15 @@ export function initGeolocation({
         return;
     }
 
+    let locationRequestVersion = 0;
+
+    document.addEventListener('station:selected', () => {
+        locationRequestVersion += 1;
+        button.disabled = false;
+    });
+
     button.addEventListener('click', () => {
+        const currentRequestVersion = ++locationRequestVersion;
         if (!navigator.geolocation) {
             results.innerHTML = `
                 <div class="search-results-section-title">
@@ -66,6 +74,10 @@ export function initGeolocation({
 
         navigator.geolocation.getCurrentPosition(
             position => {
+                if (currentRequestVersion !== locationRequestVersion) {
+                    return;
+                }
+
                 button.disabled = false;
 
                 const latitude = position.coords.latitude;
@@ -120,6 +132,10 @@ export function initGeolocation({
                 onDisplayedStations?.(displayedStations);
             },
             error => {
+                if (currentRequestVersion !== locationRequestVersion) {
+                    return;
+                }
+
                 button.disabled = false;
 
                 const message = error.code === 1

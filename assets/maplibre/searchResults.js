@@ -204,6 +204,8 @@ export function renderSearchResults(
     directStations,
     locationGroups
 ) {
+    
+
     let stationIndex = 0;
     const displayedStations = [];
 
