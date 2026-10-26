@@ -10,11 +10,14 @@ import {
 
 const map = createMap();
 
+
 //initStationPanel();
 initStationPanel(map);
 
 //initSearch();
 initSearch(map);
+
+map.resize();
 
 document.addEventListener(
     'station:selected',

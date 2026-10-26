@@ -694,9 +694,22 @@
         display: none;
     }
 
+    html,
+    body.maplibre-page {
+        height: 100%;
+        overflow: hidden;
+    }
+
+    body.maplibre-page {
+        min-height: 0;
+    }
+
     .maplibre-page main {
-        
-        height: 100svh;
+        position: fixed;
+        inset: 0;
+        height: auto;
+        margin: 0;
+        /*border: 3px solid red;*/
     }
 
     .maplibre-page #maplibre-map {

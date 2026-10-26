@@ -306,6 +306,7 @@ export function createMap() {
         minZoom: 10.5,
     });
 
+
     // Bouton de changement de vue 2D / 3D.
     map.addControl(
         new ViewModeControl(),
@@ -330,6 +331,8 @@ export function createMap() {
 
     
     map.on('load', async () => {
+
+    //map.resize();
 
     map.addSource('stations', {
         type: 'geojson',
@@ -359,9 +362,11 @@ export function createMap() {
         map,
         'bikes'
     );
+
+    //map.resize();
 });
 
-
+    
     return map;
 
 }
