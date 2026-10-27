@@ -206,7 +206,8 @@ export function startWatchingPosition(onPosition, onError) {
                 latitude: position.coords.latitude,
                 longitude: position.coords.longitude,
                 heading: position.coords.heading,
-                speed: position.coords.speed
+                speed: position.coords.speed,
+                accuracy: position.coords.accuracy
             };
 
             onPosition?.(userPosition);

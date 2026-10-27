@@ -20,13 +20,16 @@ import {
     updateWalkingRoute,
     setUserFollowing,
     followUserPosition,
-    updateCameraFromCompass
+    updateCameraFromCompass,
+    clearNavigationMap,
+    ensure2DView
  } from './map.js';
 import {
     setNavigationRoute,
     updateNavigationProgress,
     startNavigationSimulation,
-    startOffRouteSimulation
+    startOffRouteSimulation,
+    stopNavigationProcessing
 } from './navigation.js'; 
 import {
     setRouteSummaryCallback
@@ -35,11 +38,12 @@ import {
     formatDistance,
     formatDuration
 } from './routeFormatting.js';
-import { startCompass } from './compass.js';
+import { startCompass,stopCompass } from './compass.js';
 
 let pane = null;
 let element = null;
 let navigationStarted = false;
+let navigationSessionId = 0;
 
 let positionWatchId = null;
 
@@ -256,6 +260,162 @@ function renderEmptyPanel() {
 }
 
 
+/**
+ * Demande confirmation avant d'arrêter la navigation.
+ */
+function showStopNavigationConfirmation(map, station) {
+    // Évite d'afficher plusieurs fenêtres.
+    if (element.querySelector('.navigation-confirmation-overlay')) {
+        return;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'navigation-confirmation-overlay';
+
+    overlay.innerHTML = `
+        <div
+            class="navigation-confirmation"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="navigation-confirmation-title"
+        >
+            <h3 id="navigation-confirmation-title">
+                Arrêter la navigation ?
+            </h3>
+
+            <p>
+                Es-tu sûr de vouloir arrêter ton itinéraire ?
+            </p>
+
+            <div class="navigation-confirmation-actions">
+                <button
+                    type="button"
+                    class="navigation-confirmation-cancel"
+                >
+                    Continuer
+                </button>
+
+                <button
+                    type="button"
+                    class="navigation-confirmation-stop"
+                >
+                    Arrêter
+                </button>
+            </div>
+        </div>
+    `;
+
+    //element.appendChild(overlay);
+    document.body.appendChild(overlay);
+
+    const cancelButton = overlay.querySelector(
+        '.navigation-confirmation-cancel'
+    );
+
+    const confirmButton = overlay.querySelector(
+        '.navigation-confirmation-stop'
+    );
+
+    // Ferme la fenêtre sans interrompre la navigation.
+    cancelButton.addEventListener('click', () => {
+        overlay.remove();
+    });
+
+    // Confirme l'arrêt de la navigation.
+    confirmButton.addEventListener('click', () => {
+        overlay.remove();
+        stopNavigation(map, station);
+    });
+
+    // Ferme aussi la fenêtre en cliquant sur le fond.
+    overlay.addEventListener('click', event => {
+        if (event.target === overlay) {
+            overlay.remove();
+        }
+    });
+
+    cancelButton.focus();
+}
+
+
+
+/**
+ * Arrête complètement la navigation en cours.
+ */
+function stopNavigation(map, station) {
+    // Invalide les opérations asynchrones de la session.
+    navigationSessionId++;
+    navigationStarted = false;
+
+    // Arrête le suivi GPS.
+    if (positionWatchId !== null) {
+        navigator.geolocation.clearWatch(positionWatchId);
+        positionWatchId = null;
+    }
+
+    // Arrête la boussole.
+    stopCompass();
+
+    // Désactive le suivi automatique de la caméra.
+    setUserFollowing(false);
+
+    // Arrête les simulations et invalide les recalculs.
+    stopNavigationProcessing();
+
+    // Nettoie le tracé et le marqueur de destination.
+    clearNavigationMap(map);
+
+    // Réinitialise l'état local.
+    //navigationStarted = false;
+    lastKnownUserPosition = null;
+
+    // Réinitialise l'affichage de la boussole.
+    const compassDisplay = element.querySelector(
+        '.station-panel-compass-status'
+    );
+
+    if (compassDisplay) {
+        compassDisplay.textContent = '';
+    }
+
+    // Restaure le bouton permettant de recalculer l'itinéraire.
+    const controls = element.querySelector(
+        '.station-panel-navigation-controls'
+    );
+
+    if (controls) {
+        controls.innerHTML = `
+            <button
+                type="button"
+                class="station-panel-join"
+            >
+                Rejoindre
+            </button>
+        `;
+    }
+
+    // Réinitialise le résumé et les boutons de test.
+    const routeSummary = element.querySelector(
+        '.station-panel-route-summary'
+    );
+
+    if (routeSummary) {
+        routeSummary.innerHTML = '';
+        routeSummary.style.display = 'none';
+    }
+
+    element.querySelectorAll(
+        '.station-panel-simulate'
+    ).forEach(button => button.remove());
+
+    // Réafficher le panneau de la station avec ses gestionnaires de clic.
+    if (station) {
+        updateStationPanel(station, map);
+    }
+
+    console.log('🛑 Navigation arrêtée.');
+
+}
 
 
 async function updateStationPanel(station, map) {
@@ -307,9 +467,11 @@ async function updateStationPanel(station, map) {
 
             <div class="station-panel-message" role="status" aria-live="polite" hidden></div>
 
-            <button type="button" class="station-panel-join">
-                Rejoindre
-            </button>
+            <div class="station-panel-navigation-controls">
+                <button type="button" class="station-panel-join">
+                    Rejoindre
+                </button>
+            </div>
 
 
             ${renderModeSelector()}
@@ -353,18 +515,29 @@ async function updateStationPanel(station, map) {
         return;
     }
 
+    // Identifie cette opération asynchrone.
+    const sessionId = ++navigationSessionId;
+
     if (joinButton.textContent.trim() === 'Démarrer') {
         
         navigationStarted = true;
         setUserFollowing(true);
 
+        const isSessionActive = () =>
+        navigationStarted &&
+        sessionId === navigationSessionId;
+
         joinButton.disabled = true;
         joinButton.textContent = 'Démarrage…';
+
+        let isInitialCameraSetup = true;
 
         await startCompass(
             reading => {
 
-                updateCameraFromCompass(map, reading);
+                if (!isInitialCameraSetup) {
+                    updateCameraFromCompass(map, reading);
+                }
 
                 const compassDisplay = element.querySelector(
                 '.station-panel-compass-status'
@@ -392,9 +565,14 @@ async function updateStationPanel(station, map) {
 
         );
 
+        if (!isSessionActive()) {
+            return;
+        }
+
 
         
         const waitForCameraMove = () => new Promise(resolve => {
+            
             if (!map.isMoving()) {
                 resolve();
                 return;
@@ -403,20 +581,15 @@ async function updateStationPanel(station, map) {
             map.once('moveend', resolve);
         });
 
+        if (!isSessionActive()) {
+            return;
+        }
+
         const viewButton = map
             .getContainer()
             .querySelector('.map-view-button');
 
-        // Le bouton affiche « 3D » quand la carte est encore en 2D.
-        if (viewButton?.textContent.trim() === '3D') {
-            viewButton.click();
-            await waitForCameraMove();
-        }
-
-        if (lastKnownUserPosition) {
-            showUserMarker(map, lastKnownUserPosition);
-        }
-
+        // Position GPS connue au moment du démarrage.
         const cameraCenter = lastKnownUserPosition
             ? [
                 lastKnownUserPosition.longitude,
@@ -427,15 +600,43 @@ async function updateStationPanel(station, map) {
                 map.getCenter().lat
             ];
 
+        if (lastKnownUserPosition) {
+            showUserMarker(map, lastKnownUserPosition);
+        }
+
+        // 1. Centrer et zoomer d'abord en 2D.
         map.easeTo({
             center: cameraCenter,
             zoom: 17,
-            pitch: 55,
-            duration: 800,
+            pitch: 0,
+            duration: 500,
             essential: true
         });
 
         await waitForCameraMove();
+
+        if (!isSessionActive()) {
+            return;
+        }
+
+        // 2. Passer ensuite en 3D.
+        if (viewButton?.textContent.trim() === '3D') {
+            viewButton.click();
+
+            await waitForCameraMove();
+            if (!isSessionActive()) {
+                return;
+            }
+}
+
+// 3. La caméra est prête : la boussole peut reprendre la main.
+isInitialCameraSetup = false;
+
+        await waitForCameraMove();
+
+        if (!isSessionActive()) {
+            return;
+        }
 
         positionWatchId = startWatchingPosition(
             position => {
@@ -459,31 +660,69 @@ async function updateStationPanel(station, map) {
                 );
             }
         );
+         
+        //if (!isSessionActive()) {
+        //    return;
+        //}
 
-        joinButton.disabled = false;
-        joinButton.textContent = 'Navigation en cours';
+        //joinButton.disabled = false;
+        //joinButton.textContent = 'Navigation en cours';
+        const controls = element.querySelector(
+            '.station-panel-navigation-controls'
+        );
 
-        
-        // 📱 Réduit le panneau après 2 secondes.
-        if (pane && mobileQuery.matches) {
-            setTimeout(() => {
-                pane.moveToBreak('bottom');
-            }, 2000);
+        if (controls) {
+            controls.innerHTML = `
+                <button
+                    type="button"
+                    class="station-panel-join"
+                    disabled
+                >
+                    Navigation en cours
+                </button>
+
+                <button
+                    type="button"
+                    class="station-panel-stop"
+                    aria-label="Arrêter la navigation"
+                    title="Arrêter la navigation"
+                >
+                    ✕
+                </button>
+            `;
+
+            const stopButton = controls.querySelector(
+                '.station-panel-stop'
+            );
+
+            stopButton.addEventListener('click', () => {
+                showStopNavigationConfirmation(map, station);
+            });
         }
+                
+                // 📱 Réduit le panneau après 2 secondes.
+                if (pane && mobileQuery.matches) {
+                    setTimeout(() => {
+                        pane.moveToBreak('bottom');
+                    }, 2000);
+                }
 
-        return;
-    }
+                return;
+            }
 
-    joinButton.disabled = true;
+            joinButton.disabled = true;
 
-    joinButton.innerHTML = `
-        <span
-            class="spinner-border spinner-border-sm me-2"
-            aria-hidden="true"
-        ></span>
-        Calcul de l'itinéraire…
-    `;
-        
+            joinButton.innerHTML = `
+                <span
+                    class="spinner-border spinner-border-sm me-2"
+                    aria-hidden="true"
+                ></span>
+                Calcul de l'itinéraire…
+            `;
+            
+            await ensure2DView();
+
+            
         if (routeMessage) {
             routeMessage.hidden = true;
             routeMessage.textContent = '';

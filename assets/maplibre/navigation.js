@@ -23,6 +23,9 @@ let navigationDestination = null;
 
 let isRecalculatingRoute = false;
 
+let navigationSessionId = 0;
+let offRouteSimulationIntervalId = null;
+
 // Paramètres de détection des sorties d'itinéraire.
 const OFF_ROUTE_THRESHOLD = 30;
 const OFF_ROUTE_CONFIRMATIONS = 3;
@@ -58,6 +61,8 @@ async function recalculateNavigationRoute(position, map) {
 
     isRecalculatingRoute = true;
 
+    const sessionId = navigationSessionId;
+
     console.log('🔄 Recalcul de l’itinéraire en cours…');
 
     try {
@@ -72,6 +77,10 @@ async function recalculateNavigationRoute(position, map) {
         const coordinates = decodePolyline(
             route.legs[0].shape
         );
+
+        if (sessionId !== navigationSessionId) {
+            return;
+        }
 
         if (coordinates.length < 2) {
             throw new Error(
@@ -470,4 +479,34 @@ export function startOffRouteSimulation(map) {
         }
 
     }, 1000);
+}
+
+
+/**
+ * Arrête les traitements internes de navigation.
+ */
+export function stopNavigationProcessing() {
+    // Invalide les recalculs déjà lancés.
+    navigationSessionId++;
+
+    // Arrête la simulation normale.
+    if (simulationIntervalId !== null) {
+        clearInterval(simulationIntervalId);
+        simulationIntervalId = null;
+    }
+
+    // Arrête la simulation de déviation.
+    if (offRouteSimulationIntervalId !== null) {
+        clearInterval(offRouteSimulationIntervalId);
+        offRouteSimulationIntervalId = null;
+    }
+
+    // Réinitialise les états de navigation.
+    currentRouteCoordinates = [];
+    lastRouteProgressIndex = 0;
+    navigationDestination = null;
+    isRecalculatingRoute = false;
+    consecutiveOffRoutePositions = 0;
+
+    console.log('🛑 Traitements de navigation arrêtés.');
 }

@@ -10,7 +10,8 @@ import {
 } from './zones.js';
 import { addZoneLayer } from './zoneLayer.js';
 import { addCommuneLayer } from './communeLayer.js';
-import { getLastCompassReading } from './compass.js';
+import { showUserMarker, requestUserPosition } from './geolocation.js';
+//import { getLastCompassReading } from './compass.js';
 
 //let destinationMarker = null;
 
@@ -28,7 +29,7 @@ let isFollowingUser = false;
 let isCameraInteractionActive = false;
 let cameraResumeTimeout = null;
 
-
+let viewModeControl = null;
 
 let lastKnownUserPosition = null;
 
@@ -55,6 +56,8 @@ let pendingUserPosition = null;
 class ViewModeControl {
 
     onAdd(map) {
+
+        viewModeControl = this;
 
         this.map = map;
         //this.is3D = false;
@@ -106,14 +109,15 @@ class ViewModeControl {
 
         try {
             await new Promise(resolve => {
+                // On écoute la fin du mouvement AVANT de lancer l'animation.
+                this.map.once('moveend', resolve);
+
                 this.map.easeTo({
                     pitch: targetPitch,
                     bearing: is3D ? this.map.getBearing() : 0,
                     duration: 700,
                     essential: true
                 });
-
-                this.map.once('moveend', resolve);
             });
         } finally {
             isChangingView = false;
@@ -134,6 +138,17 @@ class ViewModeControl {
     }
 }
 
+/**
+ * Garantit que la carte est en vue 2D.
+ * Attend la fin de la transition si un changement est nécessaire.
+ */
+export async function ensure2DView() {
+    if (!is3D) {
+        return;
+    }
+
+    await viewModeControl?.toggleView();
+}
 
 class RecenterControl {
 
@@ -154,9 +169,43 @@ onAdd(map) {
         'Recentrer sur ma position'
     );
 
-    this.button.addEventListener('click', () => {
-        recenterOnUser(this.map, lastKnownUserPosition);
-    });
+    this.button.addEventListener('click', async () => {
+    this.button.disabled = true;
+
+    try {
+        // Récupère la position avec la fonction déjà utilisée
+        // par le système de navigation.
+        const userPosition = await requestUserPosition();
+
+        // Affiche le marqueur de position.
+        showUserMarker(this.map, userPosition);
+
+        // Si la navigation est active, réactive le suivi.
+        if (isNavigationActive) {
+            recenterOnUser(this.map, userPosition);
+        } else {
+            // Sinon, recentrage ponctuel sans démarrer la navigation.
+            this.map.easeTo({
+                center: [
+                    userPosition.longitude,
+                    userPosition.latitude
+                ],
+                zoom: 17,
+                duration: 500,
+                essential: true
+            });
+        }
+
+    } catch (error) {
+        console.error('Impossible de récupérer la position GPS :', error);
+
+        alert(
+            'Impossible de te localiser. Vérifie que la géolocalisation est autorisée.'
+        );
+    } finally {
+        this.button.disabled = false;
+    }
+});
 
     this.container.appendChild(this.button);
 
@@ -200,7 +249,7 @@ function smoothHeading(currentHeading, targetHeading) {
     }
 
     // La boussole ne pilote la caméra qu'en navigation 3D.
-    if (!is3D || !isFollowingUser || isChangingView || isCameraInteractionActive || map.isMoving()) {
+    if (!is3D || !isFollowingUser || isChangingView || isCameraInteractionActive) {
         return;
     }
 
@@ -501,63 +550,54 @@ export function recenterOnUser(map, position) {
     setUserFollowing(true);
 
     followUserPosition(map, position);
-    /*map.once('moveend', () => { 
+    map.once('moveend', () => { 
                 map.easeTo({ 
                     zoom: 17, 
                     duration: 500, 
                     essential: true 
                 }); 
-            });*/
+            });
 }
 
-/**
- * Centre progressivement la carte sur la position de l'utilisateur.
- */
-/*export function followUserPosition(map, position) {
-    if (!map || !position) {
-        return;
-    }
 
-    lastKnownUserPosition = position;
-
-    if (!isFollowingUser) {
-        return;
-    }
-
-    // Pendant une transition 2D/3D, mémorise la dernière position
-    // sans lancer un mouvement de caméra concurrent.
-    if (isChangingView) {
-        pendingUserPosition = position;
-        return;
-    }
-
-    map.easeTo({
-        center: [
-            position.longitude,
-            position.latitude
-        ],
-        duration: 450,
-        essential: true
-    });
-}*/
 
 
 export function followUserPosition(map, position) {
-    if (!map || !position) {
-        return;
-    }
-
+    if (!map || !position) return;
 
     lastKnownUserPosition = position;
 
-    // Respecte le déplacement manuel de la carte.
-    if (!isFollowingUser) {
+    if (!isFollowingUser) return;
+
+    if (isChangingView) {
+        pendingUserPosition = position;
         return;
     }
 
-    // Évite les mouvements concurrents pendant la transition 2D/3D.
-    if (isChangingView) {
-        pendingUserPosition = position;
+    // Vérifie si le cap GPS est suffisamment fiable.
+    const isGpsHeadingReliable =
+        Number.isFinite(position.heading) &&
+        Number.isFinite(position.speed) &&
+        position.speed >= MIN_HEADING_SPEED;
+
+    // Distance entre le centre de la carte et la position GPS.
+    const distanceToUser = map.getCenter().distanceTo([
+        position.longitude,
+        position.latitude
+    ]);
+
+    /*
+     * En 3D, lorsque le cap GPS n'est pas fiable
+     * (notamment à l'arrêt), on ignore les petits déplacements GPS.
+     *
+     * Cela évite de relancer constamment l'animation de la caméra
+     * à cause des imprécisions du GPS.
+     */
+    if (
+        is3D &&
+        !isGpsHeadingReliable &&
+        distanceToUser < 3
+    ) {
         return;
     }
 
@@ -568,53 +608,42 @@ export function followUserPosition(map, position) {
     };
 
     // En 2D, on conserve le comportement actuel.
-    if (is3D) {
-        const isGpsHeadingReliable =
-            Number.isFinite(position.heading) &&
-            Number.isFinite(position.speed) &&
-            position.speed >= MIN_HEADING_SPEED;
+    if (is3D && isGpsHeadingReliable) {
+        const currentBearing = lastStableHeading ?? map.getBearing();
 
-        // Le GPS reste prioritaire lorsque l'utilisateur se déplace.
-        if (isGpsHeadingReliable) {
-            const currentBearing =
-                lastStableHeading ?? map.getBearing();
+        lastStableHeading = smoothHeading(
+            currentBearing,
+            position.heading
+        );
 
-            lastStableHeading = smoothHeading(
-                currentBearing,
-                position.heading
-            );
-
-            cameraOptions.bearing = lastStableHeading;
-        } else {
-            // À faible vitesse, on peut utiliser la boussole.
-            const compassReading = getLastCompassReading();
-
-            const isCompassReadingFresh =
-                compassReading &&
-                Number.isFinite(compassReading.timestamp) &&
-                Date.now() - compassReading.timestamp < 2000;
-
-            const compassHeading =
-                compassReading?.compassHeading;
-
-            if (
-                isCompassReadingFresh &&
-                Number.isFinite(compassHeading)
-            ) {
-                const currentBearing =
-                    lastStableHeading ?? map.getBearing();
-
-                lastStableHeading = smoothHeading(
-                    currentBearing,
-                    compassHeading
-                );
-
-                cameraOptions.bearing = lastStableHeading;
-            }
-        }
+        cameraOptions.bearing = lastStableHeading;
     }
 
     map.easeTo(cameraOptions);
+}
 
 
+/**
+ * Nettoie les éléments de navigation sur la carte.
+ */
+export function clearNavigationMap(map) {
+    // Désactive le suivi automatique de la caméra.
+    isFollowingUser = false;
+    isNavigationActive = false;
+
+    // Annule une éventuelle position en attente.
+    pendingUserPosition = null;
+
+    // Supprime le tracé de navigation.
+    if (map.getLayer('walking-route')) {
+        map.removeLayer('walking-route');
+    }
+
+    if (map.getSource('walking-route')) {
+        map.removeSource('walking-route');
+    }
+
+    // Supprime le marqueur de destination.
+    destinationMarker?.remove();
+    destinationMarker = null;
 }

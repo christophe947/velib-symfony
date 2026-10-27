@@ -91,6 +91,8 @@ export async function initSearch(map) {
             return;
         }
 
+        
+
 
         results.innerHTML = '';
         results.style.display = 'none';

@@ -17,7 +17,7 @@ initStationPanel(map);
 //initSearch();
 initSearch(map);
 
-map.resize();
+//map.resize();
 
 document.addEventListener(
     'station:selected',
