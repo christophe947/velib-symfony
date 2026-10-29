@@ -657,7 +657,9 @@ export function followUserPosition(map, position) {
     };
 
     // En 2D, on conserve le comportement actuel.
-    if (is3D && isGpsHeadingReliable) {
+    // En 3D, le cap GPS ne pilote plus l'orientation de la caméra.
+    // La boussole s'en charge.
+    if (is3D && isGpsHeadingReliable && !isNavigationActive) {
         const currentBearing = lastStableHeading ?? map.getBearing();
 
         lastStableHeading = smoothHeading(
