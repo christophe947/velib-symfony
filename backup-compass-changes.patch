@@ -1,0 +1,1015 @@
+diff --git a/assets/maplibre/compass.js b/assets/maplibre/compass.js
+index 35acd15..2ae6b31 100644
+--- a/assets/maplibre/compass.js
++++ b/assets/maplibre/compass.js
+@@ -4,171 +4,279 @@ let lastReading = null;
+ 
+ let orientationHandler = null;
+ 
+-function normalizeHeading(heading) {
+-    return ((heading % 360) + 360) % 360;
+-}
+-
+-/** Lit le cap natif de Safari ou le calcule depuis l'orientation absolue. */
+-function getCompassHeading(event) {
+-    if (Number.isFinite(event.webkitCompassHeading)) {
+-        return normalizeHeading(event.webkitCompassHeading);
+-    }
+-
+-    if (
+-        event.absolute !== true ||
+-        !Number.isFinite(event.alpha) ||
+-        !Number.isFinite(event.beta) ||
+-        !Number.isFinite(event.gamma)
+-    ) {
+-        return null;
+-    }
+-
+-    const toRadians = Math.PI / 180;
+-    const alpha = event.alpha * toRadians;
+-    const beta = event.beta * toRadians;
+-    const gamma = event.gamma * toRadians;
+-
+-    const cosAlpha = Math.cos(alpha);
+-    const sinAlpha = Math.sin(alpha);
+-    const sinBeta = Math.sin(beta);
+-    const cosGamma = Math.cos(gamma);
+-    const sinGamma = Math.sin(gamma);
+-
+-    const horizontalX =
+-        -cosAlpha * sinGamma - sinAlpha * sinBeta * cosGamma;
+-    const horizontalY =
+-        -sinAlpha * sinGamma + cosAlpha * sinBeta * cosGamma;
+-
+-    if (Math.hypot(horizontalX, horizontalY) < 0.001) {
+-        return null;
+-    }
+-
+-    const heading = Math.atan2(horizontalX, horizontalY) / toRadians;
+-    return normalizeHeading(heading);
+-}
++// Les fonctionnalités qui souhaitent recevoir les mesures.
++const readingCallbacks = new Set();
++
++// Évite plusieurs démarrages simultanés du capteur.
++let compassStartPromise = null;
+ 
+ /**
+- * Démarre l'écoute du capteur d'orientation.
+- */
+-export async function startCompass(onReading, onError) {
+ 
+-    if (isCompassActive) {
+-        return;
+-    }
++* Normalise un angle entre 0 et 360 degrés.
++  */
++  function normalizeHeading(heading) {
++  return ((heading % 360) + 360) % 360;
++  }
++
++/**
++
++* Lit le cap natif de Safari ou le calcule
++* depuis l'orientation absolue.
++  */
++  function getCompassHeading(event) {
++
++  if (Number.isFinite(event.webkitCompassHeading)) {
++  return normalizeHeading(event.webkitCompassHeading);
++  }
++
++  if (
++  event.absolute !== true ||
++  !Number.isFinite(event.alpha) ||
++  !Number.isFinite(event.beta) ||
++  !Number.isFinite(event.gamma)
++  ) {
++  return null;
++  }
++
++  const toRadians = Math.PI / 180;
++
++  const alpha = event.alpha * toRadians;
++  const beta = event.beta * toRadians;
++  const gamma = event.gamma * toRadians;
++
++  const cosAlpha = Math.cos(alpha);
++  const sinAlpha = Math.sin(alpha);
++  const sinBeta = Math.sin(beta);
++  const cosGamma = Math.cos(gamma);
++  const sinGamma = Math.sin(gamma);
++
++  const horizontalX =
++  -cosAlpha * sinGamma -
++  sinAlpha * sinBeta * cosGamma;
+ 
+-    if (!('DeviceOrientationEvent' in window)) {
+-        onError?.(
+-            new Error(
+-                'Le capteur d’orientation n’est pas disponible.'
+-            )
+-        );
++  const horizontalY =
++  -sinAlpha * sinGamma +
++  cosAlpha * sinBeta * cosGamma;
+ 
+-        return;
+-    }
++  if (Math.hypot(horizontalX, horizontalY) < 0.001) {
++  return null;
++  }
+ 
+-    try {
++  const heading =
++  Math.atan2(horizontalX, horizontalY) / toRadians;
+ 
+-        // Demande la permission si le navigateur l'exige.
+-        if (
+-            typeof DeviceOrientationEvent.requestPermission ===
+-            'function'
+-        ) {
++  return normalizeHeading(heading);
++  }
+ 
+-            const permission =
+-                await DeviceOrientationEvent.requestPermission();
++/**
++
++* Démarre le capteur si nécessaire et enregistre
++* une fonction qui recevra les nouvelles mesures.
++  */
++  export async function startCompass(onReading, onError) {
++
++  // Enregistre le callback sans créer de doublon.
++  if (typeof onReading === 'function') {
++  readingCallbacks.add(onReading);
++  }
++
++  // Le capteur fonctionne déjà :
++  // le nouveau callback recevra lui aussi les mesures.
++  if (isCompassActive) {
++  return;
++  }
++
++  // Un démarrage est déjà en cours.
++  if (compassStartPromise) {
++  await compassStartPromise;
++  return;
++  }
++
++  compassStartPromise = startCompassSensor(onError);
++
++  try {
++  await compassStartPromise;
++  } finally {
++  compassStartPromise = null;
++  }
++  }
++
++/**
++
++* Initialise réellement le capteur d'orientation.
++  */
++  async function startCompassSensor(onError) {
++
++  if (!('DeviceOrientationEvent' in window)) {
++
++  ```
++   readingCallbacks.clear();
++
++   onError?.(
++       new Error(
++           'Le capteur d’orientation n’est pas disponible.'
++       )
++   );
++
++   return;
++  ```
+ 
+-            if (permission !== 'granted') {
+-                throw new Error(
+-                    'L’autorisation du capteur a été refusée.'
+-                );
+-            }
+-        }
++  }
++
++  try {
++
++  ```
++   // Demande l'autorisation sur les navigateurs qui l'exigent.
++   if (
++       typeof DeviceOrientationEvent.requestPermission ===
++       'function'
++   ) {
+ 
+-        // Fonction appelée à chaque nouvelle mesure.
+-        orientationHandler = event => {
++       const permission =
++           await DeviceOrientationEvent.requestPermission();
+ 
+-            const reading = {
+-                alpha: event.alpha,
+-                beta: event.beta,
+-                gamma: event.gamma,
+-                absolute: event.absolute,
++       if (permission !== 'granted') {
++           throw new Error(
++               'L’autorisation du capteur a été refusée.'
++           );
++       }
++   }
+ 
+-                // Safari fournit un cap natif; les autres navigateurs
+-                // peuvent fournir l'orientation absolue via alpha/beta/gamma.
+-                compassHeading: getCompassHeading(event),
++   // Un seul gestionnaire pour tous les abonnés.
++   orientationHandler = event => {
+ 
+-                screenOrientation:
+-                    screen.orientation?.angle ??
+-                    window.orientation ??
+-                    0,
++       const reading = {
++           alpha: event.alpha,
++           beta: event.beta,
++           gamma: event.gamma,
++           absolute: event.absolute,
+ 
+-                timestamp: Date.now()
+-            };
++           compassHeading: getCompassHeading(event),
+ 
+-            lastReading = reading;
++           screenOrientation:
++               screen.orientation?.angle ??
++               window.orientation ??
++               0,
+ 
+-            onReading?.(reading);
+-        };
++           timestamp: Date.now()
++       };
+ 
+-        // Écoute les mesures d'orientation.
+-        window.addEventListener(
+-            'deviceorientation',
+-            orientationHandler
+-        );
++       lastReading = reading;
+ 
+-        // Certains navigateurs proposent aussi
+-        // un événement dédié à l'orientation absolue.
+-        window.addEventListener(
+-            'deviceorientationabsolute',
+-            orientationHandler
+-        );
++       // Transmet la même mesure à chaque fonctionnalité abonnée.
++       readingCallbacks.forEach(callback => {
++           try {
++               callback(reading);
++           } catch (error) {
++               console.error(
++                   'Erreur dans un callback de la boussole :',
++                   error
++               );
++           }
++       });
++   };
+ 
+-        isCompassActive = true;
++   window.addEventListener(
++       'deviceorientation',
++       orientationHandler
++   );
+ 
+-        console.log('🧭 Écoute du capteur démarrée.');
++   window.addEventListener(
++       'deviceorientationabsolute',
++       orientationHandler
++   );
+ 
+-    } catch (error) {
++   isCompassActive = true;
+ 
+-        console.error(
+-            'Impossible de démarrer le capteur :',
+-            error
+-        );
++   console.log('🧭 Écoute du capteur démarrée.');
+ 
+-        onError?.(error);
+-    }
+-}
++   // Si une mesure est déjà disponible, elle est transmise
++   // au nouveau système d'écoute.
++   if (lastReading) {
++       readingCallbacks.forEach(callback => {
++           callback(lastReading);
++       });
++   }
++  ```
+ 
++  } catch (error) {
++
++  ```
++   // Nettoie l'état du capteur en cas d'échec.
++   if (orientationHandler) {
++
++       window.removeEventListener(
++           'deviceorientation',
++           orientationHandler
++       );
++
++       window.removeEventListener(
++           'deviceorientationabsolute',
++           orientationHandler
++       );
++
++       orientationHandler = null;
++   }
++
++   isCompassActive = false;
++   readingCallbacks.clear();
++
++   console.error(
++       'Impossible de démarrer le capteur :',
++       error
++   );
++
++   onError?.(error);
++  ```
++
++  }
++  }
+ 
+ /**
+- * Arrête l'écoute du capteur d'orientation.
+- */
+-export function stopCompass() {
+ 
+-    if (!isCompassActive || !orientationHandler) {
+-        return;
+-    }
++* Désabonne un callback ou arrête complètement le capteur.
++*
++* Avec un callback : retire uniquement cet abonné.
++* Sans argument : retire tous les abonnés et arrête le capteur.
++  */
++  export function stopCompass(onReading) {
++
++  if (typeof onReading === 'function') {
++  readingCallbacks.delete(onReading);
++  } else {
++  readingCallbacks.clear();
++  }
+ 
+-    window.removeEventListener(
+-        'deviceorientation',
+-        orientationHandler
+-    );
++  // D'autres fonctionnalités utilisent encore la boussole.
++  if (readingCallbacks.size > 0) {
++  return;
++  }
+ 
+-    window.removeEventListener(
+-        'deviceorientationabsolute',
+-        orientationHandler
+-    );
++  if (!isCompassActive || !orientationHandler) {
++  return;
++  }
+ 
+-    orientationHandler = null;
++  window.removeEventListener(
++  'deviceorientation',
++  orientationHandler
++  );
+ 
+-    isCompassActive = false;
++  window.removeEventListener(
++  'deviceorientationabsolute',
++  orientationHandler
++  );
+ 
+-    console.log('🧭 Écoute du capteur arrêtée.');
+-}
++  orientationHandler = null;
+ 
++  isCompassActive = false;
++
++  console.log('🧭 Écoute du capteur arrêtée.');
++  }
+ 
+ /**
+- * Retourne la dernière mesure reçue.
+- */
+-export function getLastCompassReading() {
+-    return lastReading;
+-}
+\ No newline at end of file
++
++* Retourne la dernière mesure reçue.
++  */
++  export function getLastCompassReading() {
++  return lastReading;
++  }
+diff --git a/assets/maplibre/map.js b/assets/maplibre/map.js
+index 7e63350..65e842a 100644
+--- a/assets/maplibre/map.js
++++ b/assets/maplibre/map.js
+@@ -11,6 +11,7 @@ import {
+ import { addZoneLayer } from './zoneLayer.js';
+ import { addCommuneLayer } from './communeLayer.js';
+ import { showUserMarker, requestUserPosition } from './geolocation.js';
++import { startCompass, stopCompass } from './compass.js';
+ //import { getLastCompassReading } from './compass.js';
+ 
+ //let destinationMarker = null;
+@@ -24,6 +25,7 @@ let isNavigationActive = false;
+ // État du suivi automatique de la caméra.
+ let isFollowingUser = false;
+ 
++let isRecentering = false;
+ 
+ // Gestion temporaire des interactions manuelles avec la carte
+ let isCameraInteractionActive = false;
+@@ -50,6 +52,11 @@ let isChangingView = false;
+ let pendingUserPosition = null;
+ 
+ 
++// Reçoit les mesures de la boussole pour orienter la carte.
++function handleMapCompassReading(map, reading) {
++    updateCameraFromCompass(map, reading);
++}
++
+ /**
+  * Contrôle permettant de basculer entre les vues 2D et 3D.
+  */
+@@ -81,7 +88,7 @@ class ViewModeControl {
+         return this.container;
+     }
+ 
+-    async toggleView() {
++    /*async toggleView() {
+ 
+         // Empêche les transitions successives de se chevaucher.
+         if (isChangingView) {
+@@ -129,8 +136,83 @@ class ViewModeControl {
+                 followUserPosition(this.map, position);
+             }
+         }
++    }*/
++    async toggleView() {
++
++    // Empêche les transitions successives de se chevaucher.
++    if (isChangingView) {
++        return;
++    }
++
++    // Bloque le GPS et la boussole pendant la transition.
++    isChangingView = true;
++
++    try {
++        // Termine proprement une éventuelle animation précédente
++        // AVANT d'écouter la fin de la nouvelle transition.
++        this.map.stop();
++
++        // Détermine la nouvelle vue.
++        is3D = !is3D;
++
++        const targetPitch = is3D ? 55 : 0;
++
++        // Met à jour le bouton.
++        this.button.textContent = is3D ? '2D' : '3D';
++
++        this.button.setAttribute(
++            'aria-label',
++            is3D
++                ? 'Revenir en vue 2D'
++                : 'Passer en vue 3D'
++        );
++
++        this.button.title = is3D
++            ? 'Revenir en vue 2D'
++            : 'Passer en vue 3D';
++
++        // Attend la fin de la nouvelle animation.
++        await new Promise(resolve => {
++
++            this.map.once('moveend', resolve);
++
++            this.map.easeTo({
++                pitch: targetPitch,
++                bearing: is3D ? this.map.getBearing() : 0,
++                duration: 700,
++                essential: true
++            });
++        });
++
++    } finally {
++
++        // Le GPS et la boussole peuvent reprendre le contrôle.
++        isChangingView = false;
++
++        // Traite la dernière position GPS reçue pendant la transition.
++        if (pendingUserPosition) {
++            const position = pendingUserPosition;
++            pendingUserPosition = null;
++
++            followUserPosition(this.map, position);
++        }
++    }
++    
++    // En entrant en 3D, active la boussole si nécessaire.
++    // On réutilise le callback associé à cette carte.
++    if (!is3D && this.onCompassReading) {
++        await startCompass(
++            this.onCompassReading,
++            error => {
++                console.warn(
++                    'Boussole indisponible en vue 3D :',
++                    error
++                );
++            }
++        );
+     }
+ 
++}
+     onRemove() {
+ 
+         this.container.remove();
+@@ -170,43 +252,68 @@ onAdd(map) {
+     );
+ 
+     this.button.addEventListener('click', async () => {
+-    this.button.disabled = true;
++this.button.disabled = true;
+ 
+-    try {
+-        // Récupère la position avec la fonction déjà utilisée
+-        // par le système de navigation.
+-        const userPosition = await requestUserPosition();
+-
+-        // Affiche le marqueur de position.
+-        showUserMarker(this.map, userPosition);
+-
+-        // Si la navigation est active, réactive le suivi.
+-        if (isNavigationActive) {
+-            recenterOnUser(this.map, userPosition);
+-        } else {
+-            // Sinon, recentrage ponctuel sans démarrer la navigation.
+-            this.map.easeTo({
+-                center: [
+-                    userPosition.longitude,
+-                    userPosition.latitude
+-                ],
+-                zoom: 17,
+-                duration: 500,
+-                essential: true
+-            });
++
++try {
++    // La boussole est facultative :
++    // son échec ne doit jamais empêcher le recentrage GPS.
++    if (this.onCompassReading) {
++        try {
++            await startCompass(
++                this.onCompassReading,
++                error => {
++                    console.warn(
++                        'Boussole indisponible hors navigation :',
++                        error
++                    );
++                }
++            );
++        } catch (compassError) {
++            console.warn(
++                'Impossible de démarrer la boussole :',
++                compassError
++            );
+         }
++    }
++
++    // La géolocalisation est indépendante de la boussole.
++    const userPosition = await requestUserPosition();
+ 
+-    } catch (error) {
+-        console.error('Impossible de récupérer la position GPS :', error);
++    showUserMarker(this.map, userPosition);
+ 
+-        alert(
+-            'Impossible de te localiser. Vérifie que la géolocalisation est autorisée.'
++    recenterOnUser(this.map, userPosition);
++
++    // Active la boussole pour orienter la caméra en 3D.
++    /*if (this.onCompassReading) {
++        await startCompass(
++            this.onCompassReading,
++            error => {
++                console.warn(
++                    'Boussole indisponible hors navigation :',
++                    error
++                );
++            }
+         );
+-    } finally {
+-        this.button.disabled = false;
+-    }
++    }*/
++
++} catch (error) {
++    console.error(
++        'Impossible de récupérer la position GPS :',
++        error
++    );
++
++    alert(
++        'Impossible de te localiser. Vérifie que la géolocalisation est autorisée.'
++    );
++} finally {
++    this.button.disabled = false;
++}
++
++
+ });
+ 
++
+     this.container.appendChild(this.button);
+ 
+     return this.container;
+@@ -237,64 +344,61 @@ function smoothHeading(currentHeading, targetHeading) {
+ }
+ 
+ 
+-/**
+ 
+-* Actualise directement l'orientation de la caméra
+-* à partir des nouvelles mesures de la boussole.
+-  */
+-  export function updateCameraFromCompass(map, reading) {
++/**
++ * Actualise l'orientation de la caméra à partir
++ * des mesures de la boussole pendant la navigation.
++ */
++export function updateCameraFromCompass(map, reading) {
+ 
+     if (!map || !reading) {
+         return;
+     }
+ 
+-    // La boussole ne pilote la caméra qu'en navigation 3D.
+-    if (!is3D || !isFollowingUser || isChangingView || isCameraInteractionActive) {
++    // La boussole pilote la caméra uniquement en navigation 3D,
++    // lorsque le suivi est actif et qu'aucune interaction
++    // ou transition de caméra ne doit l'interrompre.
++    if (
++        !is3D ||
++        !isFollowingUser ||
++        isChangingView ||
++        isCameraInteractionActive ||
++        isRecentering
++    ) {
+         return;
+     }
+ 
+-    // Vérifie que la mesure est récente.
++    // Vérifie que la mesure de la boussole est récente.
+     const isReadingFresh =
+-    Number.isFinite(reading.timestamp) &&
+-    Date.now() - reading.timestamp < 1500;
++        Number.isFinite(reading.timestamp) &&
++        Date.now() - reading.timestamp < 1500;
+ 
+     if (!isReadingFresh) {
+-    return;
++        return;
+     }
+ 
+     const compassHeading = reading.compassHeading;
+ 
+     if (!Number.isFinite(compassHeading)) {
+-    return;
+-    }
+-
+-    // Le GPS reste prioritaire lorsque son cap est fiable.
+-    const isGpsHeadingReliable =
+-    Number.isFinite(lastKnownUserPosition?.heading) &&
+-    Number.isFinite(lastKnownUserPosition?.speed) &&
+-    lastKnownUserPosition.speed >= MIN_HEADING_SPEED;
+-
+-    if (isGpsHeadingReliable) {
+-    return;
++        return;
+     }
+ 
++    // La boussole contrôle l'orientation de la caméra.
++    // Le cap GPS ne bloque plus cette mise à jour.
+     const currentBearing =
+-    lastStableHeading ?? map.getBearing();
++        lastStableHeading ?? map.getBearing();
+ 
+     lastStableHeading = smoothHeading(
+-    currentBearing,
+-    compassHeading
++        currentBearing,
++        compassHeading
+     );
+ 
+-    // Met à jour uniquement l'orientation :
+-    // la position reste contrôlée par le GPS.
+-    map.easeTo({
+-    bearing: lastStableHeading,
+-    duration: 100,
+-    essential: true
+-    });
+-    
+-  }
++    // Modifie uniquement l'orientation, sans animation
++    // susceptible de perturber le suivi GPS.
++    map.setBearing(lastStableHeading);
++}
++
++
+ 
+ 
+ /**
+@@ -357,15 +461,28 @@ export function createMap() {
+         minZoom: 10.5,
+     });
+ 
++        // Callback dédié à l'orientation de la carte.
++    const onMapCompassReading = reading => {
++        handleMapCompassReading(map, reading);
++    };
++
+ 
+     // Bouton de changement de vue 2D / 3D.
++    const viewControl = new ViewModeControl();
++
++    // Transmet le callback de la boussole au contrôle.
++    viewControl.onCompassReading = onMapCompassReading;
++
+     map.addControl(
+-        new ViewModeControl(),
++        viewControl,
+         'top-right'
+     );
+ 
+     const recenterControl = new RecenterControl();
+ 
++    // Transmet le callback de la boussole au contrôle.
++    recenterControl.onCompassReading = onMapCompassReading;
++
+     map.addControl(
+         recenterControl,
+         'top-right'
+@@ -541,8 +658,15 @@ export function setUserFollowing(enabled) {
+   isFollowingUser = enabled;
+ }
+ 
++/**
++ * Indique si une navigation est actuellement en cours.
++ */
++export function setNavigationActive(enabled) {
++    isNavigationActive = enabled;
++}
++
+ 
+-export function recenterOnUser(map, position) {
++/*export function recenterOnUser(map, position) {
+     if (!map || !position) {
+         return;
+     }
+@@ -557,11 +681,74 @@ export function recenterOnUser(map, position) {
+                     essential: true 
+                 }); 
+             });
++}*/
++
++/*export function recenterOnUser(map, position) {
++    if (!map || !position) {
++        return;
++    }
++
++    // Réactive le suivi automatique de la caméra.
++    setUserFollowing(true);
++
++    // Mémorise la dernière position GPS connue.
++    lastKnownUserPosition = position;
++
++    // Annule une éventuelle temporisation de reprise de caméra.
++    clearTimeout(cameraResumeTimeout);
++
++    // Le recentrage doit fonctionner même à l'arrêt.
++    map.easeTo({
++        center: [
++            position.longitude,
++            position.latitude
++        ],
++        zoom: 17,
++        duration: 500,
++        essential: true
++    });
++}*/
++
++
++export function recenterOnUser(map, position) {
++    if (!map || !position) {
++        return;
++    }
++
++    // Réactive le suivi automatique.
++    setUserFollowing(true);
++
++    // Mémorise la position GPS connue.
++    lastKnownUserPosition = position;
++
++    // Suspend temporairement les déplacements automatiques
++    // de la caméra pendant le recentrage.
++    isRecentering = true;
++
++    clearTimeout(cameraResumeTimeout);
++
++    map.once('moveend', () => {
++        isRecentering = false;
++    });
++
++    // Effectue le recentrage et le zoom en une seule animation.
++    map.easeTo({
++        center: [
++            position.longitude,
++            position.latitude
++        ],
++        zoom: 17,
++        duration: 500,
++        essential: true
++    });
+ }
+ 
+ 
+ 
+ 
++
++
++
+ export function followUserPosition(map, position) {
+     if (!map || !position) return;
+ 
+@@ -569,12 +756,18 @@ export function followUserPosition(map, position) {
+ 
+     if (!isFollowingUser) return;
+ 
++    // Le GPS continue de fonctionner,
++    // mais ne déplace pas la caméra pendant le recentrage.
++    if (isRecentering) return;
++
+     if (isChangingView) {
+         pendingUserPosition = position;
+         return;
+     }
+ 
+     // Vérifie si le cap GPS est suffisamment fiable.
++    // Cette information sert uniquement au filtrage
++    // des petits déplacements GPS en 3D.
+     const isGpsHeadingReliable =
+         Number.isFinite(position.heading) &&
+         Number.isFinite(position.speed) &&
+@@ -594,33 +787,18 @@ export function followUserPosition(map, position) {
+      * à cause des imprécisions du GPS.
+      */
+     if (
+-        is3D &&
+-        !isGpsHeadingReliable &&
+-        distanceToUser < 3
+-    ) {
+-        return;
+-    }
++    is3D && !isGpsHeadingReliable && distanceToUser < 3 ) { 
++        return; 
++    } // Le GPS déplace la caméra vers notre position, 
++    // mais ne modifie jamais son orientation. 
++     const cameraOptions = { 
++        center: [position.longitude, position.latitude], 
++        duration: 450, 
++        essential: true 
++    }; 
++    map.easeTo(cameraOptions); }
+ 
+-    const cameraOptions = {
+-        center: [position.longitude, position.latitude],
+-        duration: 450,
+-        essential: true
+-    };
+-
+-    // En 2D, on conserve le comportement actuel.
+-    if (is3D && isGpsHeadingReliable) {
+-        const currentBearing = lastStableHeading ?? map.getBearing();
+-
+-        lastStableHeading = smoothHeading(
+-            currentBearing,
+-            position.heading
+-        );
+-
+-        cameraOptions.bearing = lastStableHeading;
+-    }
+ 
+-    map.easeTo(cameraOptions);
+-}
+ 
+ 
+ /**
+diff --git a/assets/maplibre/stationPanel.js b/assets/maplibre/stationPanel.js
+index fbf6bfa..6a332f6 100644
+--- a/assets/maplibre/stationPanel.js
++++ b/assets/maplibre/stationPanel.js
+@@ -19,6 +19,7 @@ import {
+     showDestinationMarker,
+     updateWalkingRoute,
+     setUserFollowing,
++    setNavigationActive,
+     followUserPosition,
+     updateCameraFromCompass,
+     clearNavigationMap,
+@@ -53,6 +54,9 @@ let lastCompassLogTime = 0;
+ let currentRouteCoordinates = [];
+ let lastRouteProgressIndex = 0;
+ 
++// Callback propre à la boussole de la navigation piétonne.
++let onNavigationCompassReading = null;
++
+ const mobileQuery = window.matchMedia(
+     '(max-width: 767px)'
+ );
+@@ -354,7 +358,12 @@ function stopNavigation(map, station) {
+     }
+ 
+     // Arrête la boussole.
+-    stopCompass();
++    //stopCompass();
++    // Désabonne uniquement la boussole de la navigation.
++    if (onNavigationCompassReading) {
++        stopCompass(onNavigationCompassReading);
++        onNavigationCompassReading = null;
++    }
+ 
+     // Désactive le suivi automatique de la caméra.
+     setUserFollowing(false);
+@@ -521,6 +530,7 @@ async function updateStationPanel(station, map) {
+     if (joinButton.textContent.trim() === 'Démarrer') {
+         
+         navigationStarted = true;
++        setNavigationActive(true);
+         setUserFollowing(true);
+ 
+         const isSessionActive = () =>
+@@ -532,7 +542,7 @@ async function updateStationPanel(station, map) {
+ 
+         let isInitialCameraSetup = true;
+ 
+-        await startCompass(
++        /*await startCompass(
+             reading => {
+ 
+                 if (!isInitialCameraSetup) {
+@@ -563,8 +573,38 @@ async function updateStationPanel(station, map) {
+             }
+ 
+ 
++        );*/
++        onNavigationCompassReading = reading => {
++        if (!isInitialCameraSetup) {
++            updateCameraFromCompass(map, reading);
++        }
++
++        const compassDisplay = element.querySelector(
++            '.station-panel-compass-status'
+         );
+ 
++        if (compassDisplay) {
++            compassDisplay.textContent =
++                reading.compassHeading !== null
++                    ? `🧭 Boussole active — Cap : ${Math.round(reading.compassHeading)}°`
++                    : '🧭 Boussole active — Cap indisponible';
++        }
++    };
++
++    await startCompass(
++        onNavigationCompassReading,
++        error => {
++            const compassDisplay = element.querySelector(
++                '.station-panel-compass-status'
++            );
++
++            if (compassDisplay) {
++                compassDisplay.textContent =
++                    `⚠️ Boussole indisponible : ${error.message}`;
++            }
++        }
++    );
++
+         if (!isSessionActive()) {
+             return;
+         }

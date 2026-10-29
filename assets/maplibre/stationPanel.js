@@ -19,6 +19,7 @@ import {
     showDestinationMarker,
     updateWalkingRoute,
     setUserFollowing,
+    setNavigationActive,
     followUserPosition,
     updateCameraFromCompass,
     clearNavigationMap,
@@ -521,6 +522,7 @@ async function updateStationPanel(station, map) {
     if (joinButton.textContent.trim() === 'Démarrer') {
         
         navigationStarted = true;
+        setNavigationActive(true);
         setUserFollowing(true);
 
         const isSessionActive = () =>

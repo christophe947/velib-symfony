@@ -24,6 +24,8 @@ let isNavigationActive = false;
 // État du suivi automatique de la caméra.
 let isFollowingUser = false;
 
+// Suspension temporaire du pilotage de la caméra par la boussole.
+let isCompassCameraPaused = false;
 
 // Gestion temporaire des interactions manuelles avec la carte
 let isCameraInteractionActive = false;
@@ -90,6 +92,12 @@ class ViewModeControl {
 
         isChangingView = true;
 
+        // Empêche la boussole de perturber la transition 2D / 3D.
+        isCompassCameraPaused = true;
+
+        // Termine les éventuelles animations précédentes.
+        this.map.stop();
+        
         is3D = !is3D;
 
         const targetPitch = is3D ? 55 : 0;
@@ -107,9 +115,10 @@ class ViewModeControl {
             ? 'Revenir en vue 2D'
             : 'Passer en vue 3D';
 
+        
         try {
             await new Promise(resolve => {
-                // On écoute la fin du mouvement AVANT de lancer l'animation.
+                // On écoute la fin du mouvement avant de lancer l'animation.
                 this.map.once('moveend', resolve);
 
                 this.map.easeTo({
@@ -120,15 +129,22 @@ class ViewModeControl {
                 });
             });
         } finally {
+            // La transition est terminée : on autorise de nouveau
+            // les mises à jour de la caméra par la boussole.
             isChangingView = false;
+            isCompassCameraPaused = false;
 
+            // On récupère la dernière position reçue pendant la transition.
             if (pendingUserPosition) {
                 const position = pendingUserPosition;
                 pendingUserPosition = null;
 
+                // On reprend le suivi GPS après la transition.
                 followUserPosition(this.map, position);
             }
         }
+
+
     }
 
     onRemove() {
@@ -243,58 +259,54 @@ function smoothHeading(currentHeading, targetHeading) {
 * à partir des nouvelles mesures de la boussole.
   */
   export function updateCameraFromCompass(map, reading) {
-
     if (!map || !reading) {
         return;
     }
 
-    // La boussole ne pilote la caméra qu'en navigation 3D.
-    if (!is3D || !isFollowingUser || isChangingView || isCameraInteractionActive) {
+    // La boussole pilote la caméra uniquement en navigation 3D,
+    // lorsque le suivi est actif et qu'aucune transition n'est en cours.
+    if (
+        !is3D ||
+        !isFollowingUser ||
+        isChangingView ||
+        isCameraInteractionActive ||
+        isCompassCameraPaused
+    ) {
         return;
     }
 
     // Vérifie que la mesure est récente.
     const isReadingFresh =
-    Number.isFinite(reading.timestamp) &&
-    Date.now() - reading.timestamp < 1500;
+        Number.isFinite(reading.timestamp) &&
+        Date.now() - reading.timestamp < 1500;
 
     if (!isReadingFresh) {
-    return;
+        return;
     }
 
     const compassHeading = reading.compassHeading;
 
     if (!Number.isFinite(compassHeading)) {
-    return;
+        return;
     }
 
-    // Le GPS reste prioritaire lorsque son cap est fiable.
-    const isGpsHeadingReliable =
-    Number.isFinite(lastKnownUserPosition?.heading) &&
-    Number.isFinite(lastKnownUserPosition?.speed) &&
-    lastKnownUserPosition.speed >= MIN_HEADING_SPEED;
-
-    if (isGpsHeadingReliable) {
-    return;
-    }
-
+    // Conserve le lissage du cap.
     const currentBearing =
-    lastStableHeading ?? map.getBearing();
+        lastStableHeading ?? map.getBearing();
 
     lastStableHeading = smoothHeading(
-    currentBearing,
-    compassHeading
+        currentBearing,
+        compassHeading
     );
 
-    // Met à jour uniquement l'orientation :
-    // la position reste contrôlée par le GPS.
-    map.easeTo({
-    bearing: lastStableHeading,
-    duration: 100,
-    essential: true
-    });
     
-  }
+    // Anime progressivement l'orientation de la caméra. 
+    map.easeTo({ 
+        bearing: lastStableHeading, 
+        duration: 100, 
+        essential: true 
+    });
+}
 
 
 /**
@@ -541,22 +553,41 @@ export function setUserFollowing(enabled) {
   isFollowingUser = enabled;
 }
 
+export function setNavigationActive(enabled) {
+    isNavigationActive = enabled;
+}
 
 export function recenterOnUser(map, position) {
     if (!map || !position) {
         return;
     }
 
-    setUserFollowing(true);
+    // Suspend temporairement le contrôle automatique de la caméra.
+    isCompassCameraPaused = true;
 
-    followUserPosition(map, position);
-    map.once('moveend', () => { 
-                map.easeTo({ 
-                    zoom: 17, 
-                    duration: 500, 
-                    essential: true 
-                }); 
-            });
+    // Réactive le suivi et mémorise la position GPS.
+    setUserFollowing(true);
+    lastKnownUserPosition = position;
+
+    // Termine les animations précédentes.
+    map.stop();
+
+    // Attend la fin du recentrage avant de réactiver la boussole.
+    map.once('moveend', () => {
+        isCompassCameraPaused = false;
+    });
+
+    // Une seule animation pour le recentrage et le zoom.
+    map.easeTo({
+        center: [
+            position.longitude,
+            position.latitude
+        ],
+        zoom: 17,
+        pitch: is3D ? 55 : 0,
+        duration: 500,
+        essential: true
+    });
 }
 
 
@@ -571,6 +602,10 @@ export function followUserPosition(map, position) {
 
     if (isChangingView) {
         pendingUserPosition = position;
+        return;
+    }
+
+    if (isCompassCameraPaused) {
         return;
     }
 
