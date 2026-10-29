@@ -6,11 +6,12 @@ import {
     loadArrondissements,
     loadCommunes,
     countStationsByZone,
-    filterZonesWithStations
+    //filterZonesWithStations
 } from './zones.js';
 import { addZoneLayer } from './zoneLayer.js';
 import { addCommuneLayer } from './communeLayer.js';
-import { showUserMarker, requestUserPosition } from './geolocation.js';
+import { showUserMarker, requestUserPosition, startWatchingPosition } from './geolocation.js';
+import { startCompass } from './compass.js';
 //import { getLastCompassReading } from './compass.js';
 
 //let destinationMarker = null;
@@ -23,6 +24,8 @@ let isNavigationActive = false;
 
 // État du suivi automatique de la caméra.
 let isFollowingUser = false;
+
+let backgroundPositionWatchId = null;
 
 // Suspension temporaire du pilotage de la caméra par la boussole.
 let isCompassCameraPaused = false;
@@ -97,7 +100,7 @@ class ViewModeControl {
 
         // Termine les éventuelles animations précédentes.
         this.map.stop();
-        
+
         is3D = !is3D;
 
         const targetPitch = is3D ? 55 : 0;
@@ -141,6 +144,15 @@ class ViewModeControl {
 
                 // On reprend le suivi GPS après la transition.
                 followUserPosition(this.map, position);
+            }
+            // En 3D hors navigation, active la boussole
+            // uniquement si le suivi GPS est actif.
+            if (
+                is3D &&
+                isFollowingUser &&
+                !isNavigationActive
+            ) {
+                await activateCompass(this.map);
             }
         }
 
@@ -197,11 +209,13 @@ onAdd(map) {
         showUserMarker(this.map, userPosition);
 
         // Si la navigation est active, réactive le suivi.
-        if (isNavigationActive) {
-            recenterOnUser(this.map, userPosition);
-        } else {
+        //if (isNavigationActive) {
+        recenterOnUser(this.map, userPosition);
+
+        startBackgroundUserTracking(this.map);
+        //} else {
             // Sinon, recentrage ponctuel sans démarrer la navigation.
-            this.map.easeTo({
+            /*this.map.easeTo({
                 center: [
                     userPosition.longitude,
                     userPosition.latitude
@@ -210,7 +224,7 @@ onAdd(map) {
                 duration: 500,
                 essential: true
             });
-        }
+        }*/
 
     } catch (error) {
         console.error('Impossible de récupérer la position GPS :', error);
@@ -657,6 +671,30 @@ export function followUserPosition(map, position) {
     map.easeTo(cameraOptions);
 }
 
+export function startBackgroundUserTracking(map) {
+    if (!map || backgroundPositionWatchId !== null || isNavigationActive) {
+        return;
+    }
+
+    backgroundPositionWatchId = startWatchingPosition(
+        position => {
+            showUserMarker(map, position);
+            followUserPosition(map, position);
+        },
+        error => {
+            console.error('Erreur du suivi GPS :', error);
+        }
+    );
+}
+
+export function stopBackgroundUserTracking() {
+    if (backgroundPositionWatchId === null) {
+        return;
+    }
+
+    navigator.geolocation.clearWatch(backgroundPositionWatchId);
+    backgroundPositionWatchId = null;
+}
 
 /**
  * Nettoie les éléments de navigation sur la carte.
@@ -681,4 +719,23 @@ export function clearNavigationMap(map) {
     // Supprime le marqueur de destination.
     destinationMarker?.remove();
     destinationMarker = null;
+}
+
+
+export async function activateCompass(
+    map,
+    onReading,
+    onError,
+    canControlCamera = () => true
+) {
+    await startCompass(
+        reading => {
+            if (canControlCamera()) {
+                updateCameraFromCompass(map, reading);
+            }
+
+            onReading?.(reading);
+        },
+        onError
+    );
 }

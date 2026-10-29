@@ -23,7 +23,10 @@ import {
     followUserPosition,
     updateCameraFromCompass,
     clearNavigationMap,
-    ensure2DView
+    ensure2DView,
+    startBackgroundUserTracking,
+    stopBackgroundUserTracking,
+    activateCompass
  } from './map.js';
 import {
     setNavigationRoute,
@@ -59,6 +62,9 @@ const mobileQuery = window.matchMedia(
 );
 
 let currentMode = 'bikes';
+
+
+
 
 
 
@@ -366,6 +372,9 @@ function stopNavigation(map, station) {
     // Nettoie le tracé et le marqueur de destination.
     clearNavigationMap(map);
 
+    setUserFollowing(true);
+    startBackgroundUserTracking(map);
+
     // Réinitialise l'état local.
     //navigationStarted = false;
     lastKnownUserPosition = null;
@@ -520,7 +529,7 @@ async function updateStationPanel(station, map) {
     const sessionId = ++navigationSessionId;
 
     if (joinButton.textContent.trim() === 'Démarrer') {
-        
+        stopBackgroundUserTracking();
         navigationStarted = true;
         setNavigationActive(true);
         setUserFollowing(true);
@@ -534,12 +543,14 @@ async function updateStationPanel(station, map) {
 
         let isInitialCameraSetup = true;
 
-        await startCompass(
+        await activateCompass(
+            map,
+    
             reading => {
 
-                if (!isInitialCameraSetup) {
+                /*if (!isInitialCameraSetup) {
                     updateCameraFromCompass(map, reading);
-                }
+                }*/
 
                 const compassDisplay = element.querySelector(
                 '.station-panel-compass-status'
@@ -562,7 +573,8 @@ async function updateStationPanel(station, map) {
                     compassDisplay.textContent =
                         `⚠️ Boussole indisponible : ${error.message}`;
                 }
-            }
+            },
+            () => !isInitialCameraSetup
 
 
         );

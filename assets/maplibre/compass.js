@@ -4,6 +4,10 @@ let lastReading = null;
 
 let orientationHandler = null;
 
+let onReadingCallback = null;
+
+let onErrorCallback = null;
+
 function normalizeHeading(heading) {
     return ((heading % 360) + 360) % 360;
 }
@@ -52,12 +56,16 @@ function getCompassHeading(event) {
  */
 export async function startCompass(onReading, onError) {
 
+    // Actualise les callbacks à chaque appel.
+    onReadingCallback = onReading;
+    onErrorCallback = onError;
+
     if (isCompassActive) {
         return;
     }
 
     if (!('DeviceOrientationEvent' in window)) {
-        onError?.(
+        onErrorCallback?.(
             new Error(
                 'Le capteur d’orientation n’est pas disponible.'
             )
@@ -107,7 +115,8 @@ export async function startCompass(onReading, onError) {
 
             lastReading = reading;
 
-            onReading?.(reading);
+            //?.(reading);
+            onReadingCallback?.(reading);
         };
 
         // Écoute les mesures d'orientation.
@@ -134,7 +143,8 @@ export async function startCompass(onReading, onError) {
             error
         );
 
-        onError?.(error);
+        //onError?.(error);
+        onErrorCallback?.(error);
     }
 }
 
