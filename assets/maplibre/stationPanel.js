@@ -46,6 +46,9 @@ import { startCompass,stopCompass } from './compass.js';
 
 let pane = null;
 let element = null;
+
+let panelManuallyAtBottom = true;
+
 let navigationStarted = false;
 let navigationSessionId = 0;
 
@@ -62,6 +65,7 @@ const mobileQuery = window.matchMedia(
 );
 
 let currentMode = 'bikes';
+
 
 
 
@@ -117,9 +121,12 @@ async function updateMiddleHeight(height) {
 
     pane.breakpoints.prevBreakpoint = 'middle';
 
+    panelManuallyAtBottom = false;
     // Position visuelle
     await pane.moveToHeight(height);
 }
+
+
 async function updateBottomHeight(height) {
 
     if (!pane) {
@@ -133,7 +140,9 @@ async function updateBottomHeight(height) {
         0,
         false
     );
+    
 }
+
 
 
 
@@ -158,6 +167,7 @@ export function initStationPanel(map) {
             {
                 parentElement: 'body',
                 initialBreak: 'bottom',
+                
                 showCloseButton: false,
                 dragByCursor: true,
                 clickBottomOpen: false,
@@ -187,6 +197,12 @@ export function initStationPanel(map) {
         pane.present({
             animate: false
         });
+        pane.on('onDragEnd', () => {
+    panelManuallyAtBottom = pane.currentBreak() === 'bottom';
+    
+    console.log('Panneau manuellement en bas :', panelManuallyAtBottom);
+});
+
 
     } else {
 
@@ -196,8 +212,39 @@ export function initStationPanel(map) {
     subscribeToSelectedStation(
         station => updateStationPanel(station, map)
     );
-    //subscribeToSelectedStation(updateStationPanel, map);
+    
+   
+
+    
+
+    
+
+const lowerSearchPanel = () => {
+    if (!pane || !mobileQuery.matches) return;
+    if (panelManuallyAtBottom === true) return;
+
+    //panelManuallyAtBottom = false;
+    pane.moveToBreak('bottom');
+};
+
+const restoreSearchPanel = () => {
+    if (!pane || !mobileQuery.matches) return;
+    if (panelManuallyAtBottom === true) {
+        return;
+    }
+    if (panelManuallyAtBottom === false) {
+        pane.moveToBreak('middle');
+        console.log('doi revenir');}
+};
+    
+
+    document.addEventListener('search:focus', lowerSearchPanel);
+    document.addEventListener('search:results', lowerSearchPanel);
+    document.addEventListener('search:blur', restoreSearchPanel);
+    document.addEventListener('search:results:close', restoreSearchPanel);
+    //console.log(pane.currentBreak());
 }
+
 
 function renderModeSelector() {
 
@@ -735,7 +782,7 @@ isInitialCameraSetup = false;
             `;
             
             await ensure2DView();
-
+            setUserFollowing(false);
             
         if (routeMessage) {
             routeMessage.hidden = true;

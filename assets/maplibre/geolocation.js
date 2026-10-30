@@ -130,6 +130,8 @@ export function initGeolocation({
                 );
 
                 onDisplayedStations?.(displayedStations);
+                
+                document.dispatchEvent(new Event('search:results'));
             },
             error => {
                 if (currentRequestVersion !== locationRequestVersion) {

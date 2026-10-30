@@ -7,6 +7,8 @@ import {
     getStationsForZone,
 } from './zones.js';
 
+import { setUserFollowing } from './map.js';
+
 import {
     classifySearch,
 } from './searchIntent.js';
@@ -32,6 +34,15 @@ export async function initSearch(map) {
     if (!input || !results) {
         return;
     }
+    input.addEventListener('focus', () => {
+        document.dispatchEvent(
+            new Event('search:focus')
+        );
+    });
+    input.addEventListener('blur', () => {
+        document.dispatchEvent(new Event('search:blur'));
+        console.log('blur');
+    });
 
     const stations = window.stations ?? [];
 
@@ -97,6 +108,9 @@ export async function initSearch(map) {
         results.innerHTML = '';
         results.style.display = 'none';
 
+        // Désactive le suivi caméra lors de la sélection d'une station.
+        setUserFollowing(false);
+
         document.dispatchEvent(
             new CustomEvent('station:selected', {
                 detail: station,
@@ -109,9 +123,18 @@ export async function initSearch(map) {
     document.addEventListener('click', event => {
 
         if (!event.target.closest('#map-search')) {
+
+            const hasResults = displayedStations.length > 0;
+
             results.innerHTML = '';
             results.style.display = 'none';
             displayedStations = [];
+
+            if (hasResults) {
+                document.dispatchEvent(
+                    new Event('search:results:close')
+                );
+            }
         }
 
     });
