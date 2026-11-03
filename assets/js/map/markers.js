@@ -1,29 +1,23 @@
 import L from 'leaflet';
 import { navigation } from './navigation.js';
-import {
-    getAvailabilityRate,
-    getAvailabilityColor
-} from './availability.js';
+import { getAvailabilityRate, getAvailabilityColor } from './availability.js';
 import {
     setOpenedStation,
     getOpenedStation,
     setCurrentFilteredStations,
     setStationPanelClosed,
-    getStationPanelClosed
+    getStationPanelClosed,
 } from './state.js';
-
 
 const stationMarkers = new Map();
 
 let highlightedMarker = null;
 
 function createIcon(color) {
-
     return L.divIcon({
+        className: 'station-marker',
 
-        className:'station-marker',
-
-        html:`
+        html: `
         <div 
             class="marker-dot"
             style="
@@ -32,14 +26,12 @@ function createIcon(color) {
         </div>
         `,
 
-        iconSize:[20,20],
-        iconAnchor:[10,10]
+        iconSize: [20, 20],
+        iconAnchor: [10, 10],
     });
 }
 
-
 export function highlightMarker(stationId) {
-
     const marker = stationMarkers.get(stationId);
 
     if (!marker) {
@@ -58,13 +50,10 @@ export function highlightMarker(stationId) {
     navigation.startProgrammaticMove();
 
     marker.once('popupopen', () => {
-
-        const popupElement = marker
-            .getPopup()
-            .getElement();
+        const popupElement = marker.getPopup().getElement();
 
         if (popupElement) {
-           popupElement.classList.add('highlight');
+            popupElement.classList.add('highlight');
         }
     });
 
@@ -78,16 +67,12 @@ export function highlightMarker(stationId) {
     marker.openPopup();
 }
 
-
 export function resetHighlightedMarker() {
-
     if (!highlightedMarker) {
         return;
     }
-    
-    const popupElement = highlightedMarker
-    .getPopup()
-    ?.getElement();
+
+    const popupElement = highlightedMarker.getPopup()?.getElement();
 
     if (popupElement) {
         popupElement.classList.remove('highlight');
@@ -96,8 +81,7 @@ export function resetHighlightedMarker() {
     const markerElement = highlightedMarker.getElement();
 
     if (markerElement) {
-        
-        markerElement.classList.remove('highlight')
+        markerElement.classList.remove('highlight');
     }
 
     highlightedMarker.setZIndexOffset(0);
@@ -110,7 +94,6 @@ export function resetHighlightedMarker() {
     highlightedMarker = null;
 }
 
-
 export function renderMarkers(
     map,
     markersLayer,
@@ -118,54 +101,44 @@ export function renderMarkers(
     displayMode,
     updateStationPanel,
     shouldZoom = false,
-    actions = {}
+    actions = {},
 ) {
-
     markersLayer.clearLayers();
     stationMarkers.clear();
 
-    stations.forEach(station => {
+    stations.forEach((station) => {
+        const color = getAvailabilityColor(station, displayMode);
 
-        const color = getAvailabilityColor(
-            station,
-            displayMode
-        );
-        
-        const marker = L.marker(
-            [
-                station.latitude,
-                station.longitude
-            ],
-            {
-                icon:createIcon(color)
-            }
-        );
-        
+        const marker = L.marker([station.latitude, station.longitude], {
+            icon: createIcon(color),
+        });
+
         marker.options.originalColor = color;
         marker.options.stationId = station.id;
         marker.options.station = station;
 
-        marker.bindPopup(`
+        marker.bindPopup(
+            `
             <strong>${station.name}</strong><br>
             🚲 ${station.bikes} vélos<br>
             ⚡ ${station.electricBikes} électriques<br>
             🔧 ${station.mechanicalBikes} mécaniques<br>
             🅿️ ${station.docks} places
-        `, {
-            autoPan: false
-        });
+        `,
+            {
+                autoPan: false,
+            },
+        );
 
-        
         marker.on('click', () => {
-    
             navigation.restoreAfterSearch(station);
 
             setOpenedStation(station.id);
 
             setStationPanelClosed(false);
-        
+
             setCurrentFilteredStations(null);
-         
+
             renderMarkers(
                 map,
                 markersLayer,
@@ -173,9 +146,9 @@ export function renderMarkers(
                 displayMode,
                 updateStationPanel,
                 false,
-                actions
-            ); 
-   
+                actions,
+            );
+
             updateStationPanel(station);
 
             actions.endSearch?.();
@@ -185,14 +158,12 @@ export function renderMarkers(
 
         markersLayer.addLayer(marker);
 
-        
         // 👇 restaure le popup après changement de mode a verif
         if (getOpenedStation() == station.id) {
-
             if (shouldZoom) {
                 navigation.focusStation(station);
             }
-            
+
             marker.openPopup();
 
             if (!getStationPanelClosed()) {

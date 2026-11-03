@@ -9,9 +9,7 @@ import {
 
 import { setUserFollowing } from './map.js';
 
-import {
-    classifySearch,
-} from './searchIntent.js';
+import { classifySearch } from './searchIntent.js';
 
 import {
     rankStationResults,
@@ -19,12 +17,9 @@ import {
     renderSearchResults,
 } from './searchResults.js';
 
-import {
-    searchNearbyStations,
-} from './locationSearch.js';
+import { searchNearbyStations } from './locationSearch.js';
 
 import { initGeolocation } from './geolocation.js';
-
 
 export async function initSearch(map) {
     const input = document.getElementById('map-search-input');
@@ -35,9 +30,7 @@ export async function initSearch(map) {
         return;
     }
     input.addEventListener('focus', () => {
-        document.dispatchEvent(
-            new Event('search:focus')
-        );
+        document.dispatchEvent(new Event('search:focus'));
     });
     input.addEventListener('blur', () => {
         document.dispatchEvent(new Event('search:blur'));
@@ -51,19 +44,13 @@ export async function initSearch(map) {
         loadCommunes(),
     ]);
 
-    const zones = countStationsByZone(
-        zonesData,
-        stations
-    ).features;
+    const zones = countStationsByZone(zonesData, stations).features;
 
     const communes = communesData.features ?? [];
 
-    const searchableStations = stations.map(station => ({
+    const searchableStations = stations.map((station) => ({
         station,
-        searchText: [
-            station.name,
-            station.address,
-        ]
+        searchText: [station.name, station.address]
             .filter(Boolean)
             .join(' ')
             .normalize('NFD')
@@ -83,27 +70,20 @@ export async function initSearch(map) {
     let displayedStations = [];
 
     // Un seul gestionnaire de clic pour tous les résultats.
-    results.addEventListener('click', event => {
-        const resultElement = event.target.closest(
-            '[data-station-index]'
-        );
+    results.addEventListener('click', (event) => {
+        const resultElement = event.target.closest('[data-station-index]');
 
         if (!resultElement) {
             return;
         }
 
-        const index = Number(
-            resultElement.dataset.stationIndex
-        );
+        const index = Number(resultElement.dataset.stationIndex);
 
         const station = displayedStations[index];
 
         if (!station) {
             return;
         }
-
-        
-
 
         results.innerHTML = '';
         results.style.display = 'none';
@@ -114,16 +94,13 @@ export async function initSearch(map) {
         document.dispatchEvent(
             new CustomEvent('station:selected', {
                 detail: station,
-            })
+            }),
         );
     });
 
-    
     // Ferme la liste si l'utilisateur clique en dehors de la recherche.
-    document.addEventListener('click', event => {
-
+    document.addEventListener('click', (event) => {
         if (!event.target.closest('#map-search')) {
-
             const hasResults = displayedStations.length > 0;
 
             results.innerHTML = '';
@@ -131,22 +108,16 @@ export async function initSearch(map) {
             displayedStations = [];
 
             if (hasResults) {
-                document.dispatchEvent(
-                    new Event('search:results:close')
-                );
+                document.dispatchEvent(new Event('search:results:close'));
             }
         }
-
     });
-
 
     input.addEventListener('input', () => {
         clearTimeout(debounceTimer);
 
         const version = ++searchVersion;
-        const query = input.value
-            .replace(/\s+/g, ' ')
-            .trim();
+        const query = input.value.replace(/\s+/g, ' ').trim();
 
         if (clearButton) {
             clearButton.hidden = query.length === 0;
@@ -160,42 +131,32 @@ export async function initSearch(map) {
         }
 
         debounceTimer = setTimeout(async () => {
-            const intent = classifySearch(
-                query,
-                zones,
-                communes
-            );
+            const intent = classifySearch(query, zones, communes);
 
             // Une commune ou un arrondissement affiche toutes ses stations.
             if (intent.type === 'area') {
-                const areaStations = getStationsForZone(
-                    intent.area,
-                    stations
-                );
+                const areaStations = getStationsForZone(intent.area, stations);
 
                 displayedStations = renderAreaResults(
                     results,
                     intent.label,
-                    areaStations
+                    areaStations,
                 );
 
                 return;
             }
 
             // Les correspondances de stations apparaissent immédiatement.
-            const directStations = intent.type === 'address'
-                ? []
-                : rankStationResults(
-                    fuse,
-                    stations,
-                    query
-                );
+            const directStations =
+                intent.type === 'address'
+                    ? []
+                    : rankStationResults(fuse, stations, query);
 
             if (directStations.length > 0) {
                 displayedStations = renderSearchResults(
                     results,
                     directStations,
-                    []
+                    [],
                 );
             } else {
                 results.innerHTML = `
@@ -213,7 +174,7 @@ export async function initSearch(map) {
             const locationGroups = await searchNearbyStations(
                 intent.query ?? query,
                 intent.type,
-                stations
+                stations,
             );
 
             // Ignore une réponse d’une saisie plus ancienne.
@@ -222,25 +183,22 @@ export async function initSearch(map) {
             }
 
             const directIds = new Set(
-                directStations.map(station =>
-                    String(station.id)
-                )
+                directStations.map((station) => String(station.id)),
             );
 
             const cleanGroups = locationGroups
-                .map(group => ({
+                .map((group) => ({
                     ...group,
                     stations: group.stations.filter(
-                        station =>
-                            !directIds.has(String(station.id))
+                        (station) => !directIds.has(String(station.id)),
                     ),
                 }))
-                .filter(group => group.stations.length > 0);
+                .filter((group) => group.stations.length > 0);
 
             displayedStations = renderSearchResults(
                 results,
                 directStations,
-                cleanGroups
+                cleanGroups,
             );
         }, 300);
     });
@@ -256,10 +214,8 @@ export async function initSearch(map) {
         stations,
         results,
         input,
-        onDisplayedStations: stationsToDisplay => {
+        onDisplayedStations: (stationsToDisplay) => {
             displayedStations = stationsToDisplay;
         },
     });
 }
-
-    

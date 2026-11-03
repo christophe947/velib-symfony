@@ -1,156 +1,100 @@
 export async function loadArrondissements() {
-
-    const response = await fetch(
-        '/data/arrondissements.geojson'
-    );
+    const response = await fetch('/data/arrondissements.geojson');
 
     if (!response.ok) {
         throw new Error(
-            `Impossible de charger les arrondissements : ${response.status}`
+            `Impossible de charger les arrondissements : ${response.status}`,
         );
     }
 
     return response.json();
 }
-
 
 export async function loadCommunes() {
-    const response = await fetch(
-        '/data/communes-velib.geojson'
-    );
+    const response = await fetch('/data/communes-velib.geojson');
 
     if (!response.ok) {
         throw new Error(
-            `Impossible de charger les communes : ${response.status}`
+            `Impossible de charger les communes : ${response.status}`,
         );
     }
 
     return response.json();
 }
-
 
 export function filterZonesWithStations(zones) {
     return {
         ...zones,
-        features: zones.features.filter(zone => {
+        features: zones.features.filter((zone) => {
             const stationCount = zone.properties?.stationCount ?? 0;
             const code = zone.properties?.code ?? '';
 
-            return stationCount > 0
-                && !code.startsWith('751');
-        })
+            return stationCount > 0 && !code.startsWith('751');
+        }),
     };
 }
 
-export function countStationsByZone(
-    zones,
-    stations
-) {
+export function countStationsByZone(zones, stations) {
     return {
         ...zones,
-        features: zones.features.map(zone => {
+        features: zones.features.map((zone) => {
+            const bounds = getGeometryBounds(zone.geometry);
 
-            const bounds = getGeometryBounds(
-                zone.geometry
-            );
-
-            const stationCount = stations.filter(
-                station => {
-
-                    if (!isPointInsideBounds(
+            const stationCount = stations.filter((station) => {
+                if (
+                    !isPointInsideBounds(
                         station.longitude,
                         station.latitude,
-                        bounds
-                    )) {
-                        return false;
-                    }
-
-                    return isPointInsideGeometry(
-                        station.longitude,
-                        station.latitude,
-                        zone.geometry
-                    );
+                        bounds,
+                    )
+                ) {
+                    return false;
                 }
-            ).length;
+
+                return isPointInsideGeometry(
+                    station.longitude,
+                    station.latitude,
+                    zone.geometry,
+                );
+            }).length;
 
             return {
                 ...zone,
                 properties: {
                     ...zone.properties,
-                    stationCount
-                }
+                    stationCount,
+                },
             };
-        })
+        }),
     };
 }
 
-
-function isPointInsideGeometry(
-    longitude,
-    latitude,
-    geometry
-) {
-
+function isPointInsideGeometry(longitude, latitude, geometry) {
     if (!geometry) {
         return false;
     }
 
-
     if (geometry.type === 'Polygon') {
-
-        return isPointInsidePolygon(
-            longitude,
-            latitude,
-            geometry.coordinates
-        );
+        return isPointInsidePolygon(longitude, latitude, geometry.coordinates);
     }
-
 
     if (geometry.type === 'MultiPolygon') {
-
-        return geometry.coordinates.some(
-            polygon =>
-                isPointInsidePolygon(
-                    longitude,
-                    latitude,
-                    polygon
-                )
+        return geometry.coordinates.some((polygon) =>
+            isPointInsidePolygon(longitude, latitude, polygon),
         );
     }
-
 
     return false;
 }
 
-
-function isPointInsidePolygon(
-    longitude,
-    latitude,
-    polygon
-) {
-
+function isPointInsidePolygon(longitude, latitude, polygon) {
     if (!polygon.length) {
         return false;
     }
 
-
-    if (
-        isPointInsideRing(
-            longitude,
-            latitude,
-            polygon[0]
-        )
-    ) {
-
+    if (isPointInsideRing(longitude, latitude, polygon[0])) {
         for (let i = 1; i < polygon.length; i++) {
-
-            if (
-                isPointInsideRing(
-                    longitude,
-                    latitude,
-                    polygon[i]
-                )
-            ) {
+            if (isPointInsideRing(longitude, latitude, polygon[i])) {
                 return false;
             }
         }
@@ -158,50 +102,27 @@ function isPointInsidePolygon(
         return true;
     }
 
-
     return false;
 }
 
-
-function isPointInsideRing(
-    longitude,
-    latitude,
-    ring
-) {
-
+function isPointInsideRing(longitude, latitude, ring) {
     let inside = false;
 
-
-    for (
-        let i = 0, j = ring.length - 1;
-        i < ring.length;
-        j = i++
-    ) {
-
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
         const xi = ring[i][0];
         const yi = ring[i][1];
 
         const xj = ring[j][0];
         const yj = ring[j][1];
 
-
         const intersects =
-            ((yi > latitude) !== (yj > latitude))
-            &&
-            (
-                longitude <
-                (xj - xi)
-                * (latitude - yi)
-                / (yj - yi)
-                + xi
-            );
-
+            yi > latitude !== yj > latitude &&
+            longitude < ((xj - xi) * (latitude - yi)) / (yj - yi) + xi;
 
         if (intersects) {
             inside = !inside;
         }
     }
-
 
     return inside;
 }
@@ -210,31 +131,28 @@ export function zonesToPointsGeoJSON(zones) {
     return {
         type: 'FeatureCollection',
 
-        features: zones.features.map(zone => ({
+        features: zones.features.map((zone) => ({
             type: 'Feature',
 
             geometry: {
                 type: 'Point',
                 coordinates: [
                     zone.properties.geom_x_y.lon,
-                    zone.properties.geom_x_y.lat
-                ]
+                    zone.properties.geom_x_y.lat,
+                ],
             },
 
             properties: {
-                ...zone.properties
-            }
-        }))
+                ...zone.properties,
+            },
+        })),
     };
 }
 
-
 function getGeometryBounds(geometry) {
-
     const coordinates = [];
 
     function collectCoordinates(coords) {
-
         if (typeof coords[0] === 'number') {
             coordinates.push(coords);
             return;
@@ -243,9 +161,7 @@ function getGeometryBounds(geometry) {
         coords.forEach(collectCoordinates);
     }
 
-    collectCoordinates(
-        geometry.coordinates
-    );
+    collectCoordinates(geometry.coordinates);
 
     let minLng = coordinates[0][0];
     let maxLng = coordinates[0][0];
@@ -263,16 +179,11 @@ function getGeometryBounds(geometry) {
         minLng,
         maxLng,
         minLat,
-        maxLat
+        maxLat,
     };
 }
 
-
-function isPointInsideBounds(
-    longitude,
-    latitude,
-    bounds
-) {
+function isPointInsideBounds(longitude, latitude, bounds) {
     return (
         longitude >= bounds.minLng &&
         longitude <= bounds.maxLng &&
@@ -281,39 +192,23 @@ function isPointInsideBounds(
     );
 }
 
-
-
-
-
-export function findZoneByQuery(
-    zones,
-    query
-) {
-    const arrondissement = extractArrondissementNumber(
-        query
-    );
+export function findZoneByQuery(zones, query) {
+    const arrondissement = extractArrondissementNumber(query);
 
     if (!arrondissement) {
         return null;
     }
 
-    return zones.features.find(zone => {
-
-        return Number(
-            zone.properties?.c_ar
-        ) === arrondissement;
+    return zones.features.find((zone) => {
+        return Number(zone.properties?.c_ar) === arrondissement;
     });
 }
 
-
 function extractArrondissementNumber(query) {
-
-    const normalizedQuery = query
-        .toLowerCase()
-        .trim();
+    const normalizedQuery = query.toLowerCase().trim();
 
     const match = normalizedQuery.match(
-        /(?:paris\s*)?(\d{1,2})(?:er|e|eme|ème)?(?:\s*ardt)?$/
+        /(?:paris\s*)?(\d{1,2})(?:er|e|eme|ème)?(?:\s*ardt)?$/,
     );
 
     if (!match) {
@@ -322,42 +217,29 @@ function extractArrondissementNumber(query) {
 
     const number = Number(match[1]);
 
-    if (
-        number < 1 ||
-        number > 20
-    ) {
+    if (number < 1 || number > 20) {
         return null;
     }
 
     return number;
 }
 
-export function getStationsForZone(
-    zone,
-    stations
-) {
+export function getStationsForZone(zone, stations) {
     if (!zone) {
         return [];
     }
 
-    const bounds = getGeometryBounds(
-        zone.geometry
-    );
+    const bounds = getGeometryBounds(zone.geometry);
 
-    return stations.filter(station => {
-
-        if (!isPointInsideBounds(
-            station.longitude,
-            station.latitude,
-            bounds
-        )) {
+    return stations.filter((station) => {
+        if (!isPointInsideBounds(station.longitude, station.latitude, bounds)) {
             return false;
         }
 
         return isPointInsideGeometry(
             station.longitude,
             station.latitude,
-            zone.geometry
+            zone.geometry,
         );
     });
 }

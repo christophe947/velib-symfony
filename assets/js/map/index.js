@@ -3,22 +3,18 @@ import { updateLegend } from './legend.js';
 import { createMap } from './map.js';
 import { initMapBackground } from './mapBackground.js';
 import { initMapEvents } from './mapEvents.js';
-import { renderMarkers} from './markers.js';
+import { renderMarkers } from './markers.js';
 import { initMobileModeSelector } from './mobileModeSelector.js';
 import { navigation } from './navigation.js';
-import { 
-    clearSearchState,
-    initSearch
-} from './search.js';
+import { clearSearchState, initSearch } from './search.js';
 import {
     setOpenedStation,
     setSearching,
     getDisplayMode,
-    getSearching
+    getSearching,
 } from './state.js';
 import { updateStationPanel } from './stationPanel.js';
 import '../responsive.js';
-
 
 let mapElement;
 let map;
@@ -30,10 +26,7 @@ if (typeof selectedStation !== 'undefined' && selectedStation !== null) {
     fromCard = true;
 }
 
-
 const actions = {
-
-    
     startSearch: () => {
         setSearching(true);
     },
@@ -49,29 +42,22 @@ const actions = {
 
     getAllStations: () => stations,
 };
- 
 
 document.addEventListener('DOMContentLoaded', () => {
-
     mapElement = document.getElementById('map');
-        
-    if (mapElement) {
 
+    if (mapElement) {
         const mapInstance = createMap();
 
         map = mapInstance.map;
-       
+
         markersLayer = mapInstance.markersLayer;
 
         navigation.init(map);
 
         navigation.initDefaultView();
 
-        initMapEvents(
-            map,
-            navigation,
-            actions
-        );
+        initMapEvents(map, navigation, actions);
 
         initSearch({
             stations,
@@ -81,7 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
             updateStationPanel,
             renderMarkers,
             setOpenedStation,
-            actions
+            actions,
         });
 
         initMobileModeSelector();
@@ -93,22 +79,18 @@ document.addEventListener('DOMContentLoaded', () => {
             renderMarkers,
             updateStationPanel,
             updateLegend,
-            actions
+            actions,
         });
 
         initMapBackground({
             map,
             standardLayer: mapInstance.standardLayer,
             watercolorLayer: mapInstance.watercolorLayer,
-            labelsLayer: mapInstance.labelsLayer
+            labelsLayer: mapInstance.labelsLayer,
         });
 
-        
-
         if (fromCard) {
-            setOpenedStation(
-                selectedStation.id ?? selectedStation
-            );
+            setOpenedStation(selectedStation.id ?? selectedStation);
         }
 
         renderMarkers(
@@ -118,15 +100,9 @@ document.addEventListener('DOMContentLoaded', () => {
             getDisplayMode(),
             updateStationPanel,
             true,
-            actions
+            actions,
         );
 
         updateLegend(map, getDisplayMode());
-    };
-
+    }
 });
-    
-
-
-
-

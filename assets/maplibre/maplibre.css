@@ -42,38 +42,6 @@
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #maplibre-map {
     height: 600px;
     width: 100%;
@@ -259,10 +227,7 @@
     letter-spacing: 0.03em;
 }
 
-/*.search-standard-results {
-    max-height: 320px;
-    overflow-y: auto;
-}*/
+
 
 .search-zone-stations, .search-standard-results {
     max-height: 320px;
@@ -889,29 +854,3 @@
 
 
 
-
-
-
-
-
-/*
-@media (max-width: 767.98px) {
-
-    #main-navbar {
-        display: none;
-    }
-
-    .maplibre-page main {
-        height: 100dvh;
-    }
-
-    .maplibre-page #maplibre-map {
-        height: 100%;
-    }
-
-    #map-search {
-        top: 12px;
-    }
-}
-
-*/

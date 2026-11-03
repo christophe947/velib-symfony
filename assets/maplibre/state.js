@@ -6,8 +6,8 @@ export function setSelectedStation(station) {
     selectedStation = station;
 
     console.log('Station sélectionnée :', station);
-    
-    listeners.forEach(listener => {
+
+    listeners.forEach((listener) => {
         listener(station);
     });
 }
@@ -19,7 +19,7 @@ export function getSelectedStation() {
 export function clearSelectedStation() {
     selectedStation = null;
 
-    listeners.forEach(listener => {
+    listeners.forEach((listener) => {
         listener(null);
     });
 }
@@ -37,16 +37,14 @@ let displayMode = 'bikes';
 const displayModeSubscribers = [];
 
 export function setDisplayMode(mode) {
-
     displayMode = mode;
 
-    displayModeSubscribers.forEach(callback => {
+    displayModeSubscribers.forEach((callback) => {
         callback(displayMode);
     });
 }
 
 export function subscribeToDisplayMode(callback) {
-
     displayModeSubscribers.push(callback);
 
     callback(displayMode);

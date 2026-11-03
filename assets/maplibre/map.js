@@ -10,7 +10,11 @@ import {
 } from './zones.js';
 import { addZoneLayer } from './zoneLayer.js';
 import { addCommuneLayer } from './communeLayer.js';
-import { showUserMarker, requestUserPosition, startWatchingPosition } from './geolocation.js';
+import {
+    showUserMarker,
+    requestUserPosition,
+    startWatchingPosition,
+} from './geolocation.js';
 import { startCompass } from './compass.js';
 //import { getLastCompassReading } from './compass.js';
 
@@ -54,14 +58,11 @@ let isChangingView = false;
 
 let pendingUserPosition = null;
 
-
 /**
  * Contrôle permettant de basculer entre les vues 2D et 3D.
  */
 class ViewModeControl {
-
     onAdd(map) {
-
         viewModeControl = this;
 
         this.map = map;
@@ -87,7 +88,6 @@ class ViewModeControl {
     }
 
     async toggleView() {
-
         // Empêche les transitions successives de se chevaucher.
         if (isChangingView) {
             return;
@@ -109,18 +109,13 @@ class ViewModeControl {
 
         this.button.setAttribute(
             'aria-label',
-            is3D
-                ? 'Revenir en vue 2D'
-                : 'Passer en vue 3D'
+            is3D ? 'Revenir en vue 2D' : 'Passer en vue 3D',
         );
 
-        this.button.title = is3D
-            ? 'Revenir en vue 2D'
-            : 'Passer en vue 3D';
+        this.button.title = is3D ? 'Revenir en vue 2D' : 'Passer en vue 3D';
 
-        
         try {
-            await new Promise(resolve => {
+            await new Promise((resolve) => {
                 // On écoute la fin du mouvement avant de lancer l'animation.
                 this.map.once('moveend', resolve);
 
@@ -128,7 +123,7 @@ class ViewModeControl {
                     pitch: targetPitch,
                     bearing: is3D ? this.map.getBearing() : 0,
                     duration: 700,
-                    essential: true
+                    essential: true,
                 });
             });
         } finally {
@@ -147,20 +142,13 @@ class ViewModeControl {
             }
             // En 3D hors navigation, active la boussole
             // uniquement si le suivi GPS est actif.
-            if (
-                is3D &&
-                isFollowingUser &&
-                !isNavigationActive
-            ) {
+            if (is3D && isFollowingUser && !isNavigationActive) {
                 await activateCompass(this.map);
             }
         }
-
-
     }
 
     onRemove() {
-
         this.container.remove();
         this.map = undefined;
     }
@@ -179,43 +167,38 @@ export async function ensure2DView() {
 }
 
 class RecenterControl {
+    onAdd(map) {
+        this.map = map;
 
+        this.container = document.createElement('div');
+        this.container.className = 'maplibregl-ctrl map-recenter-control';
 
-onAdd(map) {
-    this.map = map;
+        this.button = document.createElement('button');
+        this.button.type = 'button';
+        this.button.className = 'map-recenter-button';
+        this.button.textContent = '◎';
+        this.button.title = 'Recentrer sur ma position';
+        this.button.setAttribute('aria-label', 'Recentrer sur ma position');
 
-    this.container = document.createElement('div');
-    this.container.className = 'maplibregl-ctrl map-recenter-control';
+        this.button.addEventListener('click', async () => {
+            this.button.disabled = true;
 
-    this.button = document.createElement('button');
-    this.button.type = 'button';
-    this.button.className = 'map-recenter-button';
-    this.button.textContent = '◎';
-    this.button.title = 'Recentrer sur ma position';
-    this.button.setAttribute(
-        'aria-label',
-        'Recentrer sur ma position'
-    );
+            try {
+                // Récupère la position avec la fonction déjà utilisée
+                // par le système de navigation.
+                const userPosition = await requestUserPosition();
 
-    this.button.addEventListener('click', async () => {
-    this.button.disabled = true;
+                // Affiche le marqueur de position.
+                showUserMarker(this.map, userPosition);
 
-    try {
-        // Récupère la position avec la fonction déjà utilisée
-        // par le système de navigation.
-        const userPosition = await requestUserPosition();
+                // Si la navigation est active, réactive le suivi.
+                //if (isNavigationActive) {
+                recenterOnUser(this.map, userPosition);
 
-        // Affiche le marqueur de position.
-        showUserMarker(this.map, userPosition);
-
-        // Si la navigation est active, réactive le suivi.
-        //if (isNavigationActive) {
-        recenterOnUser(this.map, userPosition);
-
-        startBackgroundUserTracking(this.map);
-        //} else {
-            // Sinon, recentrage ponctuel sans démarrer la navigation.
-            /*this.map.easeTo({
+                startBackgroundUserTracking(this.map);
+                //} else {
+                // Sinon, recentrage ponctuel sans démarrer la navigation.
+                /*this.map.easeTo({
                 center: [
                     userPosition.longitude,
                     userPosition.latitude
@@ -225,34 +208,34 @@ onAdd(map) {
                 essential: true
             });
         }*/
+            } catch (error) {
+                console.error(
+                    'Impossible de récupérer la position GPS :',
+                    error,
+                );
 
-    } catch (error) {
-        console.error('Impossible de récupérer la position GPS :', error);
+                alert(
+                    'Impossible de te localiser. Vérifie que la géolocalisation est autorisée.',
+                );
+            } finally {
+                this.button.disabled = false;
+            }
+        });
 
-        alert(
-            'Impossible de te localiser. Vérifie que la géolocalisation est autorisée.'
-        );
-    } finally {
-        this.button.disabled = false;
+        this.container.appendChild(this.button);
+
+        return this.container;
     }
-});
 
-    this.container.appendChild(this.button);
-
-    return this.container;
-}
-
-onRemove() {
-    this.container.remove();
-    this.map = undefined;
-}
-
-
+    onRemove() {
+        this.container.remove();
+        this.map = undefined;
+    }
 }
 
 function smoothHeading(currentHeading, targetHeading) {
     // Normalise les angles entre 0 et 360 degrés.
-    const normalize = angle => ((angle % 360) + 360) % 360;
+    const normalize = (angle) => ((angle % 360) + 360) % 360;
 
     const current = normalize(currentHeading);
     const target = normalize(targetHeading);
@@ -261,18 +244,15 @@ function smoothHeading(currentHeading, targetHeading) {
     const difference = ((target - current + 540) % 360) - 180;
 
     // Applique un lissage progressif.
-    return normalize(
-        current + difference * HEADING_SMOOTHING_FACTOR
-    );
+    return normalize(current + difference * HEADING_SMOOTHING_FACTOR);
 }
-
 
 /**
 
 * Actualise directement l'orientation de la caméra
 * à partir des nouvelles mesures de la boussole.
   */
-  export function updateCameraFromCompass(map, reading) {
+export function updateCameraFromCompass(map, reading) {
     if (!map || !reading) {
         return;
     }
@@ -305,23 +285,17 @@ function smoothHeading(currentHeading, targetHeading) {
     }
 
     // Conserve le lissage du cap.
-    const currentBearing =
-        lastStableHeading ?? map.getBearing();
+    const currentBearing = lastStableHeading ?? map.getBearing();
 
-    lastStableHeading = smoothHeading(
-        currentBearing,
-        compassHeading
-    );
+    lastStableHeading = smoothHeading(currentBearing, compassHeading);
 
-    
-    // Anime progressivement l'orientation de la caméra. 
-    map.easeTo({ 
-        bearing: lastStableHeading, 
-        duration: 100, 
-        essential: true 
+    // Anime progressivement l'orientation de la caméra.
+    map.easeTo({
+        bearing: lastStableHeading,
+        duration: 100,
+        essential: true,
     });
 }
-
 
 /**
  * Détecte les interactions manuelles avec la carte.
@@ -331,14 +305,13 @@ function smoothHeading(currentHeading, targetHeading) {
  * pendant les interactions manuelles avec la carte.
  */
 function initManualCameraControl(map) {
-
     function suspendCameraControl() {
         clearTimeout(cameraResumeTimeout);
 
         console.log('Suspension caméra déclenchée', {
-        following: isFollowingUser,
-        time: new Date().toLocaleTimeString()
-    });
+            following: isFollowingUser,
+            time: new Date().toLocaleTimeString(),
+        });
 
         isCameraInteractionActive = true;
         isFollowingUser = false;
@@ -370,10 +343,7 @@ function initManualCameraControl(map) {
     });
 }
 
-
-
 export function createMap() {
-
     const map = new maplibregl.Map({
         container: 'maplibre-map',
         style: 'https://openmaptiles.data.gouv.fr/styles/osm-bright/style.json',
@@ -383,76 +353,49 @@ export function createMap() {
         minZoom: 10.5,
     });
 
-
     // Bouton de changement de vue 2D / 3D.
-    map.addControl(
-        new ViewModeControl(),
-        'top-right'
-    );
+    map.addControl(new ViewModeControl(), 'top-right');
 
     const recenterControl = new RecenterControl();
 
-    map.addControl(
-        recenterControl,
-        'top-right'
-    );
+    map.addControl(recenterControl, 'top-right');
 
     initManualCameraControl(map);
 
     const stations = window.stations ?? [];
 
-
     const geoJSON = stationsToGeoJSON(stations);
 
-
-
-    
     map.on('load', async () => {
+        //map.resize();
 
-    //map.resize();
+        map.addSource('stations', {
+            type: 'geojson',
+            data: geoJSON,
+        });
 
-    map.addSource('stations', {
-        type: 'geojson',
-        data: geoJSON
+        const communes = await loadCommunes();
+
+        addCommuneLayer(map, communes);
+
+        const zones = await loadArrondissements();
+
+        const zonesWithStations = countStationsByZone(
+            zones,
+            window.stations ?? [],
+        );
+
+        addZoneLayer(map, zonesWithStations);
+
+        addStationLayer(map, 'bikes');
+
+        //map.resize();
     });
 
-    const communes = await loadCommunes();
-
-    addCommuneLayer(
-        map,
-        communes
-    );
-
-    const zones = await loadArrondissements();
-
-    const zonesWithStations = countStationsByZone(
-        zones,
-        window.stations ?? []
-    );
-
-    addZoneLayer(
-        map,
-        zonesWithStations
-    );
-
-    addStationLayer(
-        map,
-        'bikes'
-    );
-
-    //map.resize();
-});
-
-    
     return map;
-
 }
 
-
-
-
 export function drawWalkingRoute(map, coordinates) {
-
     const sourceId = 'walking-route';
     const layerId = 'walking-route';
 
@@ -468,9 +411,9 @@ export function drawWalkingRoute(map, coordinates) {
             type: 'Feature',
             geometry: {
                 type: 'LineString',
-                coordinates
-            }
-        }
+                coordinates,
+            },
+        },
     });
 
     map.addLayer({
@@ -482,14 +425,12 @@ export function drawWalkingRoute(map, coordinates) {
         paint: {
             'line-color': '#198754',
             'line-width': 5,
-            'line-opacity': 0.9
-        }
+            'line-opacity': 0.9,
+        },
     });
 }
 
-
 export function updateWalkingRoute(map, coordinates) {
-
     const source = map.getSource('walking-route');
 
     if (!source || !coordinates?.length) {
@@ -500,22 +441,20 @@ export function updateWalkingRoute(map, coordinates) {
         type: 'Feature',
         geometry: {
             type: 'LineString',
-            coordinates
+            coordinates,
         },
-        properties: {}
+        properties: {},
     });
 }
 
-
 export function fitWalkingRoute(map, coordinates) {
-
     if (!coordinates?.length) {
         return;
     }
 
     const bounds = new maplibregl.LngLatBounds();
 
-    coordinates.forEach(coordinate => {
+    coordinates.forEach((coordinate) => {
         bounds.extend(coordinate);
     });
 
@@ -524,16 +463,14 @@ export function fitWalkingRoute(map, coordinates) {
             top: 120,
             bottom: 310,
             left: 40,
-            right: 40
+            right: 40,
         },
         duration: 800,
-        maxZoom: 17
+        maxZoom: 17,
     });
 }
 
-
 export function showDestinationMarker(map, position) {
-
     destinationMarker?.remove();
 
     const element = document.createElement('div');
@@ -545,26 +482,19 @@ export function showDestinationMarker(map, position) {
     `;
 
     destinationMarker = new maplibregl.Marker({
-        element
+        element,
     })
-        .setLngLat([
-            position.longitude,
-            position.latitude
-        ])
-        .setPopup(
-            new maplibregl.Popup({ offset: 25 })
-                .setText('Station Vélib')
-        )
+        .setLngLat([position.longitude, position.latitude])
+        .setPopup(new maplibregl.Popup({ offset: 25 }).setText('Station Vélib'))
         .addTo(map);
 }
-
 
 /**
 
 * Active ou désactive le suivi automatique de la caméra.
 */
 export function setUserFollowing(enabled) {
-  isFollowingUser = enabled;
+    isFollowingUser = enabled;
 }
 
 export function setNavigationActive(enabled) {
@@ -593,19 +523,13 @@ export function recenterOnUser(map, position) {
 
     // Une seule animation pour le recentrage et le zoom.
     map.easeTo({
-        center: [
-            position.longitude,
-            position.latitude
-        ],
+        center: [position.longitude, position.latitude],
         zoom: 17,
         pitch: is3D ? 55 : 0,
         duration: 500,
-        essential: true
+        essential: true,
     });
 }
-
-
-
 
 export function followUserPosition(map, position) {
     if (!map || !position) return;
@@ -630,10 +554,9 @@ export function followUserPosition(map, position) {
         position.speed >= MIN_HEADING_SPEED;
 
     // Distance entre le centre de la carte et la position GPS.
-    const distanceToUser = map.getCenter().distanceTo([
-        position.longitude,
-        position.latitude
-    ]);
+    const distanceToUser = map
+        .getCenter()
+        .distanceTo([position.longitude, position.latitude]);
 
     /*
      * En 3D, lorsque le cap GPS n'est pas fiable
@@ -642,18 +565,14 @@ export function followUserPosition(map, position) {
      * Cela évite de relancer constamment l'animation de la caméra
      * à cause des imprécisions du GPS.
      */
-    if (
-        is3D &&
-        !isGpsHeadingReliable &&
-        distanceToUser < 3
-    ) {
+    if (is3D && !isGpsHeadingReliable && distanceToUser < 3) {
         return;
     }
 
     const cameraOptions = {
         center: [position.longitude, position.latitude],
         duration: 450,
-        essential: true
+        essential: true,
     };
 
     // En 2D, on conserve le comportement actuel.
@@ -662,10 +581,7 @@ export function followUserPosition(map, position) {
     if (is3D && isGpsHeadingReliable && !isNavigationActive) {
         const currentBearing = lastStableHeading ?? map.getBearing();
 
-        lastStableHeading = smoothHeading(
-            currentBearing,
-            position.heading
-        );
+        lastStableHeading = smoothHeading(currentBearing, position.heading);
 
         cameraOptions.bearing = lastStableHeading;
     }
@@ -679,13 +595,13 @@ export function startBackgroundUserTracking(map) {
     }
 
     backgroundPositionWatchId = startWatchingPosition(
-        position => {
+        (position) => {
             showUserMarker(map, position);
             followUserPosition(map, position);
         },
-        error => {
+        (error) => {
             console.error('Erreur du suivi GPS :', error);
-        }
+        },
     );
 }
 
@@ -723,21 +639,17 @@ export function clearNavigationMap(map) {
     destinationMarker = null;
 }
 
-
 export async function activateCompass(
     map,
     onReading,
     onError,
-    canControlCamera = () => true
+    canControlCamera = () => true,
 ) {
-    await startCompass(
-        reading => {
-            if (canControlCamera()) {
-                updateCameraFromCompass(map, reading);
-            }
+    await startCompass((reading) => {
+        if (canControlCamera()) {
+            updateCameraFromCompass(map, reading);
+        }
 
-            onReading?.(reading);
-        },
-        onError
-    );
+        onReading?.(reading);
+    }, onError);
 }

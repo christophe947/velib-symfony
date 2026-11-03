@@ -1,19 +1,13 @@
 import * as maplibregl from '/maplibre-assets/maplibre-gl.mjs';
 import { CupertinoPane } from 'cupertino-pane';
-import { 
-    subscribeToSelectedStation,
-    setDisplayMode
- } from './state.js';
-import { 
+import { subscribeToSelectedStation, setDisplayMode } from './state.js';
+import {
     requestUserPosition,
     showUserMarker,
-    startWatchingPosition
- } from './geolocation.js';
+    startWatchingPosition,
+} from './geolocation.js';
+import { getWalkingRoute, decodePolyline } from './routing.js';
 import {
-    getWalkingRoute,
-    decodePolyline
-} from './routing.js';
-import { 
     drawWalkingRoute,
     fitWalkingRoute,
     showDestinationMarker,
@@ -26,23 +20,18 @@ import {
     ensure2DView,
     startBackgroundUserTracking,
     stopBackgroundUserTracking,
-    activateCompass
- } from './map.js';
+    activateCompass,
+} from './map.js';
 import {
     setNavigationRoute,
     updateNavigationProgress,
     startNavigationSimulation,
     startOffRouteSimulation,
-    stopNavigationProcessing
-} from './navigation.js'; 
-import {
-    setRouteSummaryCallback
-} from './routeSummary.js';
-import {
-    formatDistance,
-    formatDuration
-} from './routeFormatting.js';
-import { startCompass,stopCompass } from './compass.js';
+    stopNavigationProcessing,
+} from './navigation.js';
+import { setRouteSummaryCallback } from './routeSummary.js';
+import { formatDistance, formatDuration } from './routeFormatting.js';
+import { startCompass, stopCompass } from './compass.js';
 
 let pane = null;
 let element = null;
@@ -60,18 +49,9 @@ let lastCompassLogTime = 0;
 let currentRouteCoordinates = [];
 let lastRouteProgressIndex = 0;
 
-const mobileQuery = window.matchMedia(
-    '(max-width: 767px)'
-);
+const mobileQuery = window.matchMedia('(max-width: 767px)');
 
 let currentMode = 'bikes';
-
-
-
-
-
-
-
 
 /**
  * Met à jour les informations de distance et de durée
@@ -82,9 +62,7 @@ export function updateRouteSummary(distance, duration) {
         return;
     }
 
-    const routeSummary = element.querySelector(
-        '.station-panel-route-summary'
-    );
+    const routeSummary = element.querySelector('.station-panel-route-summary');
 
     if (!routeSummary) {
         return;
@@ -98,10 +76,7 @@ export function updateRouteSummary(distance, duration) {
     routeSummary.style.display = 'flex';
 }
 
-
-
 async function updateMiddleHeight(height) {
-
     if (!pane) {
         return;
     }
@@ -109,15 +84,10 @@ async function updateMiddleHeight(height) {
     pane.settings.breaks.middle.height = height;
 
     // Recalcule réellement les breakpoints internes
-    await pane.breakpoints.buildBreakpoints(
-        pane.settings.breaks,
-        0,
-        false
-    );
+    await pane.breakpoints.buildBreakpoints(pane.settings.breaks, 0, false);
 
     // Le nouveau middle devient le breakpoint courant
-    pane.breakpoints.currentBreakpoint =
-        pane.breakpoints.breaks.middle;
+    pane.breakpoints.currentBreakpoint = pane.breakpoints.breaks.middle;
 
     pane.breakpoints.prevBreakpoint = 'middle';
 
@@ -126,31 +96,18 @@ async function updateMiddleHeight(height) {
     await pane.moveToHeight(height);
 }
 
-
 async function updateBottomHeight(height) {
-
     if (!pane) {
         return;
     }
 
     pane.settings.breaks.bottom.height = height;
 
-    await pane.breakpoints.buildBreakpoints(
-        pane.settings.breaks,
-        0,
-        false
-    );
-    
+    await pane.breakpoints.buildBreakpoints(pane.settings.breaks, 0, false);
 }
 
-
-
-
 export function initStationPanel(map) {
-
-    element = document.querySelector(
-        '#station-content'
-    );
+    element = document.querySelector('#station-content');
 
     if (!element) {
         return;
@@ -161,82 +118,67 @@ export function initStationPanel(map) {
     renderEmptyPanel();
 
     if (mobileQuery.matches) {
+        pane = new CupertinoPane(element, {
+            parentElement: 'body',
+            initialBreak: 'bottom',
 
-        pane = new CupertinoPane(
-            element,
-            {
-                parentElement: 'body',
-                initialBreak: 'bottom',
-                
-                showCloseButton: false,
-                dragByCursor: true,
-                clickBottomOpen: false,
-                //animationDuration: 500,
+            showCloseButton: false,
+            dragByCursor: true,
+            clickBottomOpen: false,
+            //animationDuration: 500,
 
-                breaks: {
-                    top: {
-                        enabled: true,
-                        height: window.innerHeight - 80,
-                        bounce: true
-                    },
+            breaks: {
+                top: {
+                    enabled: true,
+                    height: window.innerHeight - 80,
+                    bounce: true,
+                },
 
-                    middle: {
-                        enabled: true,
-                        height: 270,
-                        bounce: true
-                    },
+                middle: {
+                    enabled: true,
+                    height: 270,
+                    bounce: true,
+                },
 
-                    bottom: {
-                        enabled: true,
-                        height: 70
-                    }
-                }
-            }
-        );
+                bottom: {
+                    enabled: true,
+                    height: 70,
+                },
+            },
+        });
 
         pane.present({
-            animate: false
+            animate: false,
         });
         pane.on('onDragEnd', () => {
-    panelManuallyAtBottom = pane.currentBreak() === 'bottom';
-    
-    console.log('Panneau manuellement en bas :', panelManuallyAtBottom);
-});
+            panelManuallyAtBottom = pane.currentBreak() === 'bottom';
 
-
+            console.log('Panneau manuellement en bas :', panelManuallyAtBottom);
+        });
     } else {
-
         // Desktop : panneau classique
         element.classList.add('is-open');
     }
-    subscribeToSelectedStation(
-        station => updateStationPanel(station, map)
-    );
-    
-   
+    subscribeToSelectedStation((station) => updateStationPanel(station, map));
 
-    
+    const lowerSearchPanel = () => {
+        if (!pane || !mobileQuery.matches) return;
+        if (panelManuallyAtBottom === true) return;
 
-    
+        //panelManuallyAtBottom = false;
+        pane.moveToBreak('bottom');
+    };
 
-const lowerSearchPanel = () => {
-    if (!pane || !mobileQuery.matches) return;
-    if (panelManuallyAtBottom === true) return;
-
-    //panelManuallyAtBottom = false;
-    pane.moveToBreak('bottom');
-};
-
-const restoreSearchPanel = () => {
-    if (!pane || !mobileQuery.matches) return;
-    if (panelManuallyAtBottom === true) {
-        return;
-    }
-    if (panelManuallyAtBottom === false) {
-        pane.moveToBreak('middle');
-        console.log('doi revenir');}
-};
-    
+    const restoreSearchPanel = () => {
+        if (!pane || !mobileQuery.matches) return;
+        if (panelManuallyAtBottom === true) {
+            return;
+        }
+        if (panelManuallyAtBottom === false) {
+            pane.moveToBreak('middle');
+            console.log('doi revenir');
+        }
+    };
 
     document.addEventListener('search:focus', lowerSearchPanel);
     document.addEventListener('search:results', lowerSearchPanel);
@@ -245,9 +187,7 @@ const restoreSearchPanel = () => {
     //console.log(pane.currentBreak());
 }
 
-
 function renderModeSelector() {
-
     return `
         <div class="station-panel-mode-selector">
 
@@ -281,10 +221,7 @@ function renderModeSelector() {
     `;
 }
 
-
-
 function renderEmptyPanel() {
-
     element.innerHTML = `
         <div class="station-panel-empty">
 
@@ -296,23 +233,18 @@ function renderEmptyPanel() {
 
     if (pane) {
         requestAnimationFrame(() => {
-
-            const content = element.querySelector(
-                '.station-panel-empty'
-            );
+            const content = element.querySelector('.station-panel-empty');
 
             if (!content) {
                 return;
             }
 
-            const bottomHeight =
-                content.getBoundingClientRect().height;
+            const bottomHeight = content.getBoundingClientRect().height;
 
             updateBottomHeight(bottomHeight);
         });
     }
 }
-
 
 /**
  * Demande confirmation avant d'arrêter la navigation.
@@ -363,11 +295,11 @@ function showStopNavigationConfirmation(map, station) {
     document.body.appendChild(overlay);
 
     const cancelButton = overlay.querySelector(
-        '.navigation-confirmation-cancel'
+        '.navigation-confirmation-cancel',
     );
 
     const confirmButton = overlay.querySelector(
-        '.navigation-confirmation-stop'
+        '.navigation-confirmation-stop',
     );
 
     // Ferme la fenêtre sans interrompre la navigation.
@@ -382,7 +314,7 @@ function showStopNavigationConfirmation(map, station) {
     });
 
     // Ferme aussi la fenêtre en cliquant sur le fond.
-    overlay.addEventListener('click', event => {
+    overlay.addEventListener('click', (event) => {
         if (event.target === overlay) {
             overlay.remove();
         }
@@ -390,8 +322,6 @@ function showStopNavigationConfirmation(map, station) {
 
     cancelButton.focus();
 }
-
-
 
 /**
  * Arrête complètement la navigation en cours.
@@ -428,7 +358,7 @@ function stopNavigation(map, station) {
 
     // Réinitialise l'affichage de la boussole.
     const compassDisplay = element.querySelector(
-        '.station-panel-compass-status'
+        '.station-panel-compass-status',
     );
 
     if (compassDisplay) {
@@ -437,7 +367,7 @@ function stopNavigation(map, station) {
 
     // Restaure le bouton permettant de recalculer l'itinéraire.
     const controls = element.querySelector(
-        '.station-panel-navigation-controls'
+        '.station-panel-navigation-controls',
     );
 
     if (controls) {
@@ -452,18 +382,16 @@ function stopNavigation(map, station) {
     }
 
     // Réinitialise le résumé et les boutons de test.
-    const routeSummary = element.querySelector(
-        '.station-panel-route-summary'
-    );
+    const routeSummary = element.querySelector('.station-panel-route-summary');
 
     if (routeSummary) {
         routeSummary.innerHTML = '';
         routeSummary.style.display = 'none';
     }
 
-    element.querySelectorAll(
-        '.station-panel-simulate'
-    ).forEach(button => button.remove());
+    element
+        .querySelectorAll('.station-panel-simulate')
+        .forEach((button) => button.remove());
 
     // Réafficher le panneau de la station avec ses gestionnaires de clic.
     if (station) {
@@ -471,12 +399,9 @@ function stopNavigation(map, station) {
     }
 
     console.log('🛑 Navigation arrêtée.');
-
 }
 
-
 async function updateStationPanel(station, map) {
-
     if (!station || !element) {
         return;
     }
@@ -537,203 +462,169 @@ async function updateStationPanel(station, map) {
     `;
 
     if (mobileQuery.matches && pane) {
+        const title = element.querySelector('.station-panel-title');
 
-        const title = element.querySelector(
-            '.station-panel-title'
-        );
-        
         if (title) {
-
-            const bottomHeight =
-                title.getBoundingClientRect().height + 30;
+            const bottomHeight = title.getBoundingClientRect().height + 30;
 
             await updateBottomHeight(bottomHeight);
         }
     }
 
+    const joinButton = element.querySelector('.station-panel-join');
 
-    const joinButton = element.querySelector(
-        '.station-panel-join'
-    );
+    const routeSummary = element.querySelector('.station-panel-route-summary');
 
-    const routeSummary = element.querySelector(
-        '.station-panel-route-summary'
-    );
-
-    const routeMessage = element.querySelector(
-        '.station-panel-message'
-    );
-
+    const routeMessage = element.querySelector('.station-panel-message');
 
     joinButton?.addEventListener('click', async () => {
+        if (navigationStarted) {
+            return;
+        }
 
+        // Identifie cette opération asynchrone.
+        const sessionId = ++navigationSessionId;
 
-    if (navigationStarted) {
-        return;
-    }
+        if (joinButton.textContent.trim() === 'Démarrer') {
+            stopBackgroundUserTracking();
+            navigationStarted = true;
+            setNavigationActive(true);
+            setUserFollowing(true);
 
-    // Identifie cette opération asynchrone.
-    const sessionId = ++navigationSessionId;
+            const isSessionActive = () =>
+                navigationStarted && sessionId === navigationSessionId;
 
-    if (joinButton.textContent.trim() === 'Démarrer') {
-        stopBackgroundUserTracking();
-        navigationStarted = true;
-        setNavigationActive(true);
-        setUserFollowing(true);
+            joinButton.disabled = true;
+            joinButton.textContent = 'Démarrage…';
 
-        const isSessionActive = () =>
-        navigationStarted &&
-        sessionId === navigationSessionId;
+            let isInitialCameraSetup = true;
 
-        joinButton.disabled = true;
-        joinButton.textContent = 'Démarrage…';
+            await activateCompass(
+                map,
 
-        let isInitialCameraSetup = true;
-
-        await activateCompass(
-            map,
-    
-            reading => {
-
-                /*if (!isInitialCameraSetup) {
+                (reading) => {
+                    /*if (!isInitialCameraSetup) {
                     updateCameraFromCompass(map, reading);
                 }*/
 
-                const compassDisplay = element.querySelector(
-                '.station-panel-compass-status'
-                );
+                    const compassDisplay = element.querySelector(
+                        '.station-panel-compass-status',
+                    );
 
+                    if (compassDisplay) {
+                        compassDisplay.textContent =
+                            reading.compassHeading !== null
+                                ? `🧭 Boussole active — Cap : ${Math.round(reading.compassHeading)}°`
+                                : '🧭 Boussole active — Cap indisponible';
+                    }
+                },
+                (error) => {
+                    const compassDisplay = element.querySelector(
+                        '.station-panel-compass-status',
+                    );
 
-                if (compassDisplay) {
-                    compassDisplay.textContent =
-                        reading.compassHeading !== null
-                            ? `🧭 Boussole active — Cap : ${Math.round(reading.compassHeading)}°`
-                            : '🧭 Boussole active — Cap indisponible';
-                }
-            },
-            error => {
-                const compassDisplay = element.querySelector(
-                    '.station-panel-compass-status'
-                );
+                    if (compassDisplay) {
+                        compassDisplay.textContent = `⚠️ Boussole indisponible : ${error.message}`;
+                    }
+                },
+                () => !isInitialCameraSetup,
+            );
 
-                if (compassDisplay) {
-                    compassDisplay.textContent =
-                        `⚠️ Boussole indisponible : ${error.message}`;
-                }
-            },
-            () => !isInitialCameraSetup
-
-
-        );
-
-        if (!isSessionActive()) {
-            return;
-        }
-
-
-        
-        const waitForCameraMove = () => new Promise(resolve => {
-            
-            if (!map.isMoving()) {
-                resolve();
-                return;
-            }
-
-            map.once('moveend', resolve);
-        });
-
-        if (!isSessionActive()) {
-            return;
-        }
-
-        const viewButton = map
-            .getContainer()
-            .querySelector('.map-view-button');
-
-        // Position GPS connue au moment du démarrage.
-        const cameraCenter = lastKnownUserPosition
-            ? [
-                lastKnownUserPosition.longitude,
-                lastKnownUserPosition.latitude
-            ]
-            : [
-                map.getCenter().lng,
-                map.getCenter().lat
-            ];
-
-        if (lastKnownUserPosition) {
-            showUserMarker(map, lastKnownUserPosition);
-        }
-
-        // 1. Centrer et zoomer d'abord en 2D.
-        map.easeTo({
-            center: cameraCenter,
-            zoom: 17,
-            pitch: 0,
-            duration: 500,
-            essential: true
-        });
-
-        await waitForCameraMove();
-
-        if (!isSessionActive()) {
-            return;
-        }
-
-        // 2. Passer ensuite en 3D.
-        if (viewButton?.textContent.trim() === '3D') {
-            viewButton.click();
-
-            await waitForCameraMove();
             if (!isSessionActive()) {
                 return;
             }
-}
 
-// 3. La caméra est prête : la boussole peut reprendre la main.
-isInitialCameraSetup = false;
+            const waitForCameraMove = () =>
+                new Promise((resolve) => {
+                    if (!map.isMoving()) {
+                        resolve();
+                        return;
+                    }
 
-        await waitForCameraMove();
+                    map.once('moveend', resolve);
+                });
 
-        if (!isSessionActive()) {
-            return;
-        }
-
-        positionWatchId = startWatchingPosition(
-            position => {
-
-                lastKnownUserPosition = position;
-                showUserMarker(map, position);
-                followUserPosition(map, position);
-                //updateRouteProgress(position, map);
-                 updateNavigationProgress(position, map);
-                 
-                console.log(
-                    'Nouvelle position GPS :',
-                    position
-                );
-            },
-            error => {
-
-                console.error(
-                    'Erreur GPS :',
-                    error
-                );
+            if (!isSessionActive()) {
+                return;
             }
-        );
-         
-        //if (!isSessionActive()) {
-        //    return;
-        //}
 
-        //joinButton.disabled = false;
-        //joinButton.textContent = 'Navigation en cours';
-        const controls = element.querySelector(
-            '.station-panel-navigation-controls'
-        );
+            const viewButton = map
+                .getContainer()
+                .querySelector('.map-view-button');
 
-        if (controls) {
-            controls.innerHTML = `
+            // Position GPS connue au moment du démarrage.
+            const cameraCenter = lastKnownUserPosition
+                ? [
+                      lastKnownUserPosition.longitude,
+                      lastKnownUserPosition.latitude,
+                  ]
+                : [map.getCenter().lng, map.getCenter().lat];
+
+            if (lastKnownUserPosition) {
+                showUserMarker(map, lastKnownUserPosition);
+            }
+
+            // 1. Centrer et zoomer d'abord en 2D.
+            map.easeTo({
+                center: cameraCenter,
+                zoom: 17,
+                pitch: 0,
+                duration: 500,
+                essential: true,
+            });
+
+            await waitForCameraMove();
+
+            if (!isSessionActive()) {
+                return;
+            }
+
+            // 2. Passer ensuite en 3D.
+            if (viewButton?.textContent.trim() === '3D') {
+                viewButton.click();
+
+                await waitForCameraMove();
+                if (!isSessionActive()) {
+                    return;
+                }
+            }
+
+            // 3. La caméra est prête : la boussole peut reprendre la main.
+            isInitialCameraSetup = false;
+
+            await waitForCameraMove();
+
+            if (!isSessionActive()) {
+                return;
+            }
+
+            positionWatchId = startWatchingPosition(
+                (position) => {
+                    lastKnownUserPosition = position;
+                    showUserMarker(map, position);
+                    followUserPosition(map, position);
+                    //updateRouteProgress(position, map);
+                    updateNavigationProgress(position, map);
+
+                    console.log('Nouvelle position GPS :', position);
+                },
+                (error) => {
+                    console.error('Erreur GPS :', error);
+                },
+            );
+
+            //if (!isSessionActive()) {
+            //    return;
+            //}
+
+            //joinButton.disabled = false;
+            //joinButton.textContent = 'Navigation en cours';
+            const controls = element.querySelector(
+                '.station-panel-navigation-controls',
+            );
+
+            if (controls) {
+                controls.innerHTML = `
                 <button
                     type="button"
                     class="station-panel-join"
@@ -752,103 +643,82 @@ isInitialCameraSetup = false;
                 </button>
             `;
 
-            const stopButton = controls.querySelector(
-                '.station-panel-stop'
-            );
+                const stopButton = controls.querySelector(
+                    '.station-panel-stop',
+                );
 
-            stopButton.addEventListener('click', () => {
-                showStopNavigationConfirmation(map, station);
-            });
-        }
-                
-                // 📱 Réduit le panneau après 2 secondes.
-                if (pane && mobileQuery.matches) {
-                    setTimeout(() => {
-                        pane.moveToBreak('bottom');
-                    }, 2000);
-                }
-
-                return;
+                stopButton.addEventListener('click', () => {
+                    showStopNavigationConfirmation(map, station);
+                });
             }
 
-            joinButton.disabled = true;
+            // 📱 Réduit le panneau après 2 secondes.
+            if (pane && mobileQuery.matches) {
+                setTimeout(() => {
+                    pane.moveToBreak('bottom');
+                }, 2000);
+            }
 
-            joinButton.innerHTML = `
+            return;
+        }
+
+        joinButton.disabled = true;
+
+        joinButton.innerHTML = `
                 <span
                     class="spinner-border spinner-border-sm me-2"
                     aria-hidden="true"
                 ></span>
                 Calcul de l'itinéraire…
             `;
-            
-            await ensure2DView();
-            setUserFollowing(false);
-            
+
+        await ensure2DView();
+        setUserFollowing(false);
+
         if (routeMessage) {
             routeMessage.hidden = true;
             routeMessage.textContent = '';
         }
 
         try {
-
             const userPosition = await requestUserPosition();
-            
+
             lastKnownUserPosition = userPosition;
 
             showUserMarker(map, userPosition);
 
-            const route = await getWalkingRoute(
-                userPosition,
-                {
-                    latitude: station.latitude,
-                    longitude: station.longitude
-                }
-            );
+            const route = await getWalkingRoute(userPosition, {
+                latitude: station.latitude,
+                longitude: station.longitude,
+            });
 
-            const distance = formatDistance(
-                route.summary.length
-            );
+            const distance = formatDistance(route.summary.length);
 
-            const duration = formatDuration(
-                route.summary.time
-            );
+            const duration = formatDuration(route.summary.time);
 
-            const coordinates = decodePolyline(
-                route.legs[0].shape
-            );
+            const coordinates = decodePolyline(route.legs[0].shape);
 
             //setNavigationRoute(coordinates);
-            setNavigationRoute(
-                coordinates,
-                {
-                    latitude: station.latitude,
-                    longitude: station.longitude
-                }
-            );
-            
+            setNavigationRoute(coordinates, {
+                latitude: station.latitude,
+                longitude: station.longitude,
+            });
 
             //currentRouteCoordinates = coordinates;
             //lastRouteProgressIndex = 0;
 
-            drawWalkingRoute(
-                map,
-                coordinates
-            );
+            drawWalkingRoute(map, coordinates);
 
-            fitWalkingRoute(
-                map,
-                coordinates
-            );
+            fitWalkingRoute(map, coordinates);
 
             showDestinationMarker(map, {
                 latitude: station.latitude,
-                longitude: station.longitude
+                longitude: station.longitude,
             });
 
             navigationStarted = false;
 
             joinButton.textContent = 'Démarrer';
-            
 
             if (routeSummary) {
                 routeSummary.innerHTML = `
@@ -858,7 +728,6 @@ isInitialCameraSetup = false;
 
                 routeSummary.style.display = 'flex';
 
-
                 const simulationButton = document.createElement('button');
 
                 simulationButton.type = 'button';
@@ -866,7 +735,6 @@ isInitialCameraSetup = false;
                 simulationButton.className = 'station-panel-simulate';
 
                 simulationButton.addEventListener('click', () => {
-
                     simulationButton.disabled = true;
                     simulationButton.textContent = 'Simulation en cours…';
 
@@ -874,12 +742,9 @@ isInitialCameraSetup = false;
                         simulationButton.disabled = false;
                         simulationButton.textContent = '🧪 Simuler le trajet';
                     });
-
                 });
 
                 routeSummary.after(simulationButton);
-
-
 
                 const offRouteButton = document.createElement('button');
 
@@ -893,18 +758,14 @@ isInitialCameraSetup = false;
 
                 simulationButton.after(offRouteButton);
 
-
-
                 if (pane && mobileQuery.matches) {
-
                     const content = element.querySelector(
-                        '.station-panel-content'
+                        '.station-panel-content',
                     );
 
                     pane.present({
-                        animate: true
+                        animate: true,
                     });
-
 
                     if (content) {
                         const middleHeight =
@@ -914,29 +775,28 @@ isInitialCameraSetup = false;
                     }
                 }
             }
-
         } catch (error) {
+            console.error('Impossible de calculer l’itinéraire :', error);
 
-            console.error(
-                'Impossible de calculer l’itinéraire :',
-                error
-            );
-
-            if (routeMessage) { 
-                routeMessage.hidden = false; 
-                if ( error instanceof Error && error.message === 'Geolocation unavailable' ) { 
-                    routeMessage.textContent = '📍 La géolocalisation n’est pas disponible sur cet appareil.';
-                } else { 
-                    routeMessage.textContent = '📍 Autorise la localisation dans ton navigateur pour calculer l’itinéraire.';
-                } 
+            if (routeMessage) {
+                routeMessage.hidden = false;
+                if (
+                    error instanceof Error &&
+                    error.message === 'Geolocation unavailable'
+                ) {
+                    routeMessage.textContent =
+                        '📍 La géolocalisation n’est pas disponible sur cet appareil.';
+                } else {
+                    routeMessage.textContent =
+                        '📍 Autorise la localisation dans ton navigateur pour calculer l’itinéraire.';
+                }
                 if (mobileQuery.matches && pane) {
-
                     const content = element.querySelector(
-                        '.station-panel-content'
+                        '.station-panel-content',
                     );
 
                     pane.present({
-                        animate: true
+                        animate: true,
                     });
 
                     if (content) {
@@ -949,38 +809,30 @@ isInitialCameraSetup = false;
                     return;
                 }
             }
-            
         } finally {
             joinButton.disabled = false;
 
-            joinButton.textContent = 
-                navigationStarted 
-                    ? 'Navigation en cours' 
-                    : routeMessage && !routeMessage.hidden
-                        ? 'Rejoindre'
-                        : joinButton.textContent === 'Démarrer'
-                            ? 'Démarrer'
-                            : 'Rejoindre';
-            }
+            joinButton.textContent = navigationStarted
+                ? 'Navigation en cours'
+                : routeMessage && !routeMessage.hidden
+                  ? 'Rejoindre'
+                  : joinButton.textContent === 'Démarrer'
+                    ? 'Démarrer'
+                    : 'Rejoindre';
+        }
     });
-
 
     initModeSelector();
 
-
     if (mobileQuery.matches && pane) {
-
-        const content = element.querySelector(
-            '.station-panel-content'
-        );
+        const content = element.querySelector('.station-panel-content');
 
         pane.present({
-            animate: true
+            animate: true,
         });
 
         if (content) {
-            const middleHeight =
-                content.getBoundingClientRect().height;
+            const middleHeight = content.getBoundingClientRect().height;
 
             updateMiddleHeight(middleHeight);
         }
@@ -992,27 +844,18 @@ isInitialCameraSetup = false;
     element.classList.add('is-open');
 }
 
-
 function initModeSelector() {
-
-    const selector = element.querySelector(
-        '.station-panel-mode-selector'
-    );
+    const selector = element.querySelector('.station-panel-mode-selector');
 
     if (!selector) {
         return;
     }
 
     const buttons = selector.querySelectorAll('button');
-    const indicator = selector.querySelector(
-        '.station-panel-mode-indicator'
-    );
+    const indicator = selector.querySelector('.station-panel-mode-indicator');
 
     function updateIndicator() {
-
-        const activeButton = selector.querySelector(
-            'button.active'
-        );
+        const activeButton = selector.querySelector('button.active');
 
         if (!activeButton || !indicator) {
             return;
@@ -1025,10 +868,8 @@ function initModeSelector() {
         `;
     }
 
-    buttons.forEach(button => {
-
-        button.addEventListener('click', event => {
-
+    buttons.forEach((button) => {
+        button.addEventListener('click', (event) => {
             event.stopPropagation();
 
             const mode = button.dataset.mode;
@@ -1041,18 +882,16 @@ function initModeSelector() {
 
             setDisplayMode(mode);
 
-            buttons.forEach(item => {
+            buttons.forEach((item) => {
                 item.classList.toggle(
                     'active',
-                    item.dataset.mode === currentMode
+                    item.dataset.mode === currentMode,
                 );
             });
 
             updateIndicator();
         });
-
     });
 
     updateIndicator();
 }
-

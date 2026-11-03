@@ -3,21 +3,15 @@ import { getAvailabilityLegend } from './availability.js';
 
 let legend = null;
 
-
-
-
 function getLegendTitle(displayMode) {
-
     return displayMode === 'bikes'
         ? '🚲 Disponibilité vélos'
         : displayMode === 'electric'
-            ? '⚡ Disponibilité électrique'
-            : '🅿️ Places disponibles';
+          ? '⚡ Disponibilité électrique'
+          : '🅿️ Places disponibles';
 }
 
-
 export function updateLegend(map, displayMode) {
-
     if (!map) {
         return;
     }
@@ -27,21 +21,14 @@ export function updateLegend(map, displayMode) {
     }
 
     legend = L.control({
-        position: 'bottomright'
+        position: 'bottomright',
     });
 
-
     legend.onAdd = function () {
-
-        const div = L.DomUtil.create(
-            'div',
-            'map-legend'
-        );
+        const div = L.DomUtil.create('div', 'map-legend');
 
         const items = getAvailabilityLegend();
 
-
-        
         div.innerHTML = `
 
             <div class="legend-title">
@@ -50,7 +37,9 @@ export function updateLegend(map, displayMode) {
             
             <hr>
 
-            ${items.map(item => `
+            ${items
+                .map(
+                    (item) => `
 
                 <div class="legend-item">
 
@@ -63,7 +52,9 @@ export function updateLegend(map, displayMode) {
 
                 </div>
 
-            `).join('')}
+            `,
+                )
+                .join('')}
         `;
 
         return div;

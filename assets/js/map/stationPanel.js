@@ -1,11 +1,7 @@
 import { setStationPanelClosed } from './state.js';
-import {
-    updateStationPanelDimensions
-} from '../responsive.js';
-
+import { updateStationPanelDimensions } from '../responsive.js';
 
 export function updateStationPanel(station) {
-
     const panel = document.getElementById('station-panel');
 
     if (!panel) {
@@ -13,23 +9,20 @@ export function updateStationPanel(station) {
     }
 
     // Initialisation unique du comportement responsive du panneau.
-          
-    if (!panel.dataset.initialized) {
 
-        panel.addEventListener('pointerdown', event => {
+    if (!panel.dataset.initialized) {
+        panel.addEventListener('pointerdown', (event) => {
             event.stopPropagation();
         });
 
-        panel.addEventListener('pointermove', event => {
+        panel.addEventListener('pointermove', (event) => {
             event.stopPropagation();
         });
 
         const closeButton = panel.querySelector('.btn-close');
 
         if (closeButton) {
-
             closeButton.addEventListener('click', () => {
-
                 panel.classList.remove('is-open');
                 document.body.classList.remove('station-panel-open');
 
@@ -37,193 +30,147 @@ export function updateStationPanel(station) {
             });
         }
 
-
         const handle = panel.querySelector('.station-panel-handle');
 
         if (handle) {
+            let startY = 0;
+            let startOffset = 0;
+            let hasDragged = false;
+            let wasOpen = false;
+            let isDragging = false;
 
-    let startY = 0;
-    let startOffset = 0;
-    let hasDragged = false;
-    let wasOpen = false;
-    let isDragging = false;
+            handle.addEventListener('pointerdown', (event) => {
+                isDragging = true;
 
-    handle.addEventListener('pointerdown', (event) => {
+                wasOpen = panel.classList.contains('is-open');
 
-        isDragging = true;
+                hasDragged = false;
 
-        wasOpen = panel.classList.contains('is-open');
+                handle.setPointerCapture(event.pointerId);
 
-        hasDragged = false;
+                startY = event.clientY;
 
-        handle.setPointerCapture(event.pointerId);
+                startOffset =
+                    parseFloat(
+                        getComputedStyle(panel).getPropertyValue(
+                            '--drag-offset',
+                        ),
+                    ) || 0;
 
-        startY = event.clientY;
+                panel.classList.add('is-dragging');
+            });
 
-        startOffset =
-            parseFloat(
-                getComputedStyle(panel)
-                    .getPropertyValue('--drag-offset')
-            ) || 0;
+            handle.addEventListener('pointermove', (event) => {
+                if (!isDragging) {
+                    return;
+                }
 
-        panel.classList.add('is-dragging');
-    });
+                const deltaY = event.clientY - startY;
 
+                if (Math.abs(deltaY) > 5) {
+                    hasDragged = true;
+                }
 
-    handle.addEventListener('pointermove', (event) => {
+                const panelHeight = panel.getBoundingClientRect().height;
 
-        if (!isDragging) {
-            return;
-        }
+                // Limite haute
+                const maxUp = -(panelHeight - 24 + 500);
 
-        const deltaY = event.clientY - startY;
+                // Si le panneau était ouvert,
+                // on autorise la descente.
+                const maxDown = wasOpen ? panelHeight - 24 : 0;
 
-        if (Math.abs(deltaY) > 5) {
-            hasDragged = true;
-        }
+                const newOffset = Math.max(
+                    maxUp,
+                    Math.min(maxDown, startOffset + deltaY),
+                );
 
-        const panelHeight =
-            panel.getBoundingClientRect().height;
+                panel.style.setProperty('--drag-offset', `${newOffset}px`);
+            });
 
-        // Limite haute
-        const maxUp =
-            -(panelHeight - 24 + 500);
+            handle.addEventListener('pointerup', () => {
+                if (!isDragging) {
+                    return;
+                }
 
-        // Si le panneau était ouvert,
-        // on autorise la descente.
-        const maxDown =
-            wasOpen
-                ? panelHeight - 24
-                : 0;
+                isDragging = false;
 
-        const newOffset =
-            Math.max(
-                maxUp,
-                Math.min(
-                    maxDown,
-                    startOffset + deltaY
-                )
-            );
+                if (!hasDragged) {
+                    panel.classList.remove('is-dragging');
+                    return;
+                }
 
-        panel.style.setProperty(
-            '--drag-offset',
-            `${newOffset}px`
-        );
-    });
+                const offset =
+                    parseFloat(
+                        getComputedStyle(panel).getPropertyValue(
+                            '--drag-offset',
+                        ),
+                    ) || 0;
 
-    handle.addEventListener('pointerup', () => {
+                const panelHeight = panel.getBoundingClientRect().height;
 
-        if (!isDragging) {
-            return;
-        }
+                const closeThreshold = (panelHeight - 24) * 0.05;
 
-    isDragging = false;
+                if (Math.abs(offset) < closeThreshold) {
+                    panel.style.setProperty('--drag-offset', '0px');
 
-    if (!hasDragged) {
-        panel.classList.remove('is-dragging');
-        return;
-    }
+                    return;
+                }
 
-    const offset =
-        parseFloat(
-            getComputedStyle(panel)
-                .getPropertyValue('--drag-offset')
-        ) || 0;
+                /*
+                 * Si on a suffisamment tiré vers le bas,
+                 * on ferme le panneau.
+                 */
 
-    const panelHeight =
-        panel.getBoundingClientRect().height;
+                if (offset > closeThreshold) {
+                    panel.classList.remove('is-open');
 
-    const closeThreshold =
-        (panelHeight - 24) * 0.05;
+                    document.body.classList.remove('station-panel-open');
 
-    if (Math.abs(offset) < closeThreshold) {
+                    setStationPanelClosed(true);
+                } else {
+                    /*
+                     * Sinon, le panneau reste ouvert.
+                     */
 
-        panel.style.setProperty(
-            '--drag-offset',
-            '0px'
-        );
+                    panel.classList.add('is-open');
 
-        return;
-    }
+                    requestAnimationFrame(() => {
+                        updateStationPanelDimensions();
+                    });
 
+                    document.body.classList.add('station-panel-open');
 
-    /*
-     * Si on a suffisamment tiré vers le bas,
-     * on ferme le panneau.
-     */
+                    setStationPanelClosed(false);
+                }
 
-    if (offset > closeThreshold) {
+                /*
+                 * Retour à la position normale.
+                 * La transition CSS s'occupe de l'animation.
+                 */
 
-        panel.classList.remove('is-open');
+                panel.classList.remove('is-dragging');
 
-        document.body.classList.remove(
-            'station-panel-open'
-        );
+                panel.style.setProperty('--drag-offset', '0px');
 
-        setStationPanelClosed(true);
+                panel.addEventListener(
+                    'transitionend',
+                    () => {
+                        panel.style.removeProperty('--drag-offset');
+                    },
+                    { once: true },
+                );
+            });
 
-    } else {
+            handle.addEventListener('pointercancel', () => {
+                isDragging = false;
 
-        /*
-         * Sinon, le panneau reste ouvert.
-         */
+                panel.classList.remove('is-dragging');
 
-        panel.classList.add('is-open');
+                panel.style.setProperty('--drag-offset', '0px');
+            });
 
-        requestAnimationFrame(() => {
-    updateStationPanelDimensions();
-});
-
-        document.body.classList.add(
-            'station-panel-open'
-        );
-
-        setStationPanelClosed(false);
-    }
-
-
-    /*
-     * Retour à la position normale.
-     * La transition CSS s'occupe de l'animation.
-     */
-
-    panel.classList.remove('is-dragging');
-
-    
-
-    panel.style.setProperty(
-        '--drag-offset',
-        '0px'
-    );
-
-
-    panel.addEventListener(
-        'transitionend',
-        () => {
-
-            panel.style.removeProperty(
-                '--drag-offset'
-            );
-
-        },
-        { once: true }
-    );
-
-});
-
-handle.addEventListener('pointercancel', () => {
-
-    isDragging = false;
-
-    panel.classList.remove('is-dragging');
-
-    panel.style.setProperty(
-        '--drag-offset',
-        '0px'
-    );
-});
-
-/*
+            /*
     handle.addEventListener('pointerup', () => {
 
         if (!hasDragged) {
@@ -294,30 +241,24 @@ handle.addEventListener('pointercancel', () => {
             { once: true }
         );
     });*/
-}
+        }
 
         panel.dataset.initialized = 'true';
     }
 
-
     // Éléments du panneau.
 
-    const title =
-        document.getElementById('station-panel-title');
+    const title = document.getElementById('station-panel-title');
 
-    const body =
-        panel.querySelector('.station-panel-body');
-
+    const body = panel.querySelector('.station-panel-body');
 
     if (!title || !body) {
         return;
     }
 
-
     // Mise à jour des informations.
 
     title.textContent = station.name;
-
 
     body.innerHTML = `
         <div class="station-info">
@@ -345,4 +286,3 @@ handle.addEventListener('pointercancel', () => {
         </div>
     `;
 }
-

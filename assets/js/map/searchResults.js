@@ -1,11 +1,6 @@
 import { getAvailabilityColor } from './availability.js';
 import { navigation } from './navigation.js';
-import {
-    highlightMarker,
-    resetHighlightedMarker
-} from './markers.js';
-
-
+import { highlightMarker, resetHighlightedMarker } from './markers.js';
 
 export function showStationList(
     list,
@@ -16,20 +11,19 @@ export function showStationList(
     updateStationPanel,
     renderMarkers,
     setOpenedStation,
-    actions
+    actions,
 ) {
+    const container = document.getElementById('station-results');
 
-        const container =
-            document.getElementById('station-results');
-    
-        if (!container) {
-            return;
-        }
-    
-        container.innerHTML = list.slice(0,20).map(station => {
+    if (!container) {
+        return;
+    }
 
+    container.innerHTML = list
+        .slice(0, 20)
+        .map((station) => {
             const color = getAvailabilityColor(station, displayMode);
-            
+
             return `
                 <div 
                     class="mb-3 station-item"
@@ -53,75 +47,63 @@ export function showStationList(
                     🅿️ ${station.docks}
         
                 </div>
-            `; 
+            `;
         })
         .join('');
-    
-            container.querySelectorAll('.station-item').forEach(item => {
-    
-                const station = stations.find(
-                    s => s.id == item.dataset.id
-                );
-                
-                if (!station) return;
 
-                item.addEventListener('mouseenter', () => {
-                    
-                    highlightMarker(station.id);
+    container.querySelectorAll('.station-item').forEach((item) => {
+        const station = stations.find((s) => s.id == item.dataset.id);
 
-                    const latLng = [
-                        station.latitude,
-                        station.longitude
-                    ];
+        if (!station) return;
 
-                    const bounds = map.getBounds();
+        item.addEventListener('mouseenter', () => {
+            highlightMarker(station.id);
 
-                    if (!bounds.contains(latLng)) {
-                        map.panTo(latLng, {
-                            animate: true,
-                            duration: 0.5
-                        });
-                    }
+            const latLng = [station.latitude, station.longitude];
+
+            const bounds = map.getBounds();
+
+            if (!bounds.contains(latLng)) {
+                map.panTo(latLng, {
+                    animate: true,
+                    duration: 0.5,
                 });
+            }
+        });
 
-                item.addEventListener('mouseleave', () => {
-                    resetHighlightedMarker();
-                });
+        item.addEventListener('mouseleave', () => {
+            resetHighlightedMarker();
+        });
 
-                item.addEventListener('click', () => {
+        item.addEventListener('click', () => {
+            container.innerHTML = '';
 
-                    container.innerHTML = "";
+            const searchInput = document.getElementById('station-search');
 
-                    const searchInput =
-                        document.getElementById('station-search');
+            if (searchInput) {
+                searchInput.value = '';
+            }
 
-                    if (searchInput) {
-                        searchInput.value = "";
-                    }
+            resetHighlightedMarker();
 
-                    resetHighlightedMarker();
+            setOpenedStation(station.id);
 
-                    setOpenedStation(station.id);
+            navigation.focusStation(station);
 
-                    navigation.focusStation(station);
+            renderMarkers(
+                map,
+                markersLayer,
+                stations,
+                displayMode,
+                updateStationPanel,
+                false,
+                actions,
+            );
 
-                    renderMarkers(
-                        map,
-                        markersLayer,
-                        stations,
-                        displayMode,
-                        updateStationPanel,
-                        false,
-                        actions
-                    );
+            updateStationPanel(station);
 
-                    updateStationPanel(station);
-
-                    actions.endSearch?.();
-                    document.body.classList.remove('search-active');
-            
-                });
-                
-            
-            });
+            actions.endSearch?.();
+            document.body.classList.remove('search-active');
+        });
+    });
 }

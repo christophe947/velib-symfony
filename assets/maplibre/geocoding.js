@@ -14,7 +14,7 @@ function normalizeText(value = '') {
 function uniqueRequests(requests) {
     const unique = new Map();
 
-    requests.forEach(request => {
+    requests.forEach((request) => {
         const key = [
             normalizeText(request.query),
             request.index,
@@ -38,20 +38,19 @@ function removeTransportWords(query) {
 
 function removePlacePrefix(query) {
     return query
-        .replace(
-            /^place\s+(?:(?:de|du|des)\s+)?(?:la\s+)?/i,
-            ''
-        )
+        .replace(/^place\s+(?:(?:de|du|des)\s+)?(?:la\s+)?/i, '')
         .replace(/\s+/g, ' ')
         .trim();
 }
 
 function buildRequests(query, type) {
     if (type === 'address') {
-        return [{
-            query,
-            index: 'address',
-        }];
+        return [
+            {
+                query,
+                index: 'address',
+            },
+        ];
     }
 
     const hasRer = /\brer\b/i.test(query);
@@ -147,27 +146,28 @@ async function fetchCandidates(request) {
     const data = await response.json();
 
     return (data.features ?? [])
-        .filter(feature => {
+        .filter((feature) => {
             const coordinates = feature.geometry?.coordinates;
 
-            return Array.isArray(coordinates)
-                && coordinates.length >= 2
-                && Number.isFinite(coordinates[0])
-                && Number.isFinite(coordinates[1]);
+            return (
+                Array.isArray(coordinates) &&
+                coordinates.length >= 2 &&
+                Number.isFinite(coordinates[0]) &&
+                Number.isFinite(coordinates[1])
+            );
         })
-        .map(feature => {
+        .map((feature) => {
             const properties = feature.properties ?? {};
-            const [longitude, latitude] =
-                feature.geometry.coordinates;
+            const [longitude, latitude] = feature.geometry.coordinates;
 
             return {
                 latitude,
                 longitude,
                 label:
-                    properties.toponyme
-                    ?? properties.label
-                    ?? properties.name
-                    ?? request.query,
+                    properties.toponyme ??
+                    properties.label ??
+                    properties.name ??
+                    request.query,
                 city: properties.city ?? '',
                 category: properties.category ?? '',
                 score: Number(properties.score ?? 0),
@@ -176,16 +176,13 @@ async function fetchCandidates(request) {
 }
 
 export async function geocodeCandidates(query, type) {
-    const cleanQuery = String(query)
-        .replace(/\s+/g, ' ')
-        .trim();
+    const cleanQuery = String(query).replace(/\s+/g, ' ').trim();
 
     if (cleanQuery.length < 3) {
         return [];
     }
 
-    const cacheKey =
-        `${type}|${normalizeText(cleanQuery)}`;
+    const cacheKey = `${type}|${normalizeText(cleanQuery)}`;
 
     if (cache.has(cacheKey)) {
         return cache.get(cacheKey);
@@ -194,20 +191,20 @@ export async function geocodeCandidates(query, type) {
     const requests = buildRequests(cleanQuery, type);
 
     const pending = Promise.all(
-        requests.map(request =>
-            fetchCandidates(request).catch(error => {
+        requests.map((request) =>
+            fetchCandidates(request).catch((error) => {
                 console.warn(
                     `Échec du géocodage pour « ${request.query} ».`,
-                    error
+                    error,
                 );
 
                 return [];
-            })
-        )
-    ).then(resultSets => {
+            }),
+        ),
+    ).then((resultSets) => {
         const candidates = new Map();
 
-        resultSets.flat().forEach(candidate => {
+        resultSets.flat().forEach((candidate) => {
             const key = [
                 normalizeText(candidate.label),
                 normalizeText(candidate.city),
@@ -231,27 +228,6 @@ export async function geocodeCandidates(query, type) {
 
     return pending;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 /*
 

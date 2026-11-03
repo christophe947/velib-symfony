@@ -7,19 +7,14 @@ let userMarker = null;
 let userPosition = null;
 
 export function showUserMarker(map, position) {
-
     userMarker?.remove();
 
     userMarker = new maplibregl.Marker({
         color: '#2563eb',
     })
-        .setLngLat([
-            position.longitude,
-            position.latitude
-        ])
+        .setLngLat([position.longitude, position.latitude])
         .setPopup(
-            new maplibregl.Popup({ offset: 25 })
-                .setText('Votre position')
+            new maplibregl.Popup({ offset: 25 }).setText('Votre position'),
         )
         .addTo(map);
 }
@@ -73,7 +68,7 @@ export function initGeolocation({
         results.style.display = 'block';
 
         navigator.geolocation.getCurrentPosition(
-            position => {
+            (position) => {
                 if (currentRequestVersion !== locationRequestVersion) {
                     return;
                 }
@@ -95,7 +90,7 @@ export function initGeolocation({
 
                 showUserMarker(map, {
                     latitude,
-                    longitude
+                    longitude,
                 });
 
                 /*userMarker?.remove();
@@ -115,34 +110,37 @@ export function initGeolocation({
                     longitude,
                     stations,
                     8,
-                    3000
+                    3000,
                 );
 
                 const displayedStations = renderSearchResults(
                     results,
                     [],
-                    [{
-                        label: 'Votre position',
-                        city: '',
-                        score: 1,
-                        stations: nearbyStations,
-                    }]
+                    [
+                        {
+                            label: 'Votre position',
+                            city: '',
+                            score: 1,
+                            stations: nearbyStations,
+                        },
+                    ],
                 );
 
                 onDisplayedStations?.(displayedStations);
-                
+
                 document.dispatchEvent(new Event('search:results'));
             },
-            error => {
+            (error) => {
                 if (currentRequestVersion !== locationRequestVersion) {
                     return;
                 }
 
                 button.disabled = false;
 
-                const message = error.code === 1
-                    ? 'Autorise la localisation dans ton navigateur pour voir les stations proches.'
-                    : 'Ta position n’a pas pu être récupérée. Réessaie dans un instant.';
+                const message =
+                    error.code === 1
+                        ? 'Autorise la localisation dans ton navigateur pour voir les stations proches.'
+                        : 'Ta position n’a pas pu être récupérée. Réessaie dans un instant.';
 
                 results.innerHTML = `
                     <div class="search-results-section-title">
@@ -155,23 +153,20 @@ export function initGeolocation({
                 enableHighAccuracy: true,
                 timeout: 10000,
                 maximumAge: 60000,
-            }
+            },
         );
     });
 }
 
-
 export function requestUserPosition() {
     return new Promise((resolve, reject) => {
-
         if (!navigator.geolocation) {
             reject(new Error('Geolocation unavailable'));
             return;
         }
 
         navigator.geolocation.getCurrentPosition(
-            position => {
-
+            (position) => {
                 userPosition = {
                     latitude: position.coords.latitude,
                     longitude: position.coords.longitude,
@@ -179,48 +174,43 @@ export function requestUserPosition() {
 
                 resolve(userPosition);
             },
-            error => {
+            (error) => {
                 reject(error);
             },
             {
                 enableHighAccuracy: true,
                 timeout: 10000,
                 maximumAge: 60000,
-            }
+            },
         );
     });
 }
 
-
 export function startWatchingPosition(onPosition, onError) {
-
     if (!navigator.geolocation) {
-        onError?.(
-            new Error('Geolocation unavailable')
-        );
+        onError?.(new Error('Geolocation unavailable'));
         return null;
     }
 
     return navigator.geolocation.watchPosition(
-        position => {
-
+        (position) => {
             const userPosition = {
                 latitude: position.coords.latitude,
                 longitude: position.coords.longitude,
                 heading: position.coords.heading,
                 speed: position.coords.speed,
-                accuracy: position.coords.accuracy
+                accuracy: position.coords.accuracy,
             };
 
             onPosition?.(userPosition);
         },
-        error => {
+        (error) => {
             onError?.(error);
         },
         {
             enableHighAccuracy: true,
             maximumAge: 1000,
-            timeout: 10000
-        }
+            timeout: 10000,
+        },
     );
 }

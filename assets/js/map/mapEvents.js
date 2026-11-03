@@ -1,13 +1,6 @@
-export function initMapEvents(
-    map,
-    navigation,
-    actions
-) {
-
+export function initMapEvents(map, navigation, actions) {
     map.on('moveend', () => {
-
         if (navigation.isProgrammatic()) {
-
             const saveAfter = navigation.saveAfterProgrammaticMove;
 
             navigation.endProgrammaticMove();

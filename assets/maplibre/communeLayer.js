@@ -4,20 +4,18 @@ function communesToPointsGeoJSON(communes) {
     return {
         type: 'FeatureCollection',
 
-        features: communes.features.map(commune => ({
+        features: communes.features.map((commune) => ({
             type: 'Feature',
 
             geometry: {
                 type: 'Point',
-                coordinates: getGeometryCenter(
-                    commune.geometry
-                )
+                coordinates: getGeometryCenter(commune.geometry),
             },
 
             properties: {
-                ...commune.properties
-            }
-        }))
+                ...commune.properties,
+            },
+        })),
     };
 }
 
@@ -47,10 +45,7 @@ function getGeometryCenter(geometry) {
         maxLat = Math.max(maxLat, lat);
     });
 
-    return [
-        (minLng + maxLng) / 2,
-        (minLat + maxLat) / 2
-    ];
+    return [(minLng + maxLng) / 2, (minLat + maxLat) / 2];
 }
 
 function getGeometryBounds(geometry) {
@@ -70,14 +65,11 @@ function getGeometryBounds(geometry) {
     return bounds;
 }
 
-export function addCommuneLayer(
-    map,
-    communes
-) {
+export function addCommuneLayer(map, communes) {
     // Délimitations des communes
     map.addSource('communes', {
         type: 'geojson',
-        data: communes
+        data: communes,
     });
 
     map.addLayer({
@@ -87,17 +79,12 @@ export function addCommuneLayer(
         maxzoom: 13,
         minzoom: 10.5,
 
-        filter: [
-            '!=',
-            ['get', 'code'],
-            '75056'
-        ],
-
+        filter: ['!=', ['get', 'code'], '75056'],
 
         paint: {
             'fill-color': '#4dabf7',
-            'fill-opacity': 0.07
-        }
+            'fill-opacity': 0.07,
+        },
     });
 
     map.addLayer({
@@ -107,30 +94,22 @@ export function addCommuneLayer(
         maxzoom: 13,
         minzoom: 10.5,
 
-        filter: [
-            '!=',
-            ['get', 'code'],
-            '75056'
-        ],
-
+        filter: ['!=', ['get', 'code'], '75056'],
 
         paint: {
             'line-color': '#4dabf7',
             'line-width': 2,
-            'line-opacity': 0.65
-        }
+            'line-opacity': 0.65,
+        },
     });
 
     // Points centraux
-    const communePoints = communesToPointsGeoJSON(
-        communes
-    );
+    const communePoints = communesToPointsGeoJSON(communes);
 
     map.addSource('commune-points', {
         type: 'geojson',
-        data: communePoints
+        data: communePoints,
     });
-
 
     map.addLayer({
         id: 'commune-count-shadow',
@@ -139,27 +118,26 @@ export function addCommuneLayer(
         maxzoom: 13,
         minzoom: 10.5,
 
-        filter: [
-            '!=',
-            ['get', 'code'],
-            '75056'
-        ],
+        filter: ['!=', ['get', 'code'], '75056'],
 
         paint: {
-        'circle-radius': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
+            'circle-radius': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
 
-            10, 19,
-            12, 22,
-            13, 27
-        ],
-        'circle-color': '#000000',
-        'circle-opacity': 0.70,
-        'circle-blur': 0.6,
-        'circle-translate': [0, 4]
-    }
+                10,
+                19,
+                12,
+                22,
+                13,
+                27,
+            ],
+            'circle-color': '#000000',
+            'circle-opacity': 0.7,
+            'circle-blur': 0.6,
+            'circle-translate': [0, 4],
+        },
     });
     // Rond bleu clair
     map.addLayer({
@@ -169,12 +147,7 @@ export function addCommuneLayer(
         maxzoom: 13,
         minzoom: 10.5,
 
-        filter: [
-            '!=',
-            ['get', 'code'],
-            '75056'
-        ],
-
+        filter: ['!=', ['get', 'code'], '75056'],
 
         paint: {
             'circle-radius': [
@@ -182,14 +155,17 @@ export function addCommuneLayer(
                 ['linear'],
                 ['zoom'],
 
-                10, 12,
-                12, 15,
-                13, 19
+                10,
+                12,
+                12,
+                15,
+                13,
+                19,
             ],
             'circle-color': '#4dabf7',
             'circle-stroke-width': 3,
-            'circle-stroke-color': '#ffffff'
-        }
+            'circle-stroke-color': '#ffffff',
+        },
     });
 
     // Nombre de stations
@@ -200,32 +176,21 @@ export function addCommuneLayer(
         maxzoom: 13,
         minzoom: 10.5,
 
-        filter: [
-            '!=',
-            ['get', 'code'],
-            '75056'
-        ],
-
+        filter: ['!=', ['get', 'code'], '75056'],
 
         layout: {
-            'text-field': [
-                'to-string',
-                ['get', 'stationCount']
-            ],
+            'text-field': ['to-string', ['get', 'stationCount']],
             'text-size': 14,
-            'text-font': [
-                'Open Sans Bold'
-            ]
+            'text-font': ['Open Sans Bold'],
         },
 
         paint: {
-            'text-color': '#ffffff'
-        }
+            'text-color': '#ffffff',
+        },
     });
 
     // Clic sur une commune
-    map.on('click', 'commune-count', event => {
-
+    map.on('click', 'commune-count', (event) => {
         const feature = event.features?.[0];
 
         if (!feature) {
@@ -235,8 +200,7 @@ export function addCommuneLayer(
         const code = feature.properties?.code;
 
         const commune = communes.features.find(
-            commune =>
-                commune.properties?.code == code
+            (commune) => commune.properties?.code == code,
         );
 
         if (!commune) {
@@ -245,34 +209,22 @@ export function addCommuneLayer(
 
         // Paris → niveau arrondissements
         if (code === '75056') {
+            const bounds = getGeometryBounds(commune.geometry);
 
-            const bounds = getGeometryBounds(
-                commune.geometry
-            );
-            
-
-            map.fitBounds(
-                bounds,
-                {
-                    padding: 60,
-                    maxZoom: 13
-                }
-            );
+            map.fitBounds(bounds, {
+                padding: 60,
+                maxZoom: 13,
+            });
 
             return;
         }
 
         // Commune périphérique → niveau stations
-        const bounds = getGeometryBounds(
-            commune.geometry
-        );
+        const bounds = getGeometryBounds(commune.geometry);
 
-        map.fitBounds(
-            bounds,
-            {
-                padding: 60,
-                maxZoom: 15
-            }
-        );
+        map.fitBounds(bounds, {
+            padding: 60,
+            maxZoom: 15,
+        });
     });
 }

@@ -38,10 +38,8 @@ function getCompassHeading(event) {
     const cosGamma = Math.cos(gamma);
     const sinGamma = Math.sin(gamma);
 
-    const horizontalX =
-        -cosAlpha * sinGamma - sinAlpha * sinBeta * cosGamma;
-    const horizontalY =
-        -sinAlpha * sinGamma + cosAlpha * sinBeta * cosGamma;
+    const horizontalX = -cosAlpha * sinGamma - sinAlpha * sinBeta * cosGamma;
+    const horizontalY = -sinAlpha * sinGamma + cosAlpha * sinBeta * cosGamma;
 
     if (Math.hypot(horizontalX, horizontalY) < 0.001) {
         return null;
@@ -55,7 +53,6 @@ function getCompassHeading(event) {
  * Démarre l'écoute du capteur d'orientation.
  */
 export async function startCompass(onReading, onError) {
-
     // Actualise les callbacks à chaque appel.
     onReadingCallback = onReading;
     onErrorCallback = onError;
@@ -66,35 +63,24 @@ export async function startCompass(onReading, onError) {
 
     if (!('DeviceOrientationEvent' in window)) {
         onErrorCallback?.(
-            new Error(
-                'Le capteur d’orientation n’est pas disponible.'
-            )
+            new Error('Le capteur d’orientation n’est pas disponible.'),
         );
 
         return;
     }
 
     try {
-
         // Demande la permission si le navigateur l'exige.
-        if (
-            typeof DeviceOrientationEvent.requestPermission ===
-            'function'
-        ) {
-
-            const permission =
-                await DeviceOrientationEvent.requestPermission();
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            const permission = await DeviceOrientationEvent.requestPermission();
 
             if (permission !== 'granted') {
-                throw new Error(
-                    'L’autorisation du capteur a été refusée.'
-                );
+                throw new Error('L’autorisation du capteur a été refusée.');
             }
         }
 
         // Fonction appelée à chaque nouvelle mesure.
-        orientationHandler = event => {
-
+        orientationHandler = (event) => {
             const reading = {
                 alpha: event.alpha,
                 beta: event.beta,
@@ -106,11 +92,9 @@ export async function startCompass(onReading, onError) {
                 compassHeading: getCompassHeading(event),
 
                 screenOrientation:
-                    screen.orientation?.angle ??
-                    window.orientation ??
-                    0,
+                    screen.orientation?.angle ?? window.orientation ?? 0,
 
-                timestamp: Date.now()
+                timestamp: Date.now(),
             };
 
             lastReading = reading;
@@ -120,53 +104,37 @@ export async function startCompass(onReading, onError) {
         };
 
         // Écoute les mesures d'orientation.
-        window.addEventListener(
-            'deviceorientation',
-            orientationHandler
-        );
+        window.addEventListener('deviceorientation', orientationHandler);
 
         // Certains navigateurs proposent aussi
         // un événement dédié à l'orientation absolue.
         window.addEventListener(
             'deviceorientationabsolute',
-            orientationHandler
+            orientationHandler,
         );
 
         isCompassActive = true;
 
         console.log('🧭 Écoute du capteur démarrée.');
-
     } catch (error) {
-
-        console.error(
-            'Impossible de démarrer le capteur :',
-            error
-        );
+        console.error('Impossible de démarrer le capteur :', error);
 
         //onError?.(error);
         onErrorCallback?.(error);
     }
 }
 
-
 /**
  * Arrête l'écoute du capteur d'orientation.
  */
 export function stopCompass() {
-
     if (!isCompassActive || !orientationHandler) {
         return;
     }
 
-    window.removeEventListener(
-        'deviceorientation',
-        orientationHandler
-    );
+    window.removeEventListener('deviceorientation', orientationHandler);
 
-    window.removeEventListener(
-        'deviceorientationabsolute',
-        orientationHandler
-    );
+    window.removeEventListener('deviceorientationabsolute', orientationHandler);
 
     orientationHandler = null;
 
@@ -174,7 +142,6 @@ export function stopCompass() {
 
     console.log('🧭 Écoute du capteur arrêtée.');
 }
-
 
 /**
  * Retourne la dernière mesure reçue.

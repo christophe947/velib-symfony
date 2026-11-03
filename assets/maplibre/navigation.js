@@ -1,19 +1,8 @@
-import { 
-    updateWalkingRoute,
-    followUserPosition
-} from './map.js';
+import { updateWalkingRoute, followUserPosition } from './map.js';
 import { showUserMarker } from './geolocation.js';
-import {
-    getWalkingRoute,
-    decodePolyline
-} from './routing.js';
-import {
-    updateRouteSummary
-} from './routeSummary.js';
-import {
-    formatDistance,
-    formatDuration
-} from './routeFormatting.js';
+import { getWalkingRoute, decodePolyline } from './routing.js';
+import { updateRouteSummary } from './routeSummary.js';
+import { formatDistance, formatDuration } from './routeFormatting.js';
 
 let currentRouteCoordinates = [];
 let lastRouteProgressIndex = 0;
@@ -41,21 +30,17 @@ export function setNavigationRoute(coordinates, destination) {
     navigationDestination = destination;
 }
 
-
 /**
  * Recalcule l'itinéraire depuis la position actuelle
  * jusqu'à la destination initiale.
  */
 async function recalculateNavigationRoute(position, map) {
-
     if (isRecalculatingRoute) {
         return;
     }
 
     if (!navigationDestination) {
-        console.warn(
-            'Impossible de recalculer : destination inconnue.'
-        );
+        console.warn('Impossible de recalculer : destination inconnue.');
         return;
     }
 
@@ -66,26 +51,18 @@ async function recalculateNavigationRoute(position, map) {
     console.log('🔄 Recalcul de l’itinéraire en cours…');
 
     try {
-
         // Demande un nouvel itinéraire à Valhalla.
-        const route = await getWalkingRoute(
-            position,
-            navigationDestination
-        );
+        const route = await getWalkingRoute(position, navigationDestination);
 
         // Décode la géométrie du nouvel itinéraire.
-        const coordinates = decodePolyline(
-            route.legs[0].shape
-        );
+        const coordinates = decodePolyline(route.legs[0].shape);
 
         if (sessionId !== navigationSessionId) {
             return;
         }
 
         if (coordinates.length < 2) {
-            throw new Error(
-                'Le nouvel itinéraire est invalide.'
-            );
+            throw new Error('Le nouvel itinéraire est invalide.');
         }
 
         // Remplace l'itinéraire actuel.
@@ -102,27 +79,19 @@ async function recalculateNavigationRoute(position, map) {
         // Actualise la distance et la durée dans le panneau.
         updateRouteSummary(
             formatDistance(route.summary.length),
-            formatDuration(route.summary.time)
+            formatDuration(route.summary.time),
         );
 
         console.log(
             '✅ Nouvel itinéraire calculé !',
-            `Distance : ${route.summary.length.toFixed(2)} km`
+            `Distance : ${route.summary.length.toFixed(2)} km`,
         );
-
     } catch (error) {
-
-        console.error(
-            '❌ Échec du recalcul de l’itinéraire :',
-            error
-        );
-
+        console.error('❌ Échec du recalcul de l’itinéraire :', error);
     } finally {
-
         isRecalculatingRoute = false;
     }
 }
-
 
 /**
  * Calcule la distance minimale entre une position GPS
@@ -138,21 +107,14 @@ async function recalculateNavigationRoute(position, map) {
  * - la distance minimale en mètres ;
  * - les coordonnées du point le plus proche sur le segment.
  */
-function calculateProjectionOnSegment(
-    position,
-    start,
-    end
-) {
+function calculateProjectionOnSegment(position, start, end) {
     const earthRadius = 6371000;
 
-    const toRadians = degrees =>
-        degrees * Math.PI / 180;
+    const toRadians = (degrees) => (degrees * Math.PI) / 180;
 
-    const referenceLatitude = toRadians(
-        position.latitude
-    );
+    const referenceLatitude = toRadians(position.latitude);
 
-    const project = coordinate => {
+    const project = (coordinate) => {
         const [longitude, latitude] = coordinate;
 
         return {
@@ -161,9 +123,7 @@ function calculateProjectionOnSegment(
                 earthRadius *
                 Math.cos(referenceLatitude),
 
-            y:
-                toRadians(latitude - position.latitude) *
-                earthRadius
+            y: toRadians(latitude - position.latitude) * earthRadius,
         };
     };
 
@@ -174,16 +134,12 @@ function calculateProjectionOnSegment(
     const abX = b.x - a.x;
     const abY = b.y - a.y;
 
-    const segmentLengthSquared =
-        abX * abX + abY * abY;
+    const segmentLengthSquared = abX * abX + abY * abY;
 
     let t = 0;
 
     if (segmentLengthSquared > 0) {
-        t = -(
-            a.x * abX +
-            a.y * abY
-        ) / segmentLengthSquared;
+        t = -(a.x * abX + a.y * abY) / segmentLengthSquared;
 
         t = Math.max(0, Math.min(1, t));
     }
@@ -195,15 +151,12 @@ function calculateProjectionOnSegment(
     // Coordonnées géographiques de ce point.
     const coordinate = [
         start[0] + t * (end[0] - start[0]),
-        start[1] + t * (end[1] - start[1])
+        start[1] + t * (end[1] - start[1]),
     ];
 
     return {
-        distance: Math.hypot(
-            closestX,
-            closestY
-        ),
-        coordinate
+        distance: Math.hypot(closestX, closestY),
+        coordinate,
     };
 }
 
@@ -212,7 +165,6 @@ function calculateProjectionOnSegment(
  * et détecte les sorties d'itinéraire.
  */
 export function updateNavigationProgress(position, map) {
-
     if (currentRouteCoordinates.length < 2) {
         return;
     }
@@ -233,11 +185,7 @@ export function updateNavigationProgress(position, map) {
         const start = currentRouteCoordinates[i];
         const end = currentRouteCoordinates[i + 1];
 
-        const projection = calculateProjectionOnSegment(
-            position,
-            start,
-            end
-        );
+        const projection = calculateProjectionOnSegment(position, start, end);
 
         if (projection.distance < closestDistance) {
             closestDistance = projection.distance;
@@ -248,30 +196,21 @@ export function updateNavigationProgress(position, map) {
 
     // Détection d'une éventuelle sortie d'itinéraire.
     if (closestDistance > OFF_ROUTE_THRESHOLD) {
-
         consecutiveOffRoutePositions++;
 
         console.log(
             `Écart à l'itinéraire : ${Math.round(closestDistance)} m`,
-            `(${consecutiveOffRoutePositions}/${OFF_ROUTE_CONFIRMATIONS})`
+            `(${consecutiveOffRoutePositions}/${OFF_ROUTE_CONFIRMATIONS})`,
         );
 
-        if (
-            consecutiveOffRoutePositions >=
-            OFF_ROUTE_CONFIRMATIONS
-        ) {
-            console.warn(
-                'Sortie d’itinéraire confirmée.'
-            );
+        if (consecutiveOffRoutePositions >= OFF_ROUTE_CONFIRMATIONS) {
+            console.warn('Sortie d’itinéraire confirmée.');
 
             // Évite de compter indéfiniment les positions
             // pendant que le recalcul est en cours.
             consecutiveOffRoutePositions = 0;
 
-            recalculateNavigationRoute(
-                position,
-                map
-            );
+            recalculateNavigationRoute(position, map);
         }
         // Une position hors itinéraire ne doit pas
         // faire avancer artificiellement la progression.
@@ -284,31 +223,22 @@ export function updateNavigationProgress(position, map) {
     // La progression ne peut jamais reculer.
     lastRouteProgressIndex = Math.max(
         lastRouteProgressIndex,
-        closestSegmentIndex
+        closestSegmentIndex,
     );
 
     // Le tracé restant commence à la position projetée
     // sur le segment le plus proche.
     const remainingCoordinates = closestCoordinate
         ? [
-            closestCoordinate,
-            ...currentRouteCoordinates.slice(
-                closestSegmentIndex + 1
-            )
-        ]
-        : currentRouteCoordinates.slice(
-            lastRouteProgressIndex
-        );
+              closestCoordinate,
+              ...currentRouteCoordinates.slice(closestSegmentIndex + 1),
+          ]
+        : currentRouteCoordinates.slice(lastRouteProgressIndex);
 
     if (remainingCoordinates.length >= 2) {
-        updateWalkingRoute(
-            map,
-            remainingCoordinates
-        );
+        updateWalkingRoute(map, remainingCoordinates);
     }
 }
-
-
 
 /**
  * Calcule le cap entre deux coordonnées géographiques.
@@ -317,7 +247,7 @@ export function updateNavigationProgress(position, map) {
  * Le résultat est exprimé en degrés, entre 0 et 360.
  */
 function calculateHeading(start, end) {
-    const toRadians = degrees => degrees * Math.PI / 180;
+    const toRadians = (degrees) => (degrees * Math.PI) / 180;
 
     const [longitude1, latitude1] = start;
     const [longitude2, latitude2] = end;
@@ -330,21 +260,17 @@ function calculateHeading(start, end) {
 
     const x =
         Math.cos(lat1) * Math.sin(lat2) -
-        Math.sin(lat1) * Math.cos(lat2) *
-        Math.cos(deltaLongitude);
+        Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLongitude);
 
-    const heading = Math.atan2(y, x) * 180 / Math.PI;
+    const heading = (Math.atan2(y, x) * 180) / Math.PI;
 
     return (heading + 360) % 360;
 }
-
-
 
 /**
  * Simule le déplacement de l'utilisateur le long de l'itinéraire.
  */
 export function startNavigationSimulation(map, onFinish) {
-
     if (currentRouteCoordinates.length < 2) {
         console.warn('Aucun itinéraire à simuler.');
         return;
@@ -357,37 +283,32 @@ export function startNavigationSimulation(map, onFinish) {
     }
 
     simulationIntervalId = setInterval(() => {
-
         index += 3;
 
         if (index >= currentRouteCoordinates.length - 1) {
             index = currentRouteCoordinates.length - 1;
         }
 
-        
-        const [longitude, latitude] =
-            currentRouteCoordinates[index];
+        const [longitude, latitude] = currentRouteCoordinates[index];
 
         // Point suivant sur l'itinéraire pour calculer la direction.
         const nextIndex = Math.min(
             index + 1,
-            currentRouteCoordinates.length - 1
+            currentRouteCoordinates.length - 1,
         );
 
         const heading = calculateHeading(
             currentRouteCoordinates[index],
-            currentRouteCoordinates[nextIndex]
+            currentRouteCoordinates[nextIndex],
         );
 
         const position = {
             longitude,
             latitude,
             heading,
-            speed: 1.4
+            speed: 1.4,
         };
 
-
-        
         showUserMarker(map, position);
         updateNavigationProgress(position, map);
 
@@ -397,7 +318,6 @@ export function startNavigationSimulation(map, onFinish) {
             simulationIntervalId = null;
             onFinish?.();
         }
-
     }, 500);
 }
 
@@ -417,7 +337,6 @@ function stopNavigationSimulation() {
  * Simule trois positions consécutives hors itinéraire.
  */
 export function startOffRouteSimulation(map) {
-
     if (currentRouteCoordinates.length < 2) {
         console.warn('Aucun itinéraire à tester.');
         return;
@@ -435,52 +354,40 @@ export function startOffRouteSimulation(map) {
     // pour ne pas perturber le démarrage du parcours.
     const index = Math.min(
         lastRouteProgressIndex + 10,
-        currentRouteCoordinates.length - 1
+        currentRouteCoordinates.length - 1,
     );
 
-    const [longitude, latitude] =
-        currentRouteCoordinates[index];
+    const [longitude, latitude] = currentRouteCoordinates[index];
 
     // Décalage artificiel d'environ 50 mètres vers l'est.
     const longitudeOffset =
-        50 / (
-            111320 *
-            Math.cos(latitude * Math.PI / 180)
-        );
+        50 / (111320 * Math.cos((latitude * Math.PI) / 180));
 
     const simulatedPosition = {
         longitude: longitude + longitudeOffset,
-        latitude
+        latitude,
     };
 
     let count = 0;
 
     const intervalId = setInterval(() => {
-
         count++;
 
-        console.log(
-            `🧪 Position artificielle hors itinéraire : ${count}/3`
-        );
+        console.log(`🧪 Position artificielle hors itinéraire : ${count}/3`);
 
         showUserMarker(map, simulatedPosition);
 
-        updateNavigationProgress(
-            simulatedPosition,
-            map
-        );
+        updateNavigationProgress(simulatedPosition, map);
 
         if (count >= 3) {
             clearInterval(intervalId);
 
             console.log(
-                '✅ Test terminé : consulte les messages de détection ci-dessus.'
+                '✅ Test terminé : consulte les messages de détection ci-dessus.',
             );
         }
-
     }, 1000);
 }
-
 
 /**
  * Arrête les traitements internes de navigation.

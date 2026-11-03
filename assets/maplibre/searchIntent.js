@@ -10,10 +10,7 @@ function normalizeText(value = '') {
 }
 
 function editDistance(a, b) {
-    const row = Array.from(
-        { length: b.length + 1 },
-        (_, index) => index
-    );
+    const row = Array.from({ length: b.length + 1 }, (_, index) => index);
 
     for (let i = 1; i <= a.length; i += 1) {
         let diagonal = row[0];
@@ -25,7 +22,7 @@ function editDistance(a, b) {
             row[j] = Math.min(
                 row[j] + 1,
                 row[j - 1] + 1,
-                diagonal + (a[i - 1] === b[j - 1] ? 0 : 1)
+                diagonal + (a[i - 1] === b[j - 1] ? 0 : 1),
             );
 
             diagonal = oldValue;
@@ -36,11 +33,10 @@ function editDistance(a, b) {
 }
 
 function findArrondissement(query, zones) {
-    const compactQuery = normalizeText(query)
-        .replace(/\s+/g, '');
+    const compactQuery = normalizeText(query).replace(/\s+/g, '');
 
     const match = compactQuery.match(
-        /^(?:paris)?(\d{1,2})(?:er|e|eme)?(?:arrondissement|ardt|arrt|ar)?$/
+        /^(?:paris)?(\d{1,2})(?:er|e|eme)?(?:arrondissement|ardt|arrt|ar)?$/,
     );
 
     if (!match) {
@@ -53,9 +49,9 @@ function findArrondissement(query, zones) {
         return null;
     }
 
-    return zones.find(zone =>
-        Number(zone.properties?.c_ar) === number
-    ) ?? null;
+    return (
+        zones.find((zone) => Number(zone.properties?.c_ar) === number) ?? null
+    );
 }
 
 function findCommune(query, communes) {
@@ -67,68 +63,57 @@ function findCommune(query, communes) {
 
     const queryWords = normalizedQuery.split(' ');
 
-    return communes.find(commune => {
-        const communeName = normalizeText(
-            commune.properties?.nom ?? ''
-        );
+    return (
+        communes.find((commune) => {
+            const communeName = normalizeText(commune.properties?.nom ?? '');
 
-        if (!communeName) {
-            return false;
-        }
+            if (!communeName) {
+                return false;
+            }
 
-        if (communeName === normalizedQuery) {
-            return true;
-        }
+            if (communeName === normalizedQuery) {
+                return true;
+            }
 
-        const communeWords = communeName.split(' ');
+            const communeWords = communeName.split(' ');
 
-        return communeWords.every(communeWord =>
-            queryWords.some(queryWord =>
-                queryWord === communeWord
-                || (
-                    communeWord.length >= 5
-                    && Math.abs(
-                        communeWord.length - queryWord.length
-                    ) <= 1
-                    && editDistance(communeWord, queryWord) <= 1
-                )
-            )
-        );
-    }) ?? null;
+            return communeWords.every((communeWord) =>
+                queryWords.some(
+                    (queryWord) =>
+                        queryWord === communeWord ||
+                        (communeWord.length >= 5 &&
+                            Math.abs(communeWord.length - queryWord.length) <=
+                                1 &&
+                            editDistance(communeWord, queryWord) <= 1),
+                ),
+            );
+        }) ?? null
+    );
 }
 
 export function classifySearch(query, zones, communes) {
-    const normalizedQuery = query
-        .replace(/\s+/g, ' ')
-        .trim();
+    const normalizedQuery = query.replace(/\s+/g, ' ').trim();
 
-    const arrondissement = findArrondissement(
-        normalizedQuery,
-        zones
-    );
+    const arrondissement = findArrondissement(normalizedQuery, zones);
 
     if (arrondissement) {
         return {
             type: 'area',
             label:
-                arrondissement.properties?.l_ar
-                ?? `Paris ${arrondissement.properties?.c_ar}e`,
+                arrondissement.properties?.l_ar ??
+                `Paris ${arrondissement.properties?.c_ar}e`,
             area: arrondissement,
         };
     }
 
-    const isTransportSearch =
-        /\b(rer|metro|métro|gare|station|train)\b/i.test(
-            normalizedQuery
-        );
+    const isTransportSearch = /\b(rer|metro|métro|gare|station|train)\b/i.test(
+        normalizedQuery,
+    );
 
     // Une commune seule affiche toutes ses stations.
     // « Vincennes RER » reste une recherche de gare.
     if (!isTransportSearch) {
-        const commune = findCommune(
-            normalizedQuery,
-            communes
-        );
+        const commune = findCommune(normalizedQuery, communes);
 
         if (commune) {
             return {
@@ -140,9 +125,10 @@ export function classifySearch(query, zones, communes) {
     }
 
     const isAddress =
-        /^\d+\s/.test(normalizedQuery)
-        || /\b(rue|avenue|boulevard|quai|impasse|allée|allee|passage|route|cours)\b/i
-            .test(normalizedQuery);
+        /^\d+\s/.test(normalizedQuery) ||
+        /\b(rue|avenue|boulevard|quai|impasse|allée|allee|passage|route|cours)\b/i.test(
+            normalizedQuery,
+        );
 
     return {
         type: isAddress ? 'address' : 'place',

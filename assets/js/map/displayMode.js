@@ -2,12 +2,10 @@ import { navigation } from './navigation.js';
 import {
     setDisplayMode,
     getDisplayMode,
-    getCurrentFilteredStations
+    getCurrentFilteredStations,
 } from './state.js';
 
-
 export function initDisplayMode(options) {
-
     const {
         map,
         markersLayer,
@@ -15,53 +13,42 @@ export function initDisplayMode(options) {
         renderMarkers,
         updateStationPanel,
         updateLegend,
-        actions
+        actions,
     } = options;
 
+    const bikesButton = document.getElementById('mode-bikes');
 
-    const bikesButton =
-        document.getElementById('mode-bikes');
+    const electricButton = document.getElementById('mode-electric');
 
-    const electricButton =
-        document.getElementById('mode-electric');
-
-
-    const docksButton =
-        document.getElementById('mode-docks');
-
-
+    const docksButton = document.getElementById('mode-docks');
 
     function updateModeButtons() {
-
         if (!bikesButton || !docksButton || !electricButton) {
             return;
         }
 
         const mode = getDisplayMode();
 
-        const mobileModeTrigger =
-            document.querySelector('.mobile-mode-trigger');
+        const mobileModeTrigger = document.querySelector(
+            '.mobile-mode-trigger',
+        );
 
         if (mobileModeTrigger) {
-
             const icons = {
                 bikes: '🚲',
                 electric: '⚡',
-                docks: '🅿️'
+                docks: '🅿️',
             };
 
-            mobileModeTrigger.textContent =
-                icons[mode] ?? '🚲';
+            mobileModeTrigger.textContent = icons[mode] ?? '🚲';
 
             mobileModeTrigger.classList.remove(
                 'mode-bikes',
                 'mode-electric',
-                'mode-docks'
+                'mode-docks',
             );
 
-            mobileModeTrigger.classList.add(
-                `mode-${mode}`
-            );
+            mobileModeTrigger.classList.add(`mode-${mode}`);
         }
 
         bikesButton.className =
@@ -78,8 +65,6 @@ export function initDisplayMode(options) {
             mode === 'docks'
                 ? 'btn btn-primary active mode-docks'
                 : 'btn btn-outline-primary mode-docks';
-        
-
 
         /*if (getDisplayMode() === 'bikes') {
 
@@ -100,19 +85,12 @@ export function initDisplayMode(options) {
         }*/
     }
 
-
-    
-
-    
     bikesButton?.addEventListener('click', () => {
-
         //navigation.startProgrammaticMove();
 
         setDisplayMode('bikes');
 
-
         updateModeButtons();
-
 
         renderMarkers(
             map,
@@ -121,21 +99,13 @@ export function initDisplayMode(options) {
             getDisplayMode(),
             updateStationPanel,
             false,
-            actions
+            actions,
         );
 
-
-        updateLegend(
-            map,
-            getDisplayMode()
-        );
-
+        updateLegend(map, getDisplayMode());
     });
 
-    
-
     electricButton?.addEventListener('click', () => {
-
         setDisplayMode('electric');
 
         updateModeButtons();
@@ -147,28 +117,18 @@ export function initDisplayMode(options) {
             getDisplayMode(),
             updateStationPanel,
             false,
-            actions
+            actions,
         );
 
-        updateLegend(
-            map,
-            getDisplayMode()
-        );
+        updateLegend(map, getDisplayMode());
     });
 
-    
-    
-
-
     docksButton?.addEventListener('click', () => {
-
         //navigation.startProgrammaticMove();
 
         setDisplayMode('docks');
 
-
         updateModeButtons();
-
 
         renderMarkers(
             map,
@@ -177,19 +137,11 @@ export function initDisplayMode(options) {
             getDisplayMode(),
             updateStationPanel,
             false,
-            actions
+            actions,
         );
 
-
-        updateLegend(
-            map,
-            getDisplayMode()
-        );
-
+        updateLegend(map, getDisplayMode());
     });
 
-
-
     updateModeButtons();
-
 }

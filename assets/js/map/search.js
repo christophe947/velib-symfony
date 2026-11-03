@@ -1,57 +1,41 @@
 import L from 'leaflet';
 import { navigation } from './navigation.js';
 import { showStationList } from './searchResults.js';
-import {
-    setCurrentFilteredStations,
-    getDisplayMode,
-} from './state.js';
-
-
+import { setCurrentFilteredStations, getDisplayMode } from './state.js';
 
 export function clearSearchState() {
-    
     setCurrentFilteredStations(null);
-    
+
     const searchInput = document.getElementById('station-search');
 
     if (searchInput) {
-        searchInput.value = "";
+        searchInput.value = '';
     }
 
     const container = document.getElementById('station-results');
 
     if (container) {
-        container.innerHTML = "";
+        container.innerHTML = '';
     }
 }
 
-
 function restoreSearchMapView() {
-
-    if (navigation.mode !== "savedView") {
-
+    if (navigation.mode !== 'savedView') {
         navigation.initDefaultView();
-
     } else {
         navigation.restoreUserView();
-    }    
+    }
 }
-
 
 function handleSearchBlur() {
-
     setTimeout(() => {
-
-        const container =
-            document.getElementById('station-results');
+        const container = document.getElementById('station-results');
 
         if (container) {
-            container.innerHTML = "";
+            container.innerHTML = '';
         }
-
     }, 400);
 }
-
 
 function handleSearchFocus(
     searchInput,
@@ -61,15 +45,14 @@ function handleSearchFocus(
     updateStationPanel,
     renderMarkers,
     setOpenedStation,
-    actions
+    actions,
 ) {
-
     const value = searchInput.value.toLowerCase();
 
     if (!value) return;
 
-    const filtered = stations.filter(station =>
-        station.name.toLowerCase().includes(value)
+    const filtered = stations.filter((station) =>
+        station.name.toLowerCase().includes(value),
     );
 
     showStationList(
@@ -81,22 +64,18 @@ function handleSearchFocus(
         updateStationPanel,
         renderMarkers,
         setOpenedStation,
-        actions
+        actions,
     );
-
 }
 
-
 function handleSearchKeydown(e) {
-
-    console.log("tappe lettre");
+    console.log('tappe lettre');
 
     if (e.key === 'Enter') {
         e.preventDefault();
         e.stopPropagation();
     }
 }
-
 
 function updateSearchResults(
     value,
@@ -106,11 +85,10 @@ function updateSearchResults(
     updateStationPanel,
     renderMarkers,
     setOpenedStation,
-    actions
+    actions,
 ) {
-
-    const filtered = stations.filter(station =>
-        station.name.toLowerCase().includes(value)
+    const filtered = stations.filter((station) =>
+        station.name.toLowerCase().includes(value),
     );
 
     setCurrentFilteredStations(filtered);
@@ -124,7 +102,7 @@ function updateSearchResults(
         updateStationPanel,
         renderMarkers,
         setOpenedStation,
-        actions
+        actions,
     );
 
     renderMarkers(
@@ -134,52 +112,38 @@ function updateSearchResults(
         getDisplayMode(),
         updateStationPanel,
         false,
-        actions
+        actions,
     );
 
     if (filtered.length) {
+        const bounds = L.latLngBounds(
+            filtered.map((station) => [station.latitude, station.longitude]),
+        );
 
-    const bounds = L.latLngBounds(
-        filtered.map(station => [
-            station.latitude,
-            station.longitude
-        ])
-    );
+        const boundsZoom = map.getBoundsZoom(bounds);
 
-    const boundsZoom = map.getBoundsZoom(bounds);
+        const targetZoom = Math.max(boundsZoom, 13);
 
-    const targetZoom = Math.max(
-        boundsZoom,
-        13
-    );
+        navigation.startProgrammaticMove();
 
-    navigation.startProgrammaticMove();
-
-    map.flyTo(
-        bounds.getCenter(),
-        targetZoom,
-        {
-            duration: 0.5
-        }
-    );
+        map.flyTo(bounds.getCenter(), targetZoom, {
+            duration: 0.5,
+        });
+    }
 }
-}
-
 
 export function initSearch(options) {
+    const {
+        stations,
+        map,
+        markersLayer,
+        updateStationPanel,
+        renderMarkers,
+        setOpenedStation,
+        actions,
+    } = options;
 
-   const {
-    stations,
-    map,
-    markersLayer,
-    updateStationPanel,
-    renderMarkers,
-    setOpenedStation,
-    actions
-} = options;
-
-    const searchInput =
-        document.getElementById('station-search');
+    const searchInput = document.getElementById('station-search');
 
     if (!searchInput) {
         return;
@@ -187,23 +151,20 @@ export function initSearch(options) {
 
     // 1) Enter
     searchInput.addEventListener('keydown', (e) => {
-       handleSearchKeydown(e);
+        handleSearchKeydown(e);
     });
 
     // 2) Blur
     searchInput.addEventListener('blur', () => {
-         searchInput.closest('.mobile-search')
-        ?.classList.remove('expanded');
+        searchInput.closest('.mobile-search')?.classList.remove('expanded');
         document.body.classList.remove('search-active');
         handleSearchBlur();
     });
 
     // 3) Focus
     searchInput.addEventListener('focus', () => {
-
-        searchInput.closest('.mobile-search')
-    ?.classList.add('expanded');
-    document.body.classList.add('search-active');
+        searchInput.closest('.mobile-search')?.classList.add('expanded');
+        document.body.classList.add('search-active');
         handleSearchFocus(
             searchInput,
             stations,
@@ -212,13 +173,11 @@ export function initSearch(options) {
             updateStationPanel,
             renderMarkers,
             setOpenedStation,
-            actions
+            actions,
         );
     });
 
     searchInput.addEventListener('input', () => {
-
-       
         // debounce à réintroduire pour recherche API externe
         /*if (searchTimeout) {
             clearTimeout(searchTimeout);
@@ -226,42 +185,41 @@ export function initSearch(options) {
 
         searchTimeout = setTimeout(() => {*/
 
-            const value = searchInput.value.toLowerCase();
+        const value = searchInput.value.toLowerCase();
 
-            if (!value.trim()) {   
+        if (!value.trim()) {
+            actions.endSearch();
+            document.body.classList.remove('search-active');
 
-                actions.endSearch();
-                document.body.classList.remove('search-active');
-                
-                restoreSearchMapView();
+            restoreSearchMapView();
 
-                renderMarkers(
-                    map,
-                    markersLayer,
-                    stations,
-                    getDisplayMode(),
-                    updateStationPanel,
-                    false,
-                    actions
-                );
-                return;
-            }
-
-            if (!actions.isSearching?.()) {
-                actions.startSearch();
-                document.body.classList.add('search-active');
-            }
-
-            updateSearchResults(
-                value,
-                stations,
+            renderMarkers(
                 map,
                 markersLayer,
+                stations,
+                getDisplayMode(),
                 updateStationPanel,
-                renderMarkers,
-                setOpenedStation,
-                actions
+                false,
+                actions,
             );
+            return;
+        }
+
+        if (!actions.isSearching?.()) {
+            actions.startSearch();
+            document.body.classList.add('search-active');
+        }
+
+        updateSearchResults(
+            value,
+            stations,
+            map,
+            markersLayer,
+            updateStationPanel,
+            renderMarkers,
+            setOpenedStation,
+            actions,
+        );
         /*}, 400);*/
     });
 }

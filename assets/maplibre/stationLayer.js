@@ -1,49 +1,44 @@
 import { AVAILABILITY } from './constants.js';
-import { setSelectedStation,
+import {
+    setSelectedStation,
     subscribeToSelectedStation,
-    subscribeToDisplayMode
- } from './state.js';
-
+    subscribeToDisplayMode,
+} from './state.js';
 
 function getDisplayProperties(displayMode) {
-
-    const availableProperty = displayMode === 'electric'
-        ? 'electricBikes'
-        : displayMode === 'docks'
-            ? 'docks'
-            : 'bikes';
+    const availableProperty =
+        displayMode === 'electric'
+            ? 'electricBikes'
+            : displayMode === 'docks'
+              ? 'docks'
+              : 'bikes';
 
     const available = ['get', availableProperty];
 
-    const rate = [
-        '/',
-        available,
-        ['get', 'capacity']
-    ];
+    const rate = ['/', available, ['get', 'capacity']];
 
     const colorExpression = [
         'case',
-        ['==', available, 0], 'gray',
-        ['<=', available, AVAILABILITY.MIN_RED], 'red',
-        ['<=', available, AVAILABILITY.MIN_ORANGE], 'orange',
-        ['>=', rate, AVAILABILITY.GOOD], 'green',
-        'orange'
+        ['==', available, 0],
+        'gray',
+        ['<=', available, AVAILABILITY.MIN_RED],
+        'red',
+        ['<=', available, AVAILABILITY.MIN_ORANGE],
+        'orange',
+        ['>=', rate, AVAILABILITY.GOOD],
+        'green',
+        'orange',
     ];
 
     return {
         availableProperty,
-        colorExpression
+        colorExpression,
     };
 }
 
-
 export function addStationLayer(map, displayMode = 'bikes') {
-
-    const {
-        availableProperty,
-        colorExpression
-    } = getDisplayProperties(displayMode);
-
+    const { availableProperty, colorExpression } =
+        getDisplayProperties(displayMode);
 
     map.addLayer({
         id: 'station-selected-halo',
@@ -51,11 +46,7 @@ export function addStationLayer(map, displayMode = 'bikes') {
         source: 'stations',
         minzoom: 13,
 
-        filter: [
-            '==',
-            ['to-string', ['get', 'id']],
-            ''
-        ],
+        filter: ['==', ['to-string', ['get', 'id']], ''],
 
         paint: {
             //'circle-radius': 36,
@@ -64,13 +55,16 @@ export function addStationLayer(map, displayMode = 'bikes') {
                 ['linear'],
                 ['zoom'],
 
-                13, 34,
-                15, 36,
-                17, 40
+                13,
+                34,
+                15,
+                36,
+                17,
+                40,
             ],
             'circle-color': '#fff200',
-            'circle-opacity': 0.35
-        }
+            'circle-opacity': 0.35,
+        },
     });
 
     map.addLayer({
@@ -88,15 +82,18 @@ export function addStationLayer(map, displayMode = 'bikes') {
                 ['linear'],
                 ['zoom'],
 
-                13, 15,
-                15, 17,
-                17, 25
+                13,
+                15,
+                15,
+                17,
+                17,
+                25,
             ],
             'circle-color': '#000000',
-            'circle-opacity': 0.70,
+            'circle-opacity': 0.7,
             'circle-blur': 0.7,
-            'circle-translate': [0, 3]
-        }
+            'circle-translate': [0, 3],
+        },
     });
 
     map.addLayer({
@@ -114,14 +111,17 @@ export function addStationLayer(map, displayMode = 'bikes') {
                 ['linear'],
                 ['zoom'],
 
-                13, 10,
-                15, 12,
-                17, 18
+                13,
+                10,
+                15,
+                12,
+                17,
+                18,
             ],
             'circle-color': colorExpression,
             'circle-stroke-width': 2,
-            'circle-stroke-color': '#ffffff'
-        }
+            'circle-stroke-color': '#ffffff',
+        },
     });
 
     map.addLayer({
@@ -136,15 +136,15 @@ export function addStationLayer(map, displayMode = 'bikes') {
             'text-field': ['get', availableProperty],
             'text-size': 12,
             'text-allow-overlap': true,
-            'text-ignore-placement': true
+            'text-ignore-placement': true,
         },
 
         paint: {
             'text-color': '#ffffff',
             'text-halo-color': '#ffffff',
             'text-halo-width': 0.35,
-            'text-halo-blur': 0
-        }
+            'text-halo-blur': 0,
+        },
     });
 
     map.addLayer({
@@ -153,11 +153,7 @@ export function addStationLayer(map, displayMode = 'bikes') {
         source: 'stations',
         minzoom: 13,
 
-        filter: [
-            '==',
-            ['to-string', ['get', 'id']],
-            ''
-        ],
+        filter: ['==', ['to-string', ['get', 'id']], ''],
 
         paint: {
             //'circle-radius': 22,
@@ -166,56 +162,38 @@ export function addStationLayer(map, displayMode = 'bikes') {
                 ['linear'],
                 ['zoom'],
 
-                13, 17,
-                15, 20,
-                17, 26
+                13,
+                17,
+                15,
+                20,
+                17,
+                26,
             ],
             'circle-color': 'transparent',
             'circle-stroke-width': 7,
-            'circle-stroke-color': '#fff200'
-        }
+            'circle-stroke-color': '#fff200',
+        },
     });
 
-    subscribeToDisplayMode(mode => {
+    subscribeToDisplayMode((mode) => {
+        const { availableProperty, colorExpression } =
+            getDisplayProperties(mode);
 
-        const {
+        map.setPaintProperty('stations', 'circle-color', colorExpression);
+
+        map.setLayoutProperty('station-count', 'text-field', [
+            'get',
             availableProperty,
-            colorExpression
-        } = getDisplayProperties(mode);
-
-        map.setPaintProperty(
-            'stations',
-            'circle-color',
-            colorExpression
-        );
-
-        map.setLayoutProperty(
-            'station-count',
-            'text-field',
-            ['get', availableProperty]
-        );
-
+        ]);
     });
 
-    subscribeToSelectedStation(station => {
-
+    subscribeToSelectedStation((station) => {
         if (!station) {
+            const emptyFilter = ['==', ['to-string', ['get', 'id']], ''];
 
-            const emptyFilter = [
-                '==',
-                ['to-string', ['get', 'id']],
-                ''
-            ];
+            map.setFilter('station-selected', emptyFilter);
 
-            map.setFilter(
-                'station-selected',
-                emptyFilter
-            );
-
-            map.setFilter(
-                'station-selected-halo',
-                emptyFilter
-            );
+            map.setFilter('station-selected-halo', emptyFilter);
 
             return;
         }
@@ -223,24 +201,15 @@ export function addStationLayer(map, displayMode = 'bikes') {
         const selectedFilter = [
             '==',
             ['to-string', ['get', 'id']],
-            String(station.id)
+            String(station.id),
         ];
 
-        map.setFilter(
-            'station-selected',
-            selectedFilter
-        );
+        map.setFilter('station-selected', selectedFilter);
 
-        map.setFilter(
-            'station-selected-halo',
-            selectedFilter
-        );
+        map.setFilter('station-selected-halo', selectedFilter);
     });
 
-
-
-    map.on('click', 'stations', event => {
-
+    map.on('click', 'stations', (event) => {
         const feature = event.features?.[0];
 
         if (!feature) {
@@ -249,6 +218,4 @@ export function addStationLayer(map, displayMode = 'bikes') {
 
         setSelectedStation(feature.properties);
     });
-
-
 }

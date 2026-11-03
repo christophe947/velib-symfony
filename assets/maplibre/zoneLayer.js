@@ -1,14 +1,11 @@
 import * as maplibregl from '/maplibre-assets/maplibre-gl.mjs';
 import { zonesToPointsGeoJSON } from './zones.js';
 
-export function addZoneLayer(
-    map,
-    zones
-) {
+export function addZoneLayer(map, zones) {
     // Délimitations des arrondissements
     map.addSource('arrondissements', {
         type: 'geojson',
-        data: zones
+        data: zones,
     });
 
     map.addLayer({
@@ -20,8 +17,8 @@ export function addZoneLayer(
 
         paint: {
             'fill-color': '#0d6efd',
-            'fill-opacity': 0.08
-        }
+            'fill-opacity': 0.08,
+        },
     });
 
     map.addLayer({
@@ -34,8 +31,8 @@ export function addZoneLayer(
         paint: {
             'line-color': '#0d6efd',
             'line-width': 2,
-            'line-opacity': 0.7
-        }
+            'line-opacity': 0.7,
+        },
     });
 
     // Points centraux pour les compteurs
@@ -43,7 +40,7 @@ export function addZoneLayer(
 
     map.addSource('arrondissement-points', {
         type: 'geojson',
-        data: zonePoints
+        data: zonePoints,
     });
 
     map.addLayer({
@@ -54,20 +51,23 @@ export function addZoneLayer(
         minzoom: 10.5,
 
         paint: {
-        'circle-radius': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
+            'circle-radius': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
 
-            10, 19,
-            12, 22,
-            13, 27
-        ],
-        'circle-color': '#000000',
-        'circle-opacity': 0.70,
-        'circle-blur': 0.6,
-        'circle-translate': [0, 4]
-    }
+                10,
+                19,
+                12,
+                22,
+                13,
+                27,
+            ],
+            'circle-color': '#000000',
+            'circle-opacity': 0.7,
+            'circle-blur': 0.6,
+            'circle-translate': [0, 4],
+        },
     });
 
     // Cercle bleu
@@ -83,15 +83,18 @@ export function addZoneLayer(
                 'interpolate',
                 ['linear'],
                 ['zoom'],
-                
-                10, 12,
-                12, 15,
-                13, 19
+
+                10,
+                12,
+                12,
+                15,
+                13,
+                19,
             ],
             'circle-color': '#0d6efd',
             'circle-stroke-width': 3,
-            'circle-stroke-color': '#ffffff'
-        }
+            'circle-stroke-color': '#ffffff',
+        },
     });
 
     // Nombre de stations
@@ -103,94 +106,63 @@ export function addZoneLayer(
         minzoom: 10.5,
 
         layout: {
-            'text-field': [
-                'to-string',
-                ['get', 'stationCount']
-            ],
+            'text-field': ['to-string', ['get', 'stationCount']],
             'text-size': 14,
-            'text-font': [
-                'Open Sans Bold'
-            ]
+            'text-font': ['Open Sans Bold'],
         },
 
         paint: {
-            'text-color': '#ffffff'
-        }
+            'text-color': '#ffffff',
+        },
     });
 
+    map.on('click', 'arrondissement-count', (event) => {
+        const feature = event.features?.[0];
 
-
-
-    map.on('click', 'arrondissement-count', event => {
-
-    const feature = event.features?.[0];
-
-    if (!feature) {
-        return;
-    }
-
-    const zoneId = feature.properties?.c_ar;
-
-    const zone = zones.features.find(
-        zone => zone.properties?.c_ar == zoneId
-    );
-
-    if (!zone) {
-        return;
-    }
-
-    const bounds = getGeometryBounds(
-        zone.geometry
-    );
-
-    if (!bounds) {
-        return;
-    }
-
-    map.fitBounds(
-        bounds,
-        {
-            padding: 60,
-            maxZoom: 15
-        }
-    );
-});
-
-
-
-
-
-function getGeometryBounds(geometry) {
-
-    if (!geometry) {
-        return null;
-    }
-
-    const bounds = new maplibregl.LngLatBounds();
-
-    function extendCoordinates(coordinates) {
-
-        if (
-            typeof coordinates[0] === 'number'
-        ) {
-            bounds.extend(coordinates);
+        if (!feature) {
             return;
         }
 
-        coordinates.forEach(
-            extendCoordinates
+        const zoneId = feature.properties?.c_ar;
+
+        const zone = zones.features.find(
+            (zone) => zone.properties?.c_ar == zoneId,
         );
+
+        if (!zone) {
+            return;
+        }
+
+        const bounds = getGeometryBounds(zone.geometry);
+
+        if (!bounds) {
+            return;
+        }
+
+        map.fitBounds(bounds, {
+            padding: 60,
+            maxZoom: 15,
+        });
+    });
+
+    function getGeometryBounds(geometry) {
+        if (!geometry) {
+            return null;
+        }
+
+        const bounds = new maplibregl.LngLatBounds();
+
+        function extendCoordinates(coordinates) {
+            if (typeof coordinates[0] === 'number') {
+                bounds.extend(coordinates);
+                return;
+            }
+
+            coordinates.forEach(extendCoordinates);
+        }
+
+        extendCoordinates(geometry.coordinates);
+
+        return bounds;
     }
-
-    extendCoordinates(
-        geometry.coordinates
-    );
-
-    return bounds;
-}
-
-
-
-
-
 }

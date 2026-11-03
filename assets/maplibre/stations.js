@@ -1,17 +1,13 @@
 export function stationsToGeoJSON(stations) {
-
     return {
         type: 'FeatureCollection',
 
-        features: stations.map(station => ({
+        features: stations.map((station) => ({
             type: 'Feature',
 
             geometry: {
                 type: 'Point',
-                coordinates: [
-                    station.longitude,
-                    station.latitude
-                ]
+                coordinates: [station.longitude, station.latitude],
             },
 
             properties: {
@@ -23,8 +19,8 @@ export function stationsToGeoJSON(stations) {
                 docks: station.docks,
                 capacity: station.capacity,
                 latitude: station.latitude,
-                longitude: station.longitude
-            }
-        }))
+                longitude: station.longitude,
+            },
+        })),
     };
 }

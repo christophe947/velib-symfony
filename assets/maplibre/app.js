@@ -3,13 +3,9 @@ import { initStationPanel } from './stationPanel.js';
 import { initSearch } from './search.js';
 import { setSelectedStation } from './state.js';
 
-import {
-    startCompass,
-    stopCompass
-} from './compass.js';
+import { startCompass, stopCompass } from './compass.js';
 
 const map = createMap();
-
 
 //initStationPanel();
 initStationPanel(map);
@@ -19,33 +15,16 @@ initSearch(map);
 
 //map.resize();
 
-document.addEventListener(
-    'station:selected',
-    event => {
+document.addEventListener('station:selected', (event) => {
+    const station = event.detail;
 
-        const station = event.detail;
+    setSelectedStation(station);
 
-        setSelectedStation(station);
-
-        map.flyTo({
-            center: [
-                station.longitude,
-                station.latitude
-            ],
-            zoom: 16
-        });
-    }
-);
-
-
-
-
-
-
-
-
-
-
+    map.flyTo({
+        center: [station.longitude, station.latitude],
+        zoom: 16,
+    });
+});
 
 // Test temporaire de la boussole sur téléphone.
 /*
