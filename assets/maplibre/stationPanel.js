@@ -22,14 +22,7 @@ import {
     stopBackgroundUserTracking,
     activateCompass,
 } from './map.js';
-import {
-    setNavigationRoute,
-    updateNavigationProgress,
-    startNavigationSimulation,
-    startOffRouteSimulation,
-    stopNavigationProcessing,
-} from './navigation.js';
-import { setRouteSummaryCallback } from './routeSummary.js';
+import { createNavigationEngine } from './navigation.js';
 import { formatDistance, formatDuration } from './routeFormatting.js';
 import { startCompass, stopCompass } from './compass.js';
 
@@ -48,6 +41,7 @@ let lastKnownUserPosition = null;
 let lastCompassLogTime = 0;
 let currentRouteCoordinates = [];
 let lastRouteProgressIndex = 0;
+let navigationEngine = null;
 
 const mobileQuery = window.matchMedia('(max-width: 767px)');
 
@@ -112,7 +106,14 @@ export function initStationPanel(map) {
     if (!element) {
         return;
     }
-    setRouteSummaryCallback(updateRouteSummary);
+    navigationEngine = createNavigationEngine({
+        showUserMarker: (position) => showUserMarker(map, position),
+        followUserPosition: (position) => followUserPosition(map, position),
+        updateWalkingRoute: (coordinates) =>
+            updateWalkingRoute(map, coordinates),
+        updateRouteSummary,
+    });
+
     // Le panneau vide est présent dès le lancement
     // sur mobile comme sur desktop.
     renderEmptyPanel();
@@ -344,7 +345,7 @@ function stopNavigation(map, station) {
     setUserFollowing(false);
 
     // Arrête les simulations et invalide les recalculs.
-    stopNavigationProcessing();
+    navigationEngine.stopNavigationProcessing();
 
     // Nettoie le tracé et le marqueur de destination.
     clearNavigationMap(map);
@@ -604,7 +605,7 @@ async function updateStationPanel(station, map) {
                     showUserMarker(map, position);
                     followUserPosition(map, position);
                     //updateRouteProgress(position, map);
-                    updateNavigationProgress(position, map);
+                    navigationEngine.updateNavigationProgress(position);
 
                     console.log('Nouvelle position GPS :', position);
                 },
@@ -699,7 +700,7 @@ async function updateStationPanel(station, map) {
             const coordinates = decodePolyline(route.legs[0].shape);
 
             //setNavigationRoute(coordinates);
-            setNavigationRoute(coordinates, {
+            navigationEngine.setNavigationRoute(coordinates, {
                 latitude: station.latitude,
                 longitude: station.longitude,
             });
@@ -738,7 +739,7 @@ async function updateStationPanel(station, map) {
                     simulationButton.disabled = true;
                     simulationButton.textContent = 'Simulation en cours…';
 
-                    startNavigationSimulation(map, () => {
+                    navigationEngine.startNavigationSimulation(() => {
                         simulationButton.disabled = false;
                         simulationButton.textContent = '🧪 Simuler le trajet';
                     });
@@ -753,7 +754,7 @@ async function updateStationPanel(station, map) {
                 offRouteButton.className = 'station-panel-simulate';
 
                 offRouteButton.addEventListener('click', () => {
-                    startOffRouteSimulation(map);
+                    navigationEngine.startOffRouteSimulation();
                 });
 
                 simulationButton.after(offRouteButton);
