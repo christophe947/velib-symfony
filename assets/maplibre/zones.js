@@ -1,3 +1,6 @@
+let geographicFilesPromise = null;
+const geographicDataByStations = new Map();
+
 export async function loadArrondissements() {
     const response = await fetch('/data/arrondissements.geojson');
 
@@ -67,6 +70,65 @@ export function countStationsByZone(zones, stations) {
             };
         }),
     };
+}
+
+function loadGeographicFiles() {
+    if (geographicFilesPromise) {
+        return geographicFilesPromise;
+    }
+
+    const promise = Promise.all([loadArrondissements(), loadCommunes()]).then(
+        ([arrondissements, communes]) => ({
+            arrondissements,
+            communes,
+        }),
+    );
+
+    geographicFilesPromise = promise.catch((error) => {
+        geographicFilesPromise = null;
+        throw error;
+    });
+
+    return geographicFilesPromise;
+}
+
+export function loadGeographicData(stations) {
+    const stationPositions = stations.map(({ longitude, latitude }) => ({
+        longitude,
+        latitude,
+    }));
+    const stationsKey = JSON.stringify(
+        stationPositions.map(({ longitude, latitude }) => [
+            longitude,
+            latitude,
+        ]),
+    );
+
+    const cachedPromise = geographicDataByStations.get(stationsKey);
+
+    if (cachedPromise) {
+        return cachedPromise;
+    }
+
+    const promise = loadGeographicFiles().then(
+        ({ arrondissements, communes }) => ({
+            communes,
+            arrondissementsWithStationCount: countStationsByZone(
+                arrondissements,
+                stationPositions,
+            ),
+        }),
+    );
+
+    geographicDataByStations.set(stationsKey, promise);
+
+    promise.catch(() => {
+        if (geographicDataByStations.get(stationsKey) === promise) {
+            geographicDataByStations.delete(stationsKey);
+        }
+    });
+
+    return promise;
 }
 
 function isPointInsideGeometry(longitude, latitude, geometry) {

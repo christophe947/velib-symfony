@@ -1,25 +1,18 @@
 import Fuse from '/maplibre-assets/fuse.mjs';
-
 import {
-    loadArrondissements,
-    loadCommunes,
-    countStationsByZone,
+    loadGeographicData,
     getStationsForZone,
 } from './zones.js';
-
 import { setUserFollowing } from './map.js';
-
 import { classifySearch } from './searchIntent.js';
-
 import {
     rankStationResults,
     renderAreaResults,
     renderSearchResults,
 } from './searchResults.js';
-
 import { searchNearbyStations } from './locationSearch.js';
-
 import { initGeolocation } from './geolocation.js';
+
 
 export async function initSearch(map) {
     const input = document.getElementById('map-search-input');
@@ -39,12 +32,10 @@ export async function initSearch(map) {
 
     const stations = window.stations ?? [];
 
-    const [zonesData, communesData] = await Promise.all([
-        loadArrondissements(),
-        loadCommunes(),
-    ]);
+    const { arrondissementsWithStationCount, communes: communesData } =
+        await loadGeographicData(stations);
 
-    const zones = countStationsByZone(zonesData, stations).features;
+    const zones = arrondissementsWithStationCount.features;
 
     const communes = communesData.features ?? [];
 

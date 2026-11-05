@@ -2,12 +2,7 @@ import * as maplibregl from '/maplibre-assets/maplibre-gl.mjs';
 
 import { stationsToGeoJSON } from './stations.js';
 import { addStationLayer } from './stationLayer.js';
-import {
-    loadArrondissements,
-    loadCommunes,
-    countStationsByZone,
-    //filterZonesWithStations
-} from './zones.js';
+import { loadGeographicData } from './zones.js';
 import { addZoneLayer } from './zoneLayer.js';
 import { addCommuneLayer } from './communeLayer.js';
 import {
@@ -210,18 +205,14 @@ export function createMap() {
             data: geoJSON,
         });
 
-        const communes = await loadCommunes();
+        const {
+            communes,
+            arrondissementsWithStationCount,
+        } = await loadGeographicData(window.stations ?? []);
 
         addCommuneLayer(map, communes);
 
-        const zones = await loadArrondissements();
-
-        const zonesWithStations = countStationsByZone(
-            zones,
-            window.stations ?? [],
-        );
-
-        addZoneLayer(map, zonesWithStations);
+        addZoneLayer(map, arrondissementsWithStationCount);
 
         addStationLayer(map, 'bikes');
 
