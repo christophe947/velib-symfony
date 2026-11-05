@@ -1,4 +1,3 @@
-import * as maplibregl from '/maplibre-assets/maplibre-gl.mjs';
 import { CupertinoPane } from 'cupertino-pane';
 import { subscribeToSelectedStation, setDisplayMode } from './state.js';
 import {
@@ -15,7 +14,6 @@ import {
     setUserFollowing,
     setNavigationActive,
     followUserPosition,
-    updateCameraFromCompass,
     clearNavigationMap,
     ensure2DView,
     startBackgroundUserTracking,
@@ -24,7 +22,7 @@ import {
 } from './map.js';
 import { createNavigationEngine } from './navigation.js';
 import { formatDistance, formatDuration } from './routeFormatting.js';
-import { startCompass, stopCompass } from './compass.js';
+import { stopCompass } from './compass.js';
 
 let pane = null;
 let element = null;
@@ -38,9 +36,6 @@ let positionWatchId = null;
 
 // Dernière position GPS connue.
 let lastKnownUserPosition = null;
-let lastCompassLogTime = 0;
-let currentRouteCoordinates = [];
-let lastRouteProgressIndex = 0;
 let navigationEngine = null;
 
 const mobileQuery = window.matchMedia('(max-width: 767px)');
@@ -504,10 +499,6 @@ async function updateStationPanel(station, map) {
                 map,
 
                 (reading) => {
-                    /*if (!isInitialCameraSetup) {
-                    updateCameraFromCompass(map, reading);
-                }*/
-
                     const compassDisplay = element.querySelector(
                         '.station-panel-compass-status',
                     );
@@ -704,9 +695,6 @@ async function updateStationPanel(station, map) {
                 latitude: station.latitude,
                 longitude: station.longitude,
             });
-
-            //currentRouteCoordinates = coordinates;
-            //lastRouteProgressIndex = 0;
 
             drawWalkingRoute(map, coordinates);
 
