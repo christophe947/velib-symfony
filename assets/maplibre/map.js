@@ -13,8 +13,8 @@ import { addCommuneLayer } from './communeLayer.js';
 import {
     showUserMarker,
     requestUserPosition,
-    startWatchingPosition,
 } from './geolocation.js';
+import * as userTracking from './userTracking.js';
 import { startCompass } from './compass.js';
 import { createCameraController } from './cameraController.js';
 import {
@@ -34,8 +34,6 @@ export {
 //import { getLastCompassReading } from './compass.js';
 
 let isNavigationActive = false;
-
-let backgroundPositionWatchId = null;
 
 let viewModeControl = null;
 
@@ -268,11 +266,11 @@ export function followUserPosition(map, position) {
 }
 
 export function startBackgroundUserTracking(map) {
-    if (!map || backgroundPositionWatchId !== null || isNavigationActive) {
+    if (!map || isNavigationActive) {
         return;
     }
 
-    backgroundPositionWatchId = startWatchingPosition(
+    userTracking.start(
         (position) => {
             showUserMarker(map, position);
             followUserPosition(map, position);
@@ -284,12 +282,7 @@ export function startBackgroundUserTracking(map) {
 }
 
 export function stopBackgroundUserTracking() {
-    if (backgroundPositionWatchId === null) {
-        return;
-    }
-
-    navigator.geolocation.clearWatch(backgroundPositionWatchId);
-    backgroundPositionWatchId = null;
+    userTracking.stop();
 }
 
 /**
