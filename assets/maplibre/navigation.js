@@ -342,6 +342,10 @@ export function startOffRouteSimulation(map) {
         return;
     }
 
+    if (offRouteSimulationIntervalId !== null) {
+        return;
+    }
+
     // Évite que deux simulations envoient des positions simultanément.
     stopNavigationSimulation();
 
@@ -381,12 +385,15 @@ export function startOffRouteSimulation(map) {
 
         if (count >= 3) {
             clearInterval(intervalId);
+            offRouteSimulationIntervalId = null;
 
             console.log(
                 '✅ Test terminé : consulte les messages de détection ci-dessus.',
             );
         }
     }, 1000);
+
+    offRouteSimulationIntervalId = intervalId;
 }
 
 /**
