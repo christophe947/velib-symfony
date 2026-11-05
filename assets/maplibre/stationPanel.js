@@ -722,12 +722,7 @@ async function updateStationPanel(station, map) {
             joinButton.textContent = 'Démarrer';
 
             if (routeSummary) {
-                routeSummary.innerHTML = `
-                    <span>📍 ${distance}</span>
-                    <span>🚶 ${duration}</span>
-                `;
-
-                routeSummary.style.display = 'flex';
+                updateRouteSummary(distance, duration);
 
                 const simulationButton = document.createElement('button');
 
