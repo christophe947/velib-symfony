@@ -2,7 +2,7 @@ import Fuse from '/maplibre-assets/fuse.mjs';
 import {
     loadGeographicData,
     getStationsForZone,
-} from './zones.js';
+} from './geography/zones.js';
 import { setUserFollowing } from './map.js';
 import { classifySearch } from './searchIntent.js';
 import {

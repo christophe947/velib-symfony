@@ -1,5 +1,5 @@
 import * as maplibregl from '/maplibre-assets/maplibre-gl.mjs';
-import { getGeometryBounds } from './geometry.js';
+import { getGeometryBounds } from './geography/geometry.js';
 
 function communesToPointsGeoJSON(communes) {
     return {
