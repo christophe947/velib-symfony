@@ -73,8 +73,6 @@ export function addStationLayer(map, displayMode = 'bikes') {
         source: 'stations',
         minzoom: 13,
 
-        filter: ['!', ['has', 'point_count']],
-
         paint: {
             //'circle-radius': 15,
             'circle-radius': [
@@ -102,8 +100,6 @@ export function addStationLayer(map, displayMode = 'bikes') {
         source: 'stations',
         minzoom: 13,
 
-        filter: ['!', ['has', 'point_count']],
-
         paint: {
             //'circle-radius': 11,
             'circle-radius': [
@@ -129,8 +125,6 @@ export function addStationLayer(map, displayMode = 'bikes') {
         type: 'symbol',
         source: 'stations',
         minzoom: 13,
-
-        filter: ['!', ['has', 'point_count']],
 
         layout: {
             'text-field': ['get', availableProperty],
