@@ -76,6 +76,10 @@ export async function initSearch(map) {
             return;
         }
 
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+        searchVersion += 1;
+
         results.innerHTML = '';
         results.style.display = 'none';
 
@@ -93,6 +97,14 @@ export async function initSearch(map) {
     document.addEventListener('click', (event) => {
         if (!event.target.closest('#map-search')) {
             const hasResults = displayedStations.length > 0;
+            const hasPendingSearch = debounceTimer !== null ||
+                results.style.display === 'block';
+
+            if (hasPendingSearch) {
+                clearTimeout(debounceTimer);
+                debounceTimer = null;
+                searchVersion += 1;
+            }
 
             results.innerHTML = '';
             results.style.display = 'none';
@@ -122,6 +134,7 @@ export async function initSearch(map) {
         }
 
         debounceTimer = setTimeout(async () => {
+            debounceTimer = null;
             const intent = classifySearch(query, zones, communes);
 
             // Une commune ou un arrondissement affiche toutes ses stations.
