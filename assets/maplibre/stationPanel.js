@@ -95,7 +95,7 @@ async function updateBottomHeight(height) {
     await pane.breakpoints.buildBreakpoints(pane.settings.breaks, 0, false);
 }
 
-export function initStationPanel(map) {
+export function initStationPanel(map, styleReady) {
     element = document.querySelector('#station-content');
 
     if (!element) {
@@ -155,7 +155,9 @@ export function initStationPanel(map) {
         // Desktop : panneau classique
         element.classList.add('is-open');
     }
-    subscribeToSelectedStation((station) => updateStationPanel(station, map));
+    subscribeToSelectedStation((station) =>
+        updateStationPanel(station, map, styleReady),
+    );
 
     const lowerSearchPanel = () => {
         if (!pane || !mobileQuery.matches) return;
@@ -245,7 +247,7 @@ function renderEmptyPanel() {
 /**
  * Demande confirmation avant d'arrêter la navigation.
  */
-function showStopNavigationConfirmation(map, station) {
+function showStopNavigationConfirmation(map, station, styleReady) {
     // Évite d'afficher plusieurs fenêtres.
     if (element.querySelector('.navigation-confirmation-overlay')) {
         return;
@@ -306,7 +308,7 @@ function showStopNavigationConfirmation(map, station) {
     // Confirme l'arrêt de la navigation.
     confirmButton.addEventListener('click', () => {
         overlay.remove();
-        stopNavigation(map, station);
+        stopNavigation(map, station, styleReady);
     });
 
     // Ferme aussi la fenêtre en cliquant sur le fond.
@@ -322,7 +324,7 @@ function showStopNavigationConfirmation(map, station) {
 /**
  * Arrête complètement la navigation en cours.
  */
-function stopNavigation(map, station) {
+function stopNavigation(map, station, styleReady) {
     // Invalide les opérations asynchrones de la session.
     navigationSessionId++;
     navigationStarted = false;
@@ -391,13 +393,13 @@ function stopNavigation(map, station) {
 
     // Réafficher le panneau de la station avec ses gestionnaires de clic.
     if (station) {
-        updateStationPanel(station, map);
+        updateStationPanel(station, map, styleReady);
     }
 
     console.log('🛑 Navigation arrêtée.');
 }
 
-async function updateStationPanel(station, map) {
+async function updateStationPanel(station, map, styleReady) {
     if (!station || !element) {
         return;
     }
@@ -640,7 +642,7 @@ async function updateStationPanel(station, map) {
                 );
 
                 stopButton.addEventListener('click', () => {
-                    showStopNavigationConfirmation(map, station);
+                    showStopNavigationConfirmation(map, station, styleReady);
                 });
             }
 
@@ -672,13 +674,17 @@ async function updateStationPanel(station, map) {
             routeMessage.textContent = '';
         }
 
+        let routeStep = 'gps';
+
         try {
             const userPosition = await requestUserPosition();
 
             lastKnownUserPosition = userPosition;
 
+            routeStep = 'map';
             showUserMarker(map, userPosition);
 
+            routeStep = 'routing';
             const route = await getWalkingRoute(userPosition, {
                 latitude: station.latitude,
                 longitude: station.longitude,
@@ -690,17 +696,18 @@ async function updateStationPanel(station, map) {
 
             const coordinates = decodePolyline(route.legs[0].shape);
 
-            //setNavigationRoute(coordinates);
-            navigationEngine.setNavigationRoute(coordinates, {
-                latitude: station.latitude,
-                longitude: station.longitude,
-            });
-
+            routeStep = 'map';
+            await styleReady;
             drawWalkingRoute(map, coordinates);
 
             fitWalkingRoute(map, coordinates);
 
             showDestinationMarker(map, {
+                latitude: station.latitude,
+                longitude: station.longitude,
+            });
+
+            navigationEngine.setNavigationRoute(coordinates, {
                 latitude: station.latitude,
                 longitude: station.longitude,
             });
@@ -762,9 +769,20 @@ async function updateStationPanel(station, map) {
         } catch (error) {
             console.error('Impossible de calculer l’itinéraire :', error);
 
+            if (routeStep === 'map') {
+                navigationEngine.stopNavigationProcessing();
+                clearNavigationMap(map);
+            }
+
             if (routeMessage) {
                 routeMessage.hidden = false;
-                if (
+                if (routeStep === 'map') {
+                    routeMessage.textContent =
+                        '🗺️ La carte n’a pas pu afficher l’itinéraire. Réessaie.';
+                } else if (routeStep === 'routing') {
+                    routeMessage.textContent =
+                        '🧭 L’itinéraire n’a pas pu être calculé. Réessaie.';
+                } else if (
                     error instanceof Error &&
                     error.message === 'Geolocation unavailable'
                 ) {
@@ -772,7 +790,7 @@ async function updateStationPanel(station, map) {
                         '📍 La géolocalisation n’est pas disponible sur cet appareil.';
                 } else {
                     routeMessage.textContent =
-                        '📍 Autorise la localisation dans ton navigateur pour calculer l’itinéraire.';
+                        '📍 Ta position n’a pas pu être récupérée. Vérifie les autorisations de localisation et réessaie.';
                 }
                 if (mobileQuery.matches && pane) {
                     const content = element.querySelector(

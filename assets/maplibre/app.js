@@ -4,9 +4,9 @@ import { initSearch } from './search.js';
 import { setSelectedStation } from './state.js';
 
 
-const map = createMap();
+const { map, styleReady } = createMap();
 
-initStationPanel(map);
+initStationPanel(map, styleReady);
 
 initSearch(map);
 

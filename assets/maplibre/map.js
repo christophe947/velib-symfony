@@ -172,6 +172,34 @@ export function createMap() {
         minZoom: 10.5,
     });
 
+    const styleReady = new Promise((resolve, reject) => {
+        let timeoutId;
+
+        const cleanup = () => {
+            clearTimeout(timeoutId);
+            map.off('style.load', onStyleLoad);
+        };
+
+        const onStyleLoad = () => {
+            cleanup();
+            resolve();
+        };
+
+        timeoutId = setTimeout(() => {
+            cleanup();
+            reject(
+                new Error(
+                    'Le chargement du style MapLibre a dépassé le délai autorisé de 30 secondes.',
+                ),
+            );
+        }, 30_000);
+
+        map.on('style.load', onStyleLoad);
+    });
+
+    // Prevent an unhandled rejection if the style fails before navigation is requested.
+    styleReady.catch(() => {});
+
     const cameraController = createCameraController(map, {
         onViewModeChange: (is3D) => {
             viewModeControl?.updateMode(is3D);
@@ -219,7 +247,7 @@ export function createMap() {
         //map.resize();
     });
 
-    return map;
+    return { map, styleReady };
 }
 
 /**
