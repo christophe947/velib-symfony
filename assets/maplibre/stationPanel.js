@@ -46,7 +46,7 @@ let currentMode = 'bikes';
  * Met à jour les informations de distance et de durée
  * affichées dans le panneau de navigation.
  */
-export function updateRouteSummary(distance, duration) {
+function updateRouteSummary(distance, duration) {
     if (!element) {
         return;
     }

@@ -10,7 +10,7 @@ function getAvailableValue(station, mode) {
     return values[mode] ?? 0;
 }
 
-export function getAvailabilityRate(station, mode) {
+function getAvailabilityRate(station, mode) {
     const available = getAvailableValue(station, mode);
 
     if (!station.capacity) {

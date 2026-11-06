@@ -262,7 +262,7 @@ export function setNavigationActive(enabled) {
     isNavigationActive = enabled;
 }
 
-export function updateCameraFromCompass(map, reading) {
+function updateCameraFromCompass(map, reading) {
     if (!map || !reading) {
         return;
     }
@@ -270,7 +270,7 @@ export function updateCameraFromCompass(map, reading) {
     getCameraController()?.updateFromCompass(reading);
 }
 
-export function recenterOnUser(map, position) {
+function recenterOnUser(map, position) {
     if (!map || !position) {
         return;
     }

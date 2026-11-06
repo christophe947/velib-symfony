@@ -3,7 +3,7 @@ import { getGeometryBounds } from './geometry.js';
 let geographicFilesPromise = null;
 const geographicDataByStations = new Map();
 
-export async function loadArrondissements() {
+async function loadArrondissements() {
     const response = await fetch('/data/arrondissements.geojson');
 
     if (!response.ok) {
@@ -15,7 +15,7 @@ export async function loadArrondissements() {
     return response.json();
 }
 
-export async function loadCommunes() {
+async function loadCommunes() {
     const response = await fetch('/data/communes-velib.geojson');
 
     if (!response.ok) {
@@ -27,7 +27,7 @@ export async function loadCommunes() {
     return response.json();
 }
 
-export function filterZonesWithStations(zones) {
+function filterZonesWithStations(zones) {
     return {
         ...zones,
         features: zones.features.filter((zone) => {
@@ -39,7 +39,7 @@ export function filterZonesWithStations(zones) {
     };
 }
 
-export function countStationsByZone(zones, stations) {
+function countStationsByZone(zones, stations) {
     return {
         ...zones,
         features: zones.features.map((zone) => {
