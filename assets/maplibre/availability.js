@@ -43,24 +43,3 @@ export function getAvailabilityColor(station, mode) {
 
     return 'orange';
 }
-
-export function getAvailabilityLegend() {
-    return [
-        {
-            color: 'gray',
-            label: 'Aucune disponibilité',
-        },
-        {
-            color: 'red',
-            label: 'Très faible',
-        },
-        {
-            color: 'orange',
-            label: 'Moyenne',
-        },
-        {
-            color: 'green',
-            label: 'Bonne disponibilité',
-        },
-    ];
-}

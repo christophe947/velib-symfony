@@ -6,6 +6,16 @@ import { setSelectedStation } from './state.js';
 
 const { map, styleReady } = createMap();
 
+styleReady.catch((error) => {
+    console.error('Le fond cartographique est indisponible :', error);
+
+    const fallbackMessage = document.getElementById('map-style-fallback');
+
+    if (fallbackMessage) {
+        fallbackMessage.hidden = false;
+    }
+});
+
 initStationPanel(map, styleReady);
 
 initSearch(map);

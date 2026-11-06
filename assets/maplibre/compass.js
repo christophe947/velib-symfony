@@ -142,10 +142,3 @@ export function stopCompass() {
 
     console.log('🧭 Écoute du capteur arrêtée.');
 }
-
-/**
- * Retourne la dernière mesure reçue.
- */
-export function getLastCompassReading() {
-    return lastReading;
-}

@@ -12,18 +12,6 @@ export function setSelectedStation(station) {
     });
 }
 
-export function getSelectedStation() {
-    return selectedStation;
-}
-
-export function clearSelectedStation() {
-    selectedStation = null;
-
-    listeners.forEach((listener) => {
-        listener(null);
-    });
-}
-
 export function subscribeToSelectedStation(listener) {
     listeners.add(listener);
 

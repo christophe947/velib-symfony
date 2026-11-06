@@ -22,6 +22,34 @@ export async function initSearch(map) {
     if (!input || !results) {
         return;
     }
+
+    const stations = window.stations ?? [];
+
+    let geographicData;
+
+    try {
+        geographicData = await loadGeographicData(stations);
+    } catch (error) {
+        console.error(
+            'Impossible d’initialiser la recherche géographique :',
+            error,
+        );
+        results.textContent =
+            'Les données géographiques sont indisponibles. Recharge la page pour réessayer.';
+        results.style.display = 'block';
+        return;
+    }
+
+    results.textContent = '';
+    results.style.display = 'none';
+
+    const { arrondissementsWithStationCount, communes: communesData } =
+        geographicData;
+
+    const zones = arrondissementsWithStationCount.features;
+
+    const communes = communesData.features ?? [];
+
     input.addEventListener('focus', () => {
         document.dispatchEvent(new Event('search:focus'));
     });
@@ -29,15 +57,6 @@ export async function initSearch(map) {
         document.dispatchEvent(new Event('search:blur'));
         console.log('blur');
     });
-
-    const stations = window.stations ?? [];
-
-    const { arrondissementsWithStationCount, communes: communesData } =
-        await loadGeographicData(stations);
-
-    const zones = arrondissementsWithStationCount.features;
-
-    const communes = communesData.features ?? [];
 
     const searchableStations = stations.map((station) => ({
         station,

@@ -20,6 +20,9 @@ import {
     updateWalkingRoute,
 } from './routeLayer.js';
 
+const STYLE_URL =
+    'https://openmaptiles.data.gouv.fr/styles/osm-bright/style.json';
+
 export {
     drawWalkingRoute,
     fitWalkingRoute,
@@ -165,7 +168,7 @@ class RecenterControl {
 export function createMap() {
     const map = new maplibregl.Map({
         container: 'maplibre-map',
-        style: 'https://openmaptiles.data.gouv.fr/styles/osm-bright/style.json',
+        style: STYLE_URL,
         center: [2.3522, 48.8566],
         zoom: 11,
         maxZoom: 18,
@@ -174,18 +177,45 @@ export function createMap() {
 
     const styleReady = new Promise((resolve, reject) => {
         let timeoutId;
+        let settled = false;
 
         const cleanup = () => {
             clearTimeout(timeoutId);
             map.off('style.load', onStyleLoad);
+            map.off('error', onMapError);
         };
 
         const onStyleLoad = () => {
+            if (settled) {
+                return;
+            }
+
+            settled = true;
             cleanup();
             resolve();
         };
 
+        const onMapError = (event) => {
+            if (settled || event.error?.url !== STYLE_URL) {
+                return;
+            }
+
+            settled = true;
+            cleanup();
+            reject(
+                new Error(
+                    'Le chargement du style cartographique initial a échoué.',
+                    { cause: event.error },
+                ),
+            );
+        };
+
         timeoutId = setTimeout(() => {
+            if (settled) {
+                return;
+            }
+
+            settled = true;
             cleanup();
             reject(
                 new Error(
@@ -195,6 +225,7 @@ export function createMap() {
         }, 30_000);
 
         map.on('style.load', onStyleLoad);
+        map.on('error', onMapError);
     });
 
     // Prevent an unhandled rejection if the style fails before navigation is requested.
@@ -233,10 +264,19 @@ export function createMap() {
             data: geoJSON,
         });
 
-        const {
-            communes,
-            arrondissementsWithStationCount,
-        } = await loadGeographicData(window.stations ?? []);
+        let geographicData;
+
+        try {
+            geographicData = await loadGeographicData(window.stations ?? []);
+        } catch (error) {
+            console.error(
+                'Impossible d’initialiser les couches géographiques de la carte :',
+                error,
+            );
+            return;
+        }
+
+        const { communes, arrondissementsWithStationCount } = geographicData;
 
         addCommuneLayer(map, communes);
 

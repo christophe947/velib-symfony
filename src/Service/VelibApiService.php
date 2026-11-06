@@ -2,10 +2,18 @@
 
 namespace App\Service;
 
+use Psr\Cache\CacheItemPoolInterface;
+use Symfony\Component\DependencyInjection\Attribute\Target;
+use Symfony\Contracts\HttpClient\Exception\ServerExceptionInterface;
+use Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class VelibApiService
 {
+    private const CACHE_KEY = 'latest_complete_stations';
+    private const FRESHNESS_SECONDS = 60;
+    private const MAX_STALE_SECONDS = 86400;
+
     private const STATUS_URL =
         'https://velib-metropole-opendata.smovengo.cloud/opendata/Velib_Metropole/station_status.json';
 
@@ -14,7 +22,9 @@ class VelibApiService
 
 
     public function __construct(
-        private HttpClientInterface $httpClient
+        private HttpClientInterface $httpClient,
+        #[Target('cache.velib_stations')]
+        private CacheItemPoolInterface $stationsCache,
     ) {
     }
 
@@ -45,6 +55,86 @@ class VelibApiService
     }
 
     public function getStations(): array
+    {
+        $cachedData = $this->readCachedStations();
+        $now = time();
+
+        if (
+            null !== $cachedData
+            && $now >= $cachedData['fetchedAt']
+            && $now - $cachedData['fetchedAt'] < self::FRESHNESS_SECONDS
+        ) {
+            return $cachedData['stations'];
+        }
+
+        try {
+            $stations = $this->fetchCompleteStations();
+        } catch (TransportExceptionInterface|ServerExceptionInterface $exception) {
+            $fallbackAge = null === $cachedData
+                ? null
+                : time() - $cachedData['fetchedAt'];
+
+            if (
+                null !== $fallbackAge
+                && $fallbackAge >= 0
+                && $fallbackAge < self::MAX_STALE_SECONDS
+            ) {
+                return $cachedData['stations'];
+            }
+
+            throw $exception;
+        }
+
+        $this->saveCachedStations($stations);
+
+        return $stations;
+    }
+
+    /**
+     * @return array{stations: list<array<string, mixed>>, fetchedAt: int}|null
+     */
+    private function readCachedStations(): ?array
+    {
+        $item = $this->stationsCache->getItem(self::CACHE_KEY);
+
+        if (!$item->isHit()) {
+            return null;
+        }
+
+        $data = $item->get();
+
+        if (
+            !is_array($data)
+            || !isset($data['stations'], $data['fetchedAt'])
+            || !is_array($data['stations'])
+            || !is_int($data['fetchedAt'])
+        ) {
+            return null;
+        }
+
+        return $data;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $stations
+     */
+    private function saveCachedStations(array $stations): void
+    {
+        $item = $this->stationsCache->getItem(self::CACHE_KEY);
+        $item->set([
+            'stations' => $stations,
+            'fetchedAt' => time(),
+        ]);
+        $item->expiresAfter(self::MAX_STALE_SECONDS);
+        $this->stationsCache->save($item);
+    }
+
+    /**
+     * Fetches and combines both API feeds before returning a cacheable result.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function fetchCompleteStations(): array
     {
         $status = $this->httpClient
             ->request('GET', self::STATUS_URL)

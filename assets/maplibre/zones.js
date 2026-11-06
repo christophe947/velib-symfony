@@ -3,28 +3,83 @@ import { getGeometryBounds } from './geometry.js';
 let geographicFilesPromise = null;
 const geographicDataByStations = new Map();
 
-async function loadArrondissements() {
-    const response = await fetch('/data/arrondissements.geojson');
+async function fetchGeographicJson(url, description) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+        let response;
 
-    if (!response.ok) {
-        throw new Error(
-            `Impossible de charger les arrondissements : ${response.status}`,
-        );
+        try {
+            response = await fetch(url);
+        } catch (error) {
+            if (!(error instanceof TypeError)) {
+                throw new Error(
+                    `Impossible de charger ${description} : ${error.message}`,
+                );
+            }
+
+            if (attempt === 2) {
+                throw new Error(
+                    `Impossible de charger ${description} après deux tentatives : erreur réseau (${error.message}).`,
+                );
+            }
+
+            continue;
+        }
+
+        if (response.status >= 500 && response.status < 600) {
+            if (attempt === 1) {
+                continue;
+            }
+
+            throw new Error(
+                `Impossible de charger ${description} après deux tentatives : HTTP ${response.status}.`,
+            );
+        }
+
+        if (!response.ok) {
+            throw new Error(
+                `Impossible de charger ${description} : HTTP ${response.status}.`,
+            );
+        }
+
+        let responseBody;
+
+        try {
+            responseBody = await response.text();
+        } catch (error) {
+            if (error instanceof TypeError && attempt === 1) {
+                continue;
+            }
+
+            if (error instanceof TypeError) {
+                throw new Error(
+                    `Impossible de recevoir les données de ${description} après deux tentatives : erreur réseau (${error.message}).`,
+                );
+            }
+
+            throw new Error(
+                `Impossible de recevoir les données de ${description} : ${error.message}`,
+            );
+        }
+
+        try {
+            return JSON.parse(responseBody);
+        } catch (error) {
+            throw new Error(
+                `Impossible de décoder le GeoJSON pour ${description} : JSON invalide (${error.message}).`,
+            );
+        }
     }
+}
 
-    return response.json();
+async function loadArrondissements() {
+    return fetchGeographicJson(
+        '/data/arrondissements.geojson',
+        'les arrondissements',
+    );
 }
 
 async function loadCommunes() {
-    const response = await fetch('/data/communes-velib.geojson');
-
-    if (!response.ok) {
-        throw new Error(
-            `Impossible de charger les communes : ${response.status}`,
-        );
-    }
-
-    return response.json();
+    return fetchGeographicJson('/data/communes-velib.geojson', 'les communes');
 }
 
 function filterZonesWithStations(zones) {
@@ -222,38 +277,6 @@ function isPointInsideBounds(longitude, latitude, bounds) {
         latitude >= bounds.minLat &&
         latitude <= bounds.maxLat
     );
-}
-
-export function findZoneByQuery(zones, query) {
-    const arrondissement = extractArrondissementNumber(query);
-
-    if (!arrondissement) {
-        return null;
-    }
-
-    return zones.features.find((zone) => {
-        return Number(zone.properties?.c_ar) === arrondissement;
-    });
-}
-
-function extractArrondissementNumber(query) {
-    const normalizedQuery = query.toLowerCase().trim();
-
-    const match = normalizedQuery.match(
-        /(?:paris\s*)?(\d{1,2})(?:er|e|eme|ème)?(?:\s*ardt)?$/,
-    );
-
-    if (!match) {
-        return null;
-    }
-
-    const number = Number(match[1]);
-
-    if (number < 1 || number > 20) {
-        return null;
-    }
-
-    return number;
 }
 
 export function getStationsForZone(zone, stations) {

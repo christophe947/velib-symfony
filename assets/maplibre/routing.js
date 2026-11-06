@@ -63,6 +63,12 @@ export async function getWalkingRoute(from, to) {
 
             costing: 'pedestrian',
 
+            costing_options: {
+                pedestrian: {
+                    shortest: true
+                }
+            },
+
             units: 'kilometers',
         }),
     });

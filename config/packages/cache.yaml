@@ -17,3 +17,6 @@ framework:
         # Namespaced pools use the above "app" backend by default
         #pools:
             #my.dedicated.cache: null
+        pools:
+            cache.velib_stations:
+                adapter: cache.app
