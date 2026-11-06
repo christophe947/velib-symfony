@@ -4,7 +4,7 @@ import {
     requestUserPosition,
     showUserMarker,
     startWatchingPosition,
-} from './geolocation.js';
+} from './location/geolocation.js';
 import { getWalkingRoute, decodePolyline } from './routing.js';
 import {
     drawWalkingRoute,

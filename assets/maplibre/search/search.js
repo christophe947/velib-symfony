@@ -11,7 +11,7 @@ import {
     renderSearchResults,
 } from './searchResults.js';
 import { searchNearbyStations } from './locationSearch.js';
-import { initGeolocation } from '../geolocation.js';
+import { initGeolocation } from '../location/geolocation.js';
 
 
 export async function initSearch(map) {

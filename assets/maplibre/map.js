@@ -8,8 +8,8 @@ import { addCommuneLayer } from './communeLayer.js';
 import {
     showUserMarker,
     requestUserPosition,
-} from './geolocation.js';
-import * as userTracking from './userTracking.js';
+} from './location/geolocation.js';
+import * as userTracking from './location/userTracking.js';
 import { startCompass } from './compass.js';
 import { createCameraController } from './cameraController.js';
 import {
