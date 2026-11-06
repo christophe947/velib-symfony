@@ -2,8 +2,8 @@ import Fuse from '/maplibre-assets/fuse.mjs';
 import {
     loadGeographicData,
     getStationsForZone,
-} from './geography/zones.js';
-import { setUserFollowing } from './map.js';
+} from '../geography/zones.js';
+import { setUserFollowing } from '../map.js';
 import { classifySearch } from './searchIntent.js';
 import {
     rankStationResults,
@@ -11,7 +11,7 @@ import {
     renderSearchResults,
 } from './searchResults.js';
 import { searchNearbyStations } from './locationSearch.js';
-import { initGeolocation } from './geolocation.js';
+import { initGeolocation } from '../geolocation.js';
 
 
 export async function initSearch(map) {

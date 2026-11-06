@@ -1,7 +1,7 @@
 import * as maplibregl from '/maplibre-assets/maplibre-gl.mjs';
 
-import { findNearbyStations } from './nearbyStations.js';
-import { renderSearchResults } from './searchResults.js';
+import { findNearbyStations } from './search/nearbyStations.js';
+import { renderSearchResults } from './search/searchResults.js';
 
 let userMarker = null;
 let userPosition = null;

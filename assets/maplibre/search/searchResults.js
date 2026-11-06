@@ -1,4 +1,4 @@
-import { getAvailabilityColor } from './availability.js';
+import { getAvailabilityColor } from '../availability.js';
 
 const GENERIC_WORDS = new Set([
     'a',
