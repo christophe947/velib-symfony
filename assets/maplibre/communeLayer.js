@@ -1,68 +1,58 @@
 import * as maplibregl from '/maplibre-assets/maplibre-gl.mjs';
+import { getGeometryBounds } from './geometry.js';
 
 function communesToPointsGeoJSON(communes) {
     return {
         type: 'FeatureCollection',
 
-        features: communes.features.map((commune) => ({
-            type: 'Feature',
+        features: communes.features
+            .map((commune) => {
+                const center = getGeometryCenter(commune.geometry);
 
-            geometry: {
-                type: 'Point',
-                coordinates: getGeometryCenter(commune.geometry),
-            },
+                if (!center) {
+                    return null;
+                }
 
-            properties: {
-                ...commune.properties,
-            },
-        })),
+                return {
+                    type: 'Feature',
+
+                    geometry: {
+                        type: 'Point',
+                        coordinates: center,
+                    },
+
+                    properties: {
+                        ...commune.properties,
+                    },
+                };
+            })
+            .filter(Boolean),
     };
 }
 
 function getGeometryCenter(geometry) {
-    const coordinates = [];
+    const bounds = getGeometryBounds(geometry);
 
-    function collectCoordinates(coords) {
-        if (typeof coords[0] === 'number') {
-            coordinates.push(coords);
-            return;
-        }
-
-        coords.forEach(collectCoordinates);
+    if (!bounds) {
+        return null;
     }
 
-    collectCoordinates(geometry.coordinates);
-
-    let minLng = coordinates[0][0];
-    let maxLng = coordinates[0][0];
-    let minLat = coordinates[0][1];
-    let maxLat = coordinates[0][1];
-
-    coordinates.forEach(([lng, lat]) => {
-        minLng = Math.min(minLng, lng);
-        maxLng = Math.max(maxLng, lng);
-        minLat = Math.min(minLat, lat);
-        maxLat = Math.max(maxLat, lat);
-    });
-
-    return [(minLng + maxLng) / 2, (minLat + maxLat) / 2];
+    return [
+        (bounds.minLng + bounds.maxLng) / 2,
+        (bounds.minLat + bounds.maxLat) / 2,
+    ];
 }
 
-function getGeometryBounds(geometry) {
-    const bounds = new maplibregl.LngLatBounds();
-
-    function extendCoordinates(coords) {
-        if (typeof coords[0] === 'number') {
-            bounds.extend(coords);
-            return;
-        }
-
-        coords.forEach(extendCoordinates);
+function toMapLibreBounds(bounds) {
+    if (!bounds) {
+        return null;
     }
 
-    extendCoordinates(geometry.coordinates);
+    const mapBounds = new maplibregl.LngLatBounds();
+    mapBounds.extend([bounds.minLng, bounds.minLat]);
+    mapBounds.extend([bounds.maxLng, bounds.maxLat]);
 
-    return bounds;
+    return mapBounds;
 }
 
 export function addCommuneLayer(map, communes) {
@@ -209,10 +199,16 @@ export function addCommuneLayer(map, communes) {
 
         // Paris → niveau arrondissements
         if (code === '75056') {
-            const bounds = getGeometryBounds(commune.geometry);
+            const bounds = toMapLibreBounds(
+                getGeometryBounds(commune.geometry),
+            );
+
+            if (!bounds) {
+                return;
+            }
 
             map.fitBounds(bounds, {
-                padding: 60,
+                padding: 30,
                 maxZoom: 13,
             });
 
@@ -220,10 +216,16 @@ export function addCommuneLayer(map, communes) {
         }
 
         // Commune périphérique → niveau stations
-        const bounds = getGeometryBounds(commune.geometry);
+        const bounds = toMapLibreBounds(
+            getGeometryBounds(commune.geometry),
+        );
+
+        if (!bounds) {
+            return;
+        }
 
         map.fitBounds(bounds, {
-            padding: 60,
+            padding: 30,
             maxZoom: 15,
         });
     });

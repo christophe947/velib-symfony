@@ -1,5 +1,6 @@
 import * as maplibregl from '/maplibre-assets/maplibre-gl.mjs';
 import { zonesToPointsGeoJSON } from './zones.js';
+import { getGeometryBounds } from './geometry.js';
 
 export function addZoneLayer(map, zones) {
     // Délimitations des arrondissements
@@ -133,36 +134,20 @@ export function addZoneLayer(map, zones) {
             return;
         }
 
-        const bounds = getGeometryBounds(zone.geometry);
+        const geometryBounds = getGeometryBounds(zone.geometry);
 
-        if (!bounds) {
+        if (!geometryBounds) {
             return;
         }
 
+        const bounds = new maplibregl.LngLatBounds();
+        bounds.extend([geometryBounds.minLng, geometryBounds.minLat]);
+        bounds.extend([geometryBounds.maxLng, geometryBounds.maxLat]);
+
         map.fitBounds(bounds, {
-            padding: 60,
+            padding: 30,
             maxZoom: 15,
         });
     });
 
-    function getGeometryBounds(geometry) {
-        if (!geometry) {
-            return null;
-        }
-
-        const bounds = new maplibregl.LngLatBounds();
-
-        function extendCoordinates(coordinates) {
-            if (typeof coordinates[0] === 'number') {
-                bounds.extend(coordinates);
-                return;
-            }
-
-            coordinates.forEach(extendCoordinates);
-        }
-
-        extendCoordinates(geometry.coordinates);
-
-        return bounds;
-    }
 }

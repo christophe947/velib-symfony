@@ -1,3 +1,5 @@
+import { getGeometryBounds } from './geometry.js';
+
 let geographicFilesPromise = null;
 const geographicDataByStations = new Map();
 
@@ -43,23 +45,25 @@ export function countStationsByZone(zones, stations) {
         features: zones.features.map((zone) => {
             const bounds = getGeometryBounds(zone.geometry);
 
-            const stationCount = stations.filter((station) => {
-                if (
-                    !isPointInsideBounds(
-                        station.longitude,
-                        station.latitude,
-                        bounds,
-                    )
-                ) {
-                    return false;
-                }
+            const stationCount = bounds
+                ? stations.filter((station) => {
+                      if (
+                          !isPointInsideBounds(
+                              station.longitude,
+                              station.latitude,
+                              bounds,
+                          )
+                      ) {
+                          return false;
+                      }
 
-                return isPointInsideGeometry(
-                    station.longitude,
-                    station.latitude,
-                    zone.geometry,
-                );
-            }).length;
+                      return isPointInsideGeometry(
+                          station.longitude,
+                          station.latitude,
+                          zone.geometry,
+                      );
+                  }).length
+                : 0;
 
             return {
                 ...zone,
@@ -211,40 +215,6 @@ export function zonesToPointsGeoJSON(zones) {
     };
 }
 
-function getGeometryBounds(geometry) {
-    const coordinates = [];
-
-    function collectCoordinates(coords) {
-        if (typeof coords[0] === 'number') {
-            coordinates.push(coords);
-            return;
-        }
-
-        coords.forEach(collectCoordinates);
-    }
-
-    collectCoordinates(geometry.coordinates);
-
-    let minLng = coordinates[0][0];
-    let maxLng = coordinates[0][0];
-    let minLat = coordinates[0][1];
-    let maxLat = coordinates[0][1];
-
-    coordinates.forEach(([lng, lat]) => {
-        minLng = Math.min(minLng, lng);
-        maxLng = Math.max(maxLng, lng);
-        minLat = Math.min(minLat, lat);
-        maxLat = Math.max(maxLat, lat);
-    });
-
-    return {
-        minLng,
-        maxLng,
-        minLat,
-        maxLat,
-    };
-}
-
 function isPointInsideBounds(longitude, latitude, bounds) {
     return (
         longitude >= bounds.minLng &&
@@ -292,6 +262,10 @@ export function getStationsForZone(zone, stations) {
     }
 
     const bounds = getGeometryBounds(zone.geometry);
+
+    if (!bounds) {
+        return [];
+    }
 
     return stations.filter((station) => {
         if (!isPointInsideBounds(station.longitude, station.latitude, bounds)) {
