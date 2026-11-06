@@ -10,7 +10,7 @@ import {
     requestUserPosition,
 } from './location/geolocation.js';
 import * as userTracking from './location/userTracking.js';
-import { startCompass } from './compass.js';
+import { startCompass } from './navigation/compass.js';
 import { createCameraController } from './cameraController.js';
 import {
     clearRouteLayer,
@@ -29,7 +29,7 @@ export {
     showDestinationMarker,
     updateWalkingRoute,
 };
-//import { getLastCompassReading } from './compass.js';
+//import { getLastCompassReading } from './navigation/compass.js';
 
 let isNavigationActive = false;
 

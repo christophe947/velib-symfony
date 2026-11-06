@@ -1,10 +1,10 @@
 import { CupertinoPane } from 'cupertino-pane';
-import { subscribeToSelectedStation, setDisplayMode } from './state.js';
+import { subscribeToSelectedStation, setDisplayMode } from '../state.js';
 import {
     requestUserPosition,
     showUserMarker,
     startWatchingPosition,
-} from './location/geolocation.js';
+} from '../location/geolocation.js';
 import { getWalkingRoute, decodePolyline } from './routing.js';
 import {
     drawWalkingRoute,
@@ -19,7 +19,7 @@ import {
     startBackgroundUserTracking,
     stopBackgroundUserTracking,
     activateCompass,
-} from './map.js';
+} from '../map.js';
 import { createNavigationEngine } from './navigation.js';
 import { formatDistance, formatDuration } from './routeFormatting.js';
 import { stopCompass } from './compass.js';

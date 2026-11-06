@@ -1,5 +1,5 @@
 import { createMap } from 'maplibre/map';
-import { initStationPanel } from './stationPanel.js';
+import { initStationPanel } from './navigation/stationPanel.js';
 import { initSearch } from './search/search.js';
 import { setSelectedStation } from './state.js';
 
