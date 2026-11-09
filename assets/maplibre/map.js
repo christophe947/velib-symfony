@@ -10,7 +10,10 @@ import {
     requestUserPosition,
 } from './location/geolocation.js';
 import * as userTracking from './location/userTracking.js';
-import { startCompass } from './navigation/compass.js';
+import {
+    canReactivateCompass,
+    startCompass,
+} from './navigation/compass.js';
 import { createCameraController } from './map/cameraController.js';
 import {
     clearRouteLayer,
@@ -349,6 +352,7 @@ export function stopBackgroundUserTracking() {
  */
 export function clearNavigationMap(map) {
     const cameraController = getCameraController();
+    const wasFollowingUser = cameraController?.isFollowing() ?? false;
 
     cameraController?.setFollowing(false);
     isNavigationActive = false;
@@ -356,6 +360,8 @@ export function clearNavigationMap(map) {
 
     // Supprime le tracé et le marqueur de destination.
     clearRouteLayer(map);
+
+    return wasFollowingUser;
 }
 
 export async function activateCompass(
@@ -371,4 +377,19 @@ export async function activateCompass(
 
         onReading?.(reading);
     }, onError);
+}
+
+export async function reactivateCompassIfEligible(map) {
+    const cameraController = getCameraController();
+
+    if (
+        !map ||
+        isNavigationActive ||
+        !canReactivateCompass() ||
+        !cameraController?.canUseCompass()
+    ) {
+        return;
+    }
+
+    await activateCompass(map);
 }

@@ -99,6 +99,14 @@ export function createCameraController(
         isFollowingUser = enabled;
     }
 
+    function isFollowing() {
+        return isFollowingUser;
+    }
+
+    function canUseCompass() {
+        return is3D && isFollowingUser;
+    }
+
     function updateFromCompass(reading) {
         if (!reading) {
             return;
@@ -280,6 +288,8 @@ export function createCameraController(
         toggleView,
         ensure2DView,
         setFollowing,
+        isFollowing,
+        canUseCompass,
         updateFromCompass,
         recenter,
         followPosition,

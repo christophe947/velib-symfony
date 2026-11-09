@@ -1,5 +1,7 @@
 let isCompassActive = false;
 
+let hasCompassAccess = false;
+
 let lastReading = null;
 
 let orientationHandler = null;
@@ -71,12 +73,17 @@ export async function startCompass(onReading, onError) {
 
     try {
         // Demande la permission si le navigateur l'exige.
-        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        if (
+            typeof DeviceOrientationEvent.requestPermission === 'function' &&
+            !hasCompassAccess
+        ) {
             const permission = await DeviceOrientationEvent.requestPermission();
 
             if (permission !== 'granted') {
                 throw new Error('L’autorisation du capteur a été refusée.');
             }
+
+            hasCompassAccess = true;
         }
 
         // Fonction appelée à chaque nouvelle mesure.
@@ -113,6 +120,7 @@ export async function startCompass(onReading, onError) {
             orientationHandler,
         );
 
+        hasCompassAccess = true;
         isCompassActive = true;
 
         console.log('🧭 Écoute du capteur démarrée.');
@@ -141,4 +149,8 @@ export function stopCompass() {
     isCompassActive = false;
 
     console.log('🧭 Écoute du capteur arrêtée.');
+}
+
+export function canReactivateCompass() {
+    return hasCompassAccess;
 }

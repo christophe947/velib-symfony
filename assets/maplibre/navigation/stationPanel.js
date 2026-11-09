@@ -19,6 +19,7 @@ import {
     startBackgroundUserTracking,
     stopBackgroundUserTracking,
     activateCompass,
+    reactivateCompassIfEligible,
 } from '../map.js';
 import { createNavigationEngine } from './navigation.js';
 import { formatDistance, formatDuration } from './routeFormatting.js';
@@ -338,17 +339,20 @@ function stopNavigation(map, station, styleReady) {
     // Arrête la boussole.
     stopCompass();
 
-    // Désactive le suivi automatique de la caméra.
-    setUserFollowing(false);
-
     // Arrête les simulations et invalide les recalculs.
     navigationEngine.stopNavigationProcessing();
 
     // Nettoie le tracé et le marqueur de destination.
-    clearNavigationMap(map);
+    const wasFollowingUser = clearNavigationMap(map);
 
-    setUserFollowing(true);
+    setUserFollowing(wasFollowingUser);
     startBackgroundUserTracking(map);
+
+    // Redémarre uniquement un capteur déjà autorisé, sans redemander
+    // la permission iOS pendant l'arrêt de navigation.
+    if (wasFollowingUser) {
+        reactivateCompassIfEligible(map);
+    }
 
     // Réinitialise l'état local.
     //navigationStarted = false;
