@@ -14,6 +14,10 @@ export function createCameraController(
     let lastStableHeading = null;
     let isChangingView = false;
     let pendingUserPosition = null;
+    let lastGpsPosition = null;
+    let navigationCameraAnimationActive = false;
+    let pendingNavigationCameraDuration = 0;
+    let navigationCameraAnimationGeneration = 0;
 
     const MIN_HEADING_SPEED = 0.8;
     const HEADING_SMOOTHING_FACTOR = 0.6;
@@ -107,6 +111,70 @@ export function createCameraController(
         return is3D && isFollowingUser;
     }
 
+    function canCoordinateNavigationCamera() {
+        return (
+            is3D &&
+            !shouldUseGpsHeading() &&
+            isFollowingUser &&
+            !isChangingView &&
+            !isCameraInteractionActive &&
+            !isCompassCameraPaused
+        );
+    }
+
+    function updateNavigationCamera(duration) {
+        if (!canCoordinateNavigationCamera()) {
+            pendingNavigationCameraDuration = 0;
+            return;
+        }
+
+        if (navigationCameraAnimationActive) {
+            pendingNavigationCameraDuration = Math.max(
+                pendingNavigationCameraDuration,
+                duration,
+            );
+            return;
+        }
+
+        const center = lastGpsPosition
+            ? [lastGpsPosition.longitude, lastGpsPosition.latitude]
+            : map.getCenter();
+        const bearing = lastStableHeading ?? map.getBearing();
+        const centerDistance = map.getCenter().distanceTo(center);
+        const bearingDifference = Math.abs(
+            ((bearing - map.getBearing() + 540) % 360) - 180,
+        );
+
+        if (centerDistance < 0.5 && bearingDifference < 0.5) {
+            return;
+        }
+
+        const animationGeneration = ++navigationCameraAnimationGeneration;
+        navigationCameraAnimationActive = true;
+
+        map.easeTo({
+            center,
+            bearing,
+            duration,
+            easing: (t) => t,
+            essential: true,
+        });
+
+        map.once('moveend', () => {
+            if (animationGeneration !== navigationCameraAnimationGeneration) {
+                return;
+            }
+
+            navigationCameraAnimationActive = false;
+
+            if (pendingNavigationCameraDuration > 0) {
+                const nextDuration = pendingNavigationCameraDuration;
+                pendingNavigationCameraDuration = 0;
+                updateNavigationCamera(nextDuration);
+            }
+        });
+    }
+
     function updateFromCompass(reading) {
         if (!reading) {
             return;
@@ -144,6 +212,11 @@ export function createCameraController(
 
         lastStableHeading = smoothHeading(currentBearing, compassHeading);
 
+        if (!shouldUseGpsHeading()) {
+            updateNavigationCamera(100);
+            return;
+        }
+
         // Anime progressivement l'orientation de la caméra.
         map.easeTo({
             bearing: lastStableHeading,
@@ -156,6 +229,8 @@ export function createCameraController(
         if (!position) {
             return;
         }
+
+        lastGpsPosition = position;
 
         // Suspend temporairement le contrôle automatique de la caméra.
         isCompassCameraPaused = true;
@@ -217,6 +292,13 @@ export function createCameraController(
             return;
         }
 
+        lastGpsPosition = position;
+
+        if (is3D && !shouldUseGpsHeading()) {
+            updateNavigationCamera(200);
+            return;
+        }
+
         const cameraOptions = {
             center: [position.longitude, position.latitude],
             duration: 450,
@@ -244,6 +326,7 @@ export function createCameraController(
     function initManualCameraControl() {
         function suspendCameraControl() {
             clearTimeout(cameraResumeTimeout);
+            pendingNavigationCameraDuration = 0;
 
             console.log('Suspension caméra déclenchée', {
                 following: isFollowingUser,
@@ -282,6 +365,20 @@ export function createCameraController(
 
     function clearPendingPosition() {
         pendingUserPosition = null;
+        lastGpsPosition = null;
+        pendingNavigationCameraDuration = 0;
+
+        const shouldStopNavigationCameraAnimation =
+            navigationCameraAnimationActive;
+
+        navigationCameraAnimationGeneration++;
+        navigationCameraAnimationActive = false;
+
+        if (shouldStopNavigationCameraAnimation) {
+            // MapLibre ne peut avoir qu'une seule caméra animée à la fois;
+            // ici, l'animation active appartient au coordinateur.
+            map.stop();
+        }
     }
 
     return {
