@@ -10,7 +10,10 @@ export function createNavigationEngine(effects) {
     } = effects;
 
     let currentRouteCoordinates = [];
+    let cumulativeRouteDistances = [];
     let lastRouteProgressIndex = 0;
+    let lastAcceptedRouteProgress = 0;
+    let lastAcceptedProgressTimestamp = null;
     let simulationIntervalId = null;
 
     let navigationDestination = null;
@@ -31,6 +34,50 @@ export function createNavigationEngine(effects) {
     let lastProcessedGpsTimestamp = null;
     let lastOffRouteConfirmationTimestamp = null;
 
+    const MAX_PLAUSIBLE_WALKING_SPEED = 3;
+    const ROUTE_PROGRESS_MARGIN_METERS = 15;
+    // Un écart inférieur au bruit GPS courant ne suffit pas à préférer une branche future.
+    const ROUTE_BRANCH_DISTANCE_ADVANTAGE_METERS = 8;
+
+    function calculateDistanceBetweenCoordinates(start, end) {
+        const earthRadius = 6371000;
+        const toRadians = (degrees) => (degrees * Math.PI) / 180;
+        const latitude1 = toRadians(start[1]);
+        const latitude2 = toRadians(end[1]);
+        const latitudeDifference = latitude2 - latitude1;
+        const longitudeDifference = toRadians(end[0] - start[0]);
+        const haversine =
+            Math.sin(latitudeDifference / 2) ** 2 +
+            Math.cos(latitude1) *
+                Math.cos(latitude2) *
+                Math.sin(longitudeDifference / 2) ** 2;
+
+        return (
+            2 *
+            earthRadius *
+            Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine))
+        );
+    }
+
+    function setRouteProgressGeometry(coordinates) {
+        currentRouteCoordinates = coordinates;
+        cumulativeRouteDistances = [0];
+
+        for (let i = 0; i < coordinates.length - 1; i++) {
+            cumulativeRouteDistances.push(
+                cumulativeRouteDistances[i] +
+                    calculateDistanceBetweenCoordinates(
+                        coordinates[i],
+                        coordinates[i + 1],
+                    ),
+            );
+        }
+
+        lastRouteProgressIndex = 0;
+        lastAcceptedRouteProgress = 0;
+        lastAcceptedProgressTimestamp = null;
+    }
+
     function resetOffRouteConfirmations() {
         consecutiveOffRoutePositions = 0;
         lastOffRouteConfirmationTimestamp = null;
@@ -40,8 +87,7 @@ export function createNavigationEngine(effects) {
      * Enregistre l'itinéraire et sa destination.
      */
     function setNavigationRoute(coordinates, destination) {
-        currentRouteCoordinates = coordinates;
-        lastRouteProgressIndex = 0;
+        setRouteProgressGeometry(coordinates);
         navigationDestination = destination;
         resetOffRouteConfirmations();
         lastProcessedGpsTimestamp = null;
@@ -83,10 +129,8 @@ export function createNavigationEngine(effects) {
             }
 
             // Remplace l'itinéraire actuel.
-            currentRouteCoordinates = coordinates;
-
             // La progression repart du début du nouvel itinéraire.
-            lastRouteProgressIndex = 0;
+            setRouteProgressGeometry(coordinates);
 
             // Réinitialise la détection de déviation.
             resetOffRouteConfirmations();
@@ -124,7 +168,13 @@ export function createNavigationEngine(effects) {
      * - la distance minimale en mètres ;
      * - les coordonnées du point le plus proche sur le segment.
      */
-    function calculateProjectionOnSegment(position, start, end) {
+    function calculateProjectionOnSegment(
+        position,
+        start,
+        end,
+        minT = 0,
+        maxT = 1,
+    ) {
         const earthRadius = 6371000;
 
         const toRadians = (degrees) => (degrees * Math.PI) / 180;
@@ -158,7 +208,7 @@ export function createNavigationEngine(effects) {
         if (segmentLengthSquared > 0) {
             t = -(a.x * abX + a.y * abY) / segmentLengthSquared;
 
-            t = Math.max(0, Math.min(1, t));
+            t = Math.max(minT, Math.min(maxT, t));
         }
 
         // Point le plus proche de la position GPS.
@@ -174,6 +224,7 @@ export function createNavigationEngine(effects) {
         return {
             distance: Math.hypot(closestX, closestY),
             coordinate,
+            factor: t,
         };
     }
 
@@ -181,40 +232,125 @@ export function createNavigationEngine(effects) {
      * Met à jour la progression de l'utilisateur
      * et détecte les sorties d'itinéraire.
      */
-    function updateNavigationProgress(position) {
+    function updateNavigationProgress(position, options = {}) {
         if (currentRouteCoordinates.length < 2) {
             return;
         }
 
         followUserPosition(position);
 
-        let closestSegmentIndex = lastRouteProgressIndex;
-        let closestDistance = Infinity;
-        let closestCoordinate = null;
+        let closestRouteDistance = Infinity;
+        let closestProgressCandidate = null;
 
-        // On cherche le segment le plus proche,
-        // sans revenir en arrière sur l'itinéraire.
-        for (
-            let i = lastRouteProgressIndex;
-            i < currentRouteCoordinates.length - 1;
-            i++
-        ) {
+        const timestamp = position.timestamp;
+        const age = Date.now() - timestamp;
+        const hasFreshTimestamp =
+            Number.isFinite(timestamp) &&
+            timestamp > 0 &&
+            age >= 0 &&
+            age <= MAX_GPS_FIX_AGE_MS;
+        const isDistinctProgressFix =
+            hasFreshTimestamp &&
+            (lastAcceptedProgressTimestamp === null ||
+                timestamp > lastAcceptedProgressTimestamp);
+        const elapsedSeconds =
+            lastAcceptedProgressTimestamp === null
+                ? 0
+                : Math.max(
+                      0,
+                      (timestamp - lastAcceptedProgressTimestamp) / 1000,
+                  );
+        const initialGpsDisplacement =
+            lastAcceptedProgressTimestamp === null
+                ? calculateDistanceBetweenCoordinates(
+                      currentRouteCoordinates[0],
+                      [position.longitude, position.latitude],
+                  )
+                : 0;
+        const maxForwardProgress =
+            options.maxForwardProgress ??
+            lastAcceptedRouteProgress +
+                (lastAcceptedProgressTimestamp === null
+                    ? initialGpsDisplacement
+                    : MAX_PLAUSIBLE_WALKING_SPEED * elapsedSeconds) +
+                ROUTE_PROGRESS_MARGIN_METERS;
+        const minForwardProgress = lastAcceptedRouteProgress;
+
+        for (let i = 0; i < currentRouteCoordinates.length - 1; i++) {
             const start = currentRouteCoordinates[i];
             const end = currentRouteCoordinates[i + 1];
+            const segmentStartProgress = cumulativeRouteDistances[i];
+            const segmentLength =
+                cumulativeRouteDistances[i + 1] - segmentStartProgress;
 
-            const projection = calculateProjectionOnSegment(position, start, end);
+            // La distance utilisée pour le détecteur reste mesurée sur tout le tracé.
+            const routeProjection = calculateProjectionOnSegment(
+                position,
+                start,
+                end,
+            );
 
-            if (projection.distance < closestDistance) {
-                closestDistance = projection.distance;
-                closestSegmentIndex = i;
-                closestCoordinate = projection.coordinate;
+            closestRouteDistance = Math.min(
+                closestRouteDistance,
+                routeProjection.distance,
+            );
+
+            if (!isDistinctProgressFix || segmentLength === 0) {
+                continue;
+            }
+
+            const segmentEndProgress = segmentStartProgress + segmentLength;
+            if (
+                segmentEndProgress < minForwardProgress ||
+                segmentStartProgress > maxForwardProgress
+            ) {
+                continue;
+            }
+
+            const minT = Math.max(
+                0,
+                (minForwardProgress - segmentStartProgress) / segmentLength,
+            );
+            const maxT = Math.min(
+                1,
+                (maxForwardProgress - segmentStartProgress) / segmentLength,
+            );
+            const projection = calculateProjectionOnSegment(
+                position,
+                start,
+                end,
+                minT,
+                maxT,
+            );
+            const progress =
+                segmentStartProgress + projection.factor * segmentLength;
+
+            const candidateIsFartherAhead =
+                closestProgressCandidate &&
+                progress - closestProgressCandidate.progress >
+                    ROUTE_PROGRESS_MARGIN_METERS;
+            const candidateImprovesDistance =
+                !closestProgressCandidate ||
+                projection.distance + ROUTE_BRANCH_DISTANCE_ADVANTAGE_METERS <
+                    closestProgressCandidate.distance;
+
+            if (
+                !closestProgressCandidate ||
+                (!candidateIsFartherAhead &&
+                    projection.distance < closestProgressCandidate.distance) ||
+                (candidateIsFartherAhead && candidateImprovesDistance)
+            ) {
+                closestProgressCandidate = {
+                    distance: projection.distance,
+                    coordinate: projection.coordinate,
+                    segmentIndex: i,
+                    progress,
+                };
             }
         }
 
         // Seules les mesures GPS fraîches, uniques et suffisamment précises
         // peuvent confirmer une sortie d'itinéraire.
-        const timestamp = position.timestamp;
-        const age = Date.now() - timestamp;
         const hasValidTimestamp =
             Number.isFinite(timestamp) && timestamp > 0;
         const isFreshAndDistinct =
@@ -241,7 +377,7 @@ export function createNavigationEngine(effects) {
                 const reliableOffRouteThreshold =
                     OFF_ROUTE_THRESHOLD + accuracy;
 
-                if (closestDistance > reliableOffRouteThreshold) {
+                if (closestRouteDistance > reliableOffRouteThreshold) {
                     if (
                         lastOffRouteConfirmationTimestamp !== null &&
                         timestamp - lastOffRouteConfirmationTimestamp >
@@ -264,7 +400,7 @@ export function createNavigationEngine(effects) {
                         lastOffRouteConfirmationTimestamp = timestamp;
 
                         console.log(
-                            `Écart à l'itinéraire : ${Math.round(closestDistance)} m`,
+                            `Écart à l'itinéraire : ${Math.round(closestRouteDistance)} m`,
                             `(${consecutiveOffRoutePositions}/${OFF_ROUTE_CONFIRMATIONS})`,
                         );
 
@@ -295,22 +431,32 @@ export function createNavigationEngine(effects) {
         // Conserve le comportement existant : une position au-delà de 30 m
         // ne fait pas avancer la progression si elle ne peut pas confirmer
         // une sortie fiable.
-        if (closestDistance > OFF_ROUTE_THRESHOLD) {
+        if (
+            !closestProgressCandidate ||
+            closestProgressCandidate.distance > OFF_ROUTE_THRESHOLD
+        ) {
             return;
         }
 
-        // La progression ne peut jamais reculer.
+        // La progression est monotone et bornée par le temps écoulé depuis
+        // la dernière mesure GPS acceptée.
+        lastAcceptedRouteProgress = Math.max(
+            lastAcceptedRouteProgress,
+            closestProgressCandidate.progress,
+        );
+        lastAcceptedProgressTimestamp = timestamp;
         lastRouteProgressIndex = Math.max(
             lastRouteProgressIndex,
-            closestSegmentIndex,
+            closestProgressCandidate.segmentIndex,
         );
 
-        // Le tracé restant commence à la position projetée
-        // sur le segment le plus proche.
-        const remainingCoordinates = closestCoordinate
+        // Le tracé restant commence à la projection acceptée.
+        const remainingCoordinates = closestProgressCandidate.coordinate
             ? [
-                  closestCoordinate,
-                  ...currentRouteCoordinates.slice(closestSegmentIndex + 1),
+                  closestProgressCandidate.coordinate,
+                  ...currentRouteCoordinates.slice(
+                      closestProgressCandidate.segmentIndex + 1,
+                  ),
               ]
             : currentRouteCoordinates.slice(lastRouteProgressIndex);
 
@@ -391,7 +537,9 @@ export function createNavigationEngine(effects) {
             };
 
             showUserMarker(position);
-            updateNavigationProgress(position);
+            updateNavigationProgress(position, {
+                maxForwardProgress: cumulativeRouteDistances[index],
+            });
 
             // On arrête et on replace le marqueur à la fin de l'itinéraire.
             if (index >= currentRouteCoordinates.length - 1) {
@@ -504,7 +652,10 @@ export function createNavigationEngine(effects) {
 
         // Réinitialise les états de navigation.
         currentRouteCoordinates = [];
+        cumulativeRouteDistances = [];
         lastRouteProgressIndex = 0;
+        lastAcceptedRouteProgress = 0;
+        lastAcceptedProgressTimestamp = null;
         navigationDestination = null;
         isRecalculatingRoute = false;
         resetOffRouteConfirmations();
