@@ -1,6 +1,6 @@
 import * as maplibregl from '/maplibre-assets/maplibre-gl.mjs';
-import { zonesToPointsGeoJSON } from './geography/zones.js';
-import { getGeometryBounds } from './geography/geometry.js';
+import { zonesToPointsGeoJSON } from '../../geography/zones.js';
+import { getGeometryBounds } from '../../geography/geometry.js';
 
 export function addZoneLayer(map, zones) {
     // Délimitations des arrondissements

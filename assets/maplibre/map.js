@@ -1,24 +1,24 @@
 import * as maplibregl from '/maplibre-assets/maplibre-gl.mjs';
 
-import { stationsToGeoJSON } from './stations.js';
-import { addStationLayer } from './stationLayer.js';
+import { stationsToGeoJSON } from './map/stations.js';
+import { addStationLayer } from './map/layers/stationLayer.js';
 import { loadGeographicData } from './geography/zones.js';
-import { addZoneLayer } from './zoneLayer.js';
-import { addCommuneLayer } from './communeLayer.js';
+import { addZoneLayer } from './map/layers/zoneLayer.js';
+import { addCommuneLayer } from './map/layers/communeLayer.js';
 import {
     showUserMarker,
     requestUserPosition,
 } from './location/geolocation.js';
 import * as userTracking from './location/userTracking.js';
 import { startCompass } from './navigation/compass.js';
-import { createCameraController } from './cameraController.js';
+import { createCameraController } from './map/cameraController.js';
 import {
     clearRouteLayer,
     drawWalkingRoute,
     fitWalkingRoute,
     showDestinationMarker,
     updateWalkingRoute,
-} from './routeLayer.js';
+} from './map/layers/routeLayer.js';
 
 const STYLE_URL =
     'https://openmaptiles.data.gouv.fr/styles/osm-bright/style.json';

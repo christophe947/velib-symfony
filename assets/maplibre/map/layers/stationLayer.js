@@ -1,9 +1,9 @@
-import { AVAILABILITY } from './shared/constants.js';
+import { AVAILABILITY } from '../../shared/constants.js';
 import {
     setSelectedStation,
     subscribeToSelectedStation,
     subscribeToDisplayMode,
-} from './shared/state.js';
+} from '../../shared/state.js';
 
 function getDisplayProperties(displayMode) {
     const availableProperty =
