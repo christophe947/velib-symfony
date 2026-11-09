@@ -200,6 +200,7 @@ export function startWatchingPosition(onPosition, onError) {
                 heading: position.coords.heading,
                 speed: position.coords.speed,
                 accuracy: position.coords.accuracy,
+                timestamp: position.timestamp,
             };
 
             onPosition?.(userPosition);
