@@ -444,6 +444,13 @@
     font-weight: 600;
 }
 
+.station-panel-navigation-active {
+    margin: -10px 0 10px;
+    color: #6c757d;
+    font-size: 12px;
+    font-weight: 500;
+}
+
 .station-panel-empty {
     display: flex;
     justify-content: center;
@@ -650,6 +657,31 @@
 .station-panel-navigation-controls .station-panel-join {
     flex: 1;
     min-width: 0;
+}
+
+.station-panel-navigation-controls--context {
+    flex-direction: column;
+}
+
+.station-panel-context-actions {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+}
+
+.station-panel-context-actions .station-panel-context-resume {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+}
+
+.station-panel-context-replace {
+    width: 100%;
+}
+
+.station-panel-context-replace:disabled {
+    cursor: not-allowed;
 }
 
 /* Petit bouton carré rouge */
