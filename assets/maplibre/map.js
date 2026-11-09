@@ -318,7 +318,7 @@ function updateCameraFromCompass(map, reading) {
     return getCameraController()?.updateFromCompass(reading) === true;
 }
 
-function recenterOnUser(map, position) {
+export function recenterOnUser(map, position) {
     if (!map || !position) {
         return;
     }

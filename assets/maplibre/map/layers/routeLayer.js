@@ -44,7 +44,7 @@ export function updateWalkingRoute(map, coordinates) {
     const source = map.getSource(ROUTE_ID);
 
     if (!source || !coordinates?.length) {
-        return;
+        return false;
     }
 
     source.setData({
@@ -55,6 +55,8 @@ export function updateWalkingRoute(map, coordinates) {
         },
         properties: {},
     });
+
+    return true;
 }
 
 export function fitWalkingRoute(map, coordinates) {

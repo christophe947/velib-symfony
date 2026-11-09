@@ -20,6 +20,7 @@ export function createNavigationEngine(effects) {
     let navigationDestination = null;
 
     let isRecalculatingRoute = false;
+    let isReplacingRoute = false;
 
     let navigationSessionId = 0;
     let offRouteSimulationIntervalId = null;
@@ -95,12 +96,64 @@ export function createNavigationEngine(effects) {
         lastCameraGpsTimestamp = null;
     }
 
+    function beginRouteReplacement() {
+        if (isReplacingRoute || !navigationDestination) {
+            return null;
+        }
+
+        // Invalide un recalcul de l'ancienne destination encore en vol.
+        navigationSessionId++;
+        isRecalculatingRoute = false;
+        isReplacingRoute = true;
+        resetOffRouteConfirmations();
+
+        return navigationSessionId;
+    }
+
+    function cancelRouteReplacement(replacementId) {
+        if (!isReplacingRoute || replacementId !== navigationSessionId) {
+            return false;
+        }
+
+        isReplacingRoute = false;
+        navigationSessionId++;
+
+        return true;
+    }
+
+    function commitRouteReplacement(replacementId, coordinates, destination) {
+        if (
+            !isReplacingRoute ||
+            replacementId !== navigationSessionId ||
+            !Array.isArray(coordinates) ||
+            coordinates.length < 2
+        ) {
+            return false;
+        }
+
+        // Garde la géométrie A si sa source cartographique n'est plus disponible.
+        if (updateWalkingRoute(coordinates) === false) {
+            return false;
+        }
+
+        setRouteProgressGeometry(coordinates);
+        navigationDestination = destination;
+        resetOffRouteConfirmations();
+        lastProcessedGpsTimestamp = null;
+        lastCameraGpsTimestamp = null;
+        isRecalculatingRoute = false;
+        isReplacingRoute = false;
+        navigationSessionId++;
+
+        return true;
+    }
+
     /**
      * Recalcule l'itinéraire depuis la position actuelle
      * jusqu'à la destination initiale.
      */
     async function recalculateNavigationRoute(position) {
-        if (isRecalculatingRoute) {
+        if (isRecalculatingRoute || isReplacingRoute) {
             return;
         }
 
@@ -152,7 +205,9 @@ export function createNavigationEngine(effects) {
         } catch (error) {
             console.error('❌ Échec du recalcul de l’itinéraire :', error);
         } finally {
-            isRecalculatingRoute = false;
+            if (sessionId === navigationSessionId) {
+                isRecalculatingRoute = false;
+            }
         }
     }
 
@@ -701,6 +756,7 @@ export function createNavigationEngine(effects) {
         lastCameraGpsTimestamp = null;
         navigationDestination = null;
         isRecalculatingRoute = false;
+        isReplacingRoute = false;
         resetOffRouteConfirmations();
         lastProcessedGpsTimestamp = null;
 
@@ -709,6 +765,9 @@ export function createNavigationEngine(effects) {
 
     return {
         setNavigationRoute,
+        beginRouteReplacement,
+        cancelRouteReplacement,
+        commitRouteReplacement,
         updateNavigationProgress,
         startNavigationSimulation,
         startOffRouteSimulation,

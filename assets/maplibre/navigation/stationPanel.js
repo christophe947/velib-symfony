@@ -14,6 +14,7 @@ import {
     setUserFollowing,
     setNavigationActive,
     followUserPosition,
+    recenterOnUser,
     clearNavigationMap,
     ensure2DView,
     startBackgroundUserTracking,
@@ -30,6 +31,9 @@ let pane = null;
 let element = null;
 
 let panelManuallyAtBottom = true;
+let paneDragActive = false;
+let paneInteractionId = 0;
+let paneCollapseTimeoutId = null;
 
 let navigationStarted = false;
 let navigationSessionId = 0;
@@ -38,11 +42,15 @@ let displayedStation = null;
 let activeNavigationStation = null;
 let activeNavigationRouteSummary = null;
 let routeSummaryData = null;
+let destinationChangeRequestId = 0;
+let pendingDestinationChange = null;
+let destinationChangeError = null;
 
 let positionWatchId = null;
 
 // Dernière position GPS connue.
 let lastKnownUserPosition = null;
+let lastReliableUserPosition = null;
 let navigationEngine = null;
 const screenWakeLock = createScreenWakeLock();
 
@@ -68,6 +76,78 @@ function isFreshGpsPosition(position) {
     const age = Date.now() - position.timestamp;
 
     return age >= 0 && age <= 10_000;
+}
+
+function isFreshReliableGpsPosition(position) {
+    return (
+        isFreshGpsPosition(position) &&
+        Number.isFinite(position.accuracy) &&
+        position.accuracy >= 0 &&
+        position.accuracy <= 25
+    );
+}
+
+function isValidRouteCoordinates(coordinates) {
+    return (
+        Array.isArray(coordinates) &&
+        coordinates.length >= 2 &&
+        coordinates.every(
+            (coordinate) =>
+                Array.isArray(coordinate) &&
+                coordinate.length >= 2 &&
+                Number.isFinite(coordinate[0]) &&
+                coordinate[0] >= -180 &&
+                coordinate[0] <= 180 &&
+                Number.isFinite(coordinate[1]) &&
+                coordinate[1] >= -90 &&
+                coordinate[1] <= 90,
+        )
+    );
+}
+
+function waitForMapMovement(map) {
+    return new Promise((resolve) => {
+        if (!map.isMoving()) {
+            resolve();
+            return;
+        }
+
+        map.once('moveend', resolve);
+    });
+}
+
+function clearNavigationPaneCollapseTimeout() {
+    clearTimeout(paneCollapseTimeoutId);
+    paneCollapseTimeoutId = null;
+}
+
+function scheduleNavigationPaneCollapse(station, sessionId) {
+    clearNavigationPaneCollapseTimeout();
+
+    if (!pane || !mobileQuery.matches) {
+        return;
+    }
+
+    const renderId = stationPanelRenderId;
+    const interactionId = paneInteractionId;
+
+    paneCollapseTimeoutId = setTimeout(() => {
+        paneCollapseTimeoutId = null;
+
+        if (
+            !pane ||
+            paneDragActive ||
+            paneInteractionId !== interactionId ||
+            stationPanelRenderId !== renderId ||
+            !navigationStarted ||
+            navigationSessionId !== sessionId ||
+            !stationsMatch(displayedStation, station)
+        ) {
+            return;
+        }
+
+        pane.moveToBreak('bottom');
+    }, 2000);
 }
 
 /**
@@ -260,7 +340,13 @@ export function initStationPanel(map, styleReady) {
         pane.present({
             animate: false,
         });
+        pane.on('onDragStart', () => {
+            paneDragActive = true;
+            paneInteractionId++;
+        });
         pane.on('onDragEnd', () => {
+            paneDragActive = false;
+            paneInteractionId++;
             panelManuallyAtBottom = pane.currentBreak() === 'bottom';
 
             console.log('Panneau manuellement en bas :', panelManuallyAtBottom);
@@ -361,7 +447,20 @@ function renderEmptyPanel() {
 /**
  * Demande confirmation avant d'arrêter la navigation.
  */
-function showStopNavigationConfirmation(map, station, styleReady) {
+function showStopNavigationConfirmation(
+    map,
+    station,
+    styleReady,
+    options = {},
+) {
+    const {
+        title = 'Arrêter la navigation ?',
+        message = 'Es-tu sûr de vouloir arrêter ton itinéraire ?',
+        cancelLabel = 'Continuer',
+        confirmLabel = 'Arrêter',
+        onConfirm = () => stopNavigation(map, station, styleReady),
+    } = options;
+
     // Évite d'afficher plusieurs fenêtres.
     if (document.querySelector('.navigation-confirmation-overlay')) {
         return;
@@ -377,27 +476,23 @@ function showStopNavigationConfirmation(map, station, styleReady) {
             aria-modal="true"
             aria-labelledby="navigation-confirmation-title"
         >
-            <h3 id="navigation-confirmation-title">
-                Arrêter la navigation ?
-            </h3>
+            <h3 id="navigation-confirmation-title">${title}</h3>
 
-            <p>
-                Es-tu sûr de vouloir arrêter ton itinéraire ?
-            </p>
+            <p>${message}</p>
 
             <div class="navigation-confirmation-actions">
                 <button
                     type="button"
                     class="navigation-confirmation-cancel"
                 >
-                    Continuer
+                    ${cancelLabel}
                 </button>
 
                 <button
                     type="button"
                     class="navigation-confirmation-stop"
                 >
-                    Arrêter
+                    ${confirmLabel}
                 </button>
             </div>
         </div>
@@ -422,7 +517,7 @@ function showStopNavigationConfirmation(map, station, styleReady) {
     // Confirme l'arrêt de la navigation.
     confirmButton.addEventListener('click', () => {
         overlay.remove();
-        stopNavigation(map, station, styleReady);
+        onConfirm();
     });
 
     // Ferme aussi la fenêtre en cliquant sur le fond.
@@ -439,8 +534,13 @@ function showStopNavigationConfirmation(map, station, styleReady) {
  * Arrête complètement la navigation en cours.
  */
 function stopNavigation(map, station, styleReady) {
+    clearNavigationPaneCollapseTimeout();
+
     // Invalide les opérations asynchrones de la session.
     navigationSessionId++;
+    destinationChangeRequestId++;
+    pendingDestinationChange = null;
+    destinationChangeError = null;
     navigationStarted = false;
     activeNavigationStation = null;
     activeNavigationRouteSummary = null;
@@ -479,6 +579,7 @@ function stopNavigation(map, station, styleReady) {
     // Réinitialise l'état local.
     //navigationStarted = false;
     lastKnownUserPosition = null;
+    lastReliableUserPosition = null;
     stationPanelRenderId++;
 
     // Réinitialise l'affichage de la boussole.
@@ -526,6 +627,170 @@ function stopNavigation(map, station, styleReady) {
     console.log('🛑 Navigation arrêtée.');
 }
 
+function isCurrentDestinationChange(request) {
+    return (
+        pendingDestinationChange === request &&
+        request.id === destinationChangeRequestId &&
+        request.sessionId === navigationSessionId &&
+        navigationStarted
+    );
+}
+
+function showDestinationChangeError(map, station, styleReady, message) {
+    destinationChangeError = { station, message };
+
+    updateStationPanel(displayedStation ?? station, map, styleReady, false);
+}
+
+async function startDestinationChange(map, station, styleReady) {
+    if (!navigationStarted || pendingDestinationChange) {
+        return;
+    }
+
+    const userPosition = lastReliableUserPosition;
+
+    if (!isFreshReliableGpsPosition(userPosition)) {
+        showDestinationChangeError(
+            map,
+            station,
+            styleReady,
+            'La position GPS est absente, trop imprécise ou trop ancienne. Attends un nouveau relevé puis réessaie.',
+        );
+        return;
+    }
+
+    const engineRequestId = navigationEngine.beginRouteReplacement();
+
+    if (engineRequestId === null) {
+        showDestinationChangeError(
+            map,
+            station,
+            styleReady,
+            'Le changement de destination ne peut pas démarrer pour le moment. Réessaie.',
+        );
+        return;
+    }
+
+    const request = {
+        id: ++destinationChangeRequestId,
+        sessionId: navigationSessionId,
+        engineRequestId,
+        station,
+    };
+    const previousDestination = activeNavigationStation;
+
+    pendingDestinationChange = request;
+    destinationChangeError = null;
+
+    updateStationPanel(displayedStation ?? station, map, styleReady, false);
+
+    let destinationMarkerTouched = false;
+
+    try {
+        const route = await getWalkingRoute(userPosition, {
+            latitude: station.latitude,
+            longitude: station.longitude,
+        });
+
+        if (!isCurrentDestinationChange(request)) {
+            return;
+        }
+
+        const coordinates = decodePolyline(route.legs[0].shape);
+
+        if (
+            !isValidRouteCoordinates(coordinates) ||
+            !Number.isFinite(route.summary?.length) ||
+            !Number.isFinite(route.summary?.time)
+        ) {
+            throw new Error('Valhalla returned an invalid route.');
+        }
+
+        await styleReady;
+
+        if (!isCurrentDestinationChange(request)) {
+            return;
+        }
+
+        destinationMarkerTouched = true;
+        showDestinationMarker(map, station);
+
+        if (
+            !navigationEngine.commitRouteReplacement(
+                request.engineRequestId,
+                coordinates,
+                {
+                    latitude: station.latitude,
+                    longitude: station.longitude,
+                },
+            )
+        ) {
+            throw new Error('The current route could not be replaced on the map.');
+        }
+
+        const distance = formatDistance(route.summary.length);
+        const duration = formatDuration(route.summary.time);
+
+        activeNavigationStation = station;
+        activeNavigationRouteSummary = { distance, duration };
+        routeSummaryData = activeNavigationRouteSummary;
+        pendingDestinationChange = null;
+        destinationChangeError = null;
+
+        updateStationPanel(station, map, styleReady, false);
+        scheduleNavigationPaneCollapse(station, request.sessionId);
+
+        const navigationSession = request.sessionId;
+
+        const viewButton = map
+            .getContainer()
+            .querySelector('.map-view-button');
+
+        if (viewButton?.textContent.trim() === '3D') {
+            viewButton.click();
+        }
+
+        await waitForMapMovement(map);
+
+        if (
+            navigationStarted &&
+            navigationSession === navigationSessionId &&
+            stationsMatch(activeNavigationStation, station) &&
+            isFreshGpsPosition(lastKnownUserPosition)
+        ) {
+            recenterOnUser(map, lastKnownUserPosition);
+        }
+    } catch (error) {
+        if (!isCurrentDestinationChange(request)) {
+            return;
+        }
+
+        navigationEngine.cancelRouteReplacement(request.engineRequestId);
+
+        if (destinationMarkerTouched) {
+            try {
+                showDestinationMarker(map, previousDestination);
+            } catch (restoreError) {
+                console.error(
+                    'Impossible de restaurer le marqueur de destination :',
+                    restoreError,
+                );
+            }
+        }
+
+        pendingDestinationChange = null;
+        destinationChangeError = {
+            station,
+            message:
+                'Le nouvel itinéraire n’a pas pu être calculé. L’itinéraire actuel est conservé. Réessaie.',
+        };
+
+        console.error('Impossible de changer la destination :', error);
+
+        updateStationPanel(displayedStation ?? station, map, styleReady, false);
+    }
+}
+
 async function updateStationPanel(
     station,
     map,
@@ -535,6 +800,8 @@ async function updateStationPanel(
     if (!station || !element) {
         return;
     }
+
+    clearNavigationPaneCollapseTimeout();
 
     const renderId = ++stationPanelRenderId;
     displayedStation = station;
@@ -593,9 +860,7 @@ async function updateStationPanel(
                 <button
                     type="button"
                     class="station-panel-join station-panel-context-replace"
-                    disabled
-                    aria-disabled="true"
-                    title="Cette action sera disponible prochainement"
+                    title="Calculer un itinéraire vers cette station"
                 >
                     Naviguer vers cette station
                 </button>
@@ -685,6 +950,30 @@ async function updateStationPanel(
 
     const routeMessage = element.querySelector('.station-panel-message');
 
+    const replaceButton = element.querySelector(
+        '.station-panel-context-replace',
+    );
+
+    if (pendingDestinationChange) {
+        if (routeMessage) {
+            routeMessage.hidden = false;
+            routeMessage.textContent = 'Calcul du nouvel itinéraire…';
+        }
+
+        if (replaceButton) {
+            replaceButton.disabled = true;
+            replaceButton.setAttribute('aria-busy', 'true');
+        }
+    } else if (
+        destinationChangeError &&
+        stationsMatch(destinationChangeError.station, station)
+    ) {
+        if (routeMessage) {
+            routeMessage.hidden = false;
+            routeMessage.textContent = destinationChangeError.message;
+        }
+    }
+
     const stopButton = element.querySelector('.station-panel-stop');
     stopButton?.addEventListener('click', () => {
         showStopNavigationConfirmation(map, station, styleReady);
@@ -706,6 +995,21 @@ async function updateStationPanel(
         }
 
         updateStationPanel(destination, map, styleReady, false);
+    });
+
+    replaceButton?.addEventListener('click', () => {
+        if (replaceButton.disabled || pendingDestinationChange) {
+            return;
+        }
+
+        showStopNavigationConfirmation(map, station, styleReady, {
+            title: 'Changer de destination ?',
+            message:
+                'Remplacer l’itinéraire actuel par un itinéraire vers cette station ?',
+            cancelLabel: 'Annuler',
+            confirmLabel: 'Confirmer',
+            onConfirm: () => startDestinationChange(map, station, styleReady),
+        });
     });
 
     joinButton?.addEventListener('click', async () => {
@@ -853,6 +1157,15 @@ async function updateStationPanel(
                         lastKnownUserPosition = position;
                     }
 
+                    if (
+                        isFreshReliableGpsPosition(position) &&
+                        (!Number.isFinite(lastReliableUserPosition?.timestamp) ||
+                            position.timestamp >
+                                lastReliableUserPosition.timestamp)
+                    ) {
+                        lastReliableUserPosition = position;
+                    }
+
                     navigationEngine.updateNavigationProgress(position);
 
                     console.log('Nouvelle position GPS :', position);
@@ -870,16 +1183,11 @@ async function updateStationPanel(
                 );
             }
 
-            // 📱 Réduit le panneau après 2 secondes.
-            if (
-                pane &&
-                mobileQuery.matches &&
-                stationsMatch(displayedStation, activeNavigationStation)
-            ) {
-                setTimeout(() => {
-                    pane.moveToBreak('bottom');
-                }, 2000);
-            }
+            // 📱 Réduit le panneau après 2 secondes si l'utilisateur ne l'a pas déplacé.
+            scheduleNavigationPaneCollapse(
+                activeNavigationStation,
+                sessionId,
+            );
 
             return;
         }
@@ -918,6 +1226,10 @@ async function updateStationPanel(
             }
 
             lastKnownUserPosition = userPosition;
+
+            if (isFreshReliableGpsPosition(userPosition)) {
+                lastReliableUserPosition = userPosition;
+            }
 
             routeStep = 'map';
             showUserMarker(map, userPosition);
