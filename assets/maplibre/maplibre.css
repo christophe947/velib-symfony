@@ -64,6 +64,15 @@
     overflow: hidden;
 }
 
+.user-location-marker {
+    width: 18px;
+    height: 18px;
+    box-sizing: border-box;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    background: #2563eb;
+}
+
 
 /* =========================
    Recherche carte

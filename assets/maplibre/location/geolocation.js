@@ -3,20 +3,32 @@ import * as maplibregl from '/maplibre-assets/maplibre-gl.mjs';
 import { findNearbyStations } from '../search/nearbyStations.js';
 import { renderSearchResults } from '../search/searchResults.js';
 
-let userMarker = null;
+const userMarkers = new WeakMap();
 let userPosition = null;
 
 export function showUserMarker(map, position) {
-    userMarker?.remove();
+    let userMarker = userMarkers.get(map);
 
-    userMarker = new maplibregl.Marker({
-        color: '#2563eb',
-    })
-        .setLngLat([position.longitude, position.latitude])
-        .setPopup(
-            new maplibregl.Popup({ offset: 25 }).setText('Votre position'),
-        )
-        .addTo(map);
+    if (!userMarker) {
+        const element = document.createElement('div');
+        element.className = 'user-location-marker';
+        element.setAttribute('aria-label', 'Votre position');
+
+        userMarker = new maplibregl.Marker({
+            element,
+            anchor: 'center',
+        })
+            .setLngLat([position.longitude, position.latitude])
+            .setPopup(
+                new maplibregl.Popup({ offset: 25 }).setText('Votre position'),
+            )
+            .addTo(map);
+
+        userMarkers.set(map, userMarker);
+        return;
+    }
+
+    userMarker.setLngLat([position.longitude, position.latitude]);
 }
 
 export function initGeolocation({
@@ -92,18 +104,6 @@ export function initGeolocation({
                     latitude,
                     longitude,
                 });
-
-                /*userMarker?.remove();
-
-                userMarker = new maplibregl.Marker({
-                    color: '#2563eb',
-                })
-                    .setLngLat([longitude, latitude])
-                    .setPopup(
-                        new maplibregl.Popup({ offset: 25 })
-                            .setText('Votre position')
-                    )
-                    .addTo(map);*/
 
                 const nearbyStations = findNearbyStations(
                     latitude,
