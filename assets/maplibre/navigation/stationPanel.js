@@ -45,6 +45,26 @@ const mobileQuery = window.matchMedia('(max-width: 767px)');
 
 let currentMode = 'bikes';
 
+function isFreshGpsPosition(position) {
+    if (
+        !position ||
+        !Number.isFinite(position.longitude) ||
+        position.longitude < -180 ||
+        position.longitude > 180 ||
+        !Number.isFinite(position.latitude) ||
+        position.latitude < -90 ||
+        position.latitude > 90 ||
+        !Number.isFinite(position.timestamp) ||
+        position.timestamp <= 0
+    ) {
+        return false;
+    }
+
+    const age = Date.now() - position.timestamp;
+
+    return age >= 0 && age <= 10_000;
+}
+
 /**
  * Met à jour les informations de distance et de durée
  * affichées dans le panneau de navigation.
@@ -348,6 +368,11 @@ function stopNavigation(map, station, styleReady) {
     // Nettoie le tracé et le marqueur de destination.
     const wasFollowingUser = clearNavigationMap(map);
 
+    // Le marqueur revient à la dernière coordonnée GPS brute connue.
+    if (isFreshGpsPosition(lastKnownUserPosition)) {
+        showUserMarker(map, lastKnownUserPosition);
+    }
+
     setUserFollowing(wasFollowingUser);
     startBackgroundUserTracking(map);
 
@@ -602,10 +627,17 @@ async function updateStationPanel(station, map, styleReady) {
 
             positionWatchId = startWatchingPosition(
                 (position) => {
-                    lastKnownUserPosition = position;
-                    showUserMarker(map, position);
-                    followUserPosition(map, position);
-                    //updateRouteProgress(position, map);
+                    const lastKnownTimestamp =
+                        lastKnownUserPosition?.timestamp;
+
+                    if (
+                        isFreshGpsPosition(position) &&
+                        (!Number.isFinite(lastKnownTimestamp) ||
+                            position.timestamp > lastKnownTimestamp)
+                    ) {
+                        lastKnownUserPosition = position;
+                    }
+
                     navigationEngine.updateNavigationProgress(position);
 
                     console.log('Nouvelle position GPS :', position);
@@ -615,12 +647,6 @@ async function updateStationPanel(station, map, styleReady) {
                 },
             );
 
-            //if (!isSessionActive()) {
-            //    return;
-            //}
-
-            //joinButton.disabled = false;
-            //joinButton.textContent = 'Navigation en cours';
             const controls = element.querySelector(
                 '.station-panel-navigation-controls',
             );

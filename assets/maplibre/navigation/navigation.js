@@ -14,6 +14,7 @@ export function createNavigationEngine(effects) {
     let lastRouteProgressIndex = 0;
     let lastAcceptedRouteProgress = 0;
     let lastAcceptedProgressTimestamp = null;
+    let lastCameraGpsTimestamp = null;
     let simulationIntervalId = null;
 
     let navigationDestination = null;
@@ -91,6 +92,7 @@ export function createNavigationEngine(effects) {
         navigationDestination = destination;
         resetOffRouteConfirmations();
         lastProcessedGpsTimestamp = null;
+        lastCameraGpsTimestamp = null;
     }
 
     /**
@@ -237,18 +239,48 @@ export function createNavigationEngine(effects) {
             return;
         }
 
-        followUserPosition(position);
+        const timestamp = position.timestamp;
+        const age = Date.now() - timestamp;
+        const hasValidTimestamp =
+            Number.isFinite(timestamp) && timestamp > 0;
+        const hasFreshTimestamp =
+            hasValidTimestamp &&
+            age >= 0 &&
+            age <= MAX_GPS_FIX_AGE_MS;
+        const isFreshAndDistinct =
+            hasFreshTimestamp &&
+            (lastProcessedGpsTimestamp === null ||
+                timestamp > lastProcessedGpsTimestamp);
+        const isNewCameraFix =
+            hasFreshTimestamp &&
+            (lastCameraGpsTimestamp === null ||
+                timestamp > lastCameraGpsTimestamp);
+
+        if (hasFreshTimestamp && isNewCameraFix) {
+            // L'horloge caméra avance même si précision/projection rejettent le fix.
+            lastCameraGpsTimestamp = timestamp;
+        }
+
+        const hasValidCoordinates =
+            Number.isFinite(position.longitude) &&
+            position.longitude >= -180 &&
+            position.longitude <= 180 &&
+            Number.isFinite(position.latitude) &&
+            position.latitude >= -90 &&
+            position.latitude <= 90;
+
+        if (!hasValidCoordinates) {
+            resetOffRouteConfirmations();
+            return;
+        }
+
+        if (isNewCameraFix) {
+            followUserPosition(position);
+        }
 
         let closestRouteDistance = Infinity;
         let closestProgressCandidate = null;
 
-        const timestamp = position.timestamp;
-        const age = Date.now() - timestamp;
-        const hasFreshTimestamp =
-            Number.isFinite(timestamp) &&
-            timestamp > 0 &&
-            age >= 0 &&
-            age <= MAX_GPS_FIX_AGE_MS;
         const isDistinctProgressFix =
             hasFreshTimestamp &&
             (lastAcceptedProgressTimestamp === null ||
@@ -351,15 +383,6 @@ export function createNavigationEngine(effects) {
 
         // Seules les mesures GPS fraîches, uniques et suffisamment précises
         // peuvent confirmer une sortie d'itinéraire.
-        const hasValidTimestamp =
-            Number.isFinite(timestamp) && timestamp > 0;
-        const isFreshAndDistinct =
-            hasValidTimestamp &&
-            age >= 0 &&
-            age <= MAX_GPS_FIX_AGE_MS &&
-            (lastProcessedGpsTimestamp === null ||
-                timestamp > lastProcessedGpsTimestamp);
-
         if (!hasValidTimestamp || age < 0) {
             resetOffRouteConfirmations();
         } else if (age > MAX_GPS_FIX_AGE_MS) {
@@ -420,6 +443,7 @@ export function createNavigationEngine(effects) {
 
                     // Une position hors itinéraire ne doit pas
                     // faire avancer artificiellement la progression.
+                    showUserMarker(position);
                     return;
                 }
 
@@ -435,6 +459,7 @@ export function createNavigationEngine(effects) {
             !closestProgressCandidate ||
             closestProgressCandidate.distance > OFF_ROUTE_THRESHOLD
         ) {
+            showUserMarker(position);
             return;
         }
 
@@ -463,6 +488,26 @@ export function createNavigationEngine(effects) {
         if (remainingCoordinates.length >= 2) {
             updateWalkingRoute(remainingCoordinates);
         }
+
+        const accuracy = position.accuracy;
+        const hasValidAccuracy =
+            Number.isFinite(accuracy) && accuracy >= 0;
+        const maxSnapDistance = Math.min(20, Math.max(8, accuracy));
+        const canDisplayProjection =
+            isFreshAndDistinct &&
+            hasValidAccuracy &&
+            accuracy <= 25 &&
+            closestProgressCandidate.distance <= maxSnapDistance &&
+            !isRecalculatingRoute;
+        const displayedPosition = canDisplayProjection
+            ? {
+                  ...position,
+                  longitude: closestProgressCandidate.coordinate[0],
+                  latitude: closestProgressCandidate.coordinate[1],
+              }
+            : position;
+
+        showUserMarker(displayedPosition);
     }
 
     /**
@@ -536,7 +581,6 @@ export function createNavigationEngine(effects) {
                 timestamp: Date.now(),
             };
 
-            showUserMarker(position);
             updateNavigationProgress(position, {
                 maxForwardProgress: cumulativeRouteDistances[index],
             });
@@ -614,8 +658,6 @@ export function createNavigationEngine(effects) {
                 timestamp: Date.now(),
             };
 
-            showUserMarker(position);
-
             updateNavigationProgress(position);
 
             if (count >= 3) {
@@ -656,6 +698,7 @@ export function createNavigationEngine(effects) {
         lastRouteProgressIndex = 0;
         lastAcceptedRouteProgress = 0;
         lastAcceptedProgressTimestamp = null;
+        lastCameraGpsTimestamp = null;
         navigationDestination = null;
         isRecalculatingRoute = false;
         resetOffRouteConfirmations();
