@@ -15,12 +15,19 @@ export function createCameraController(
     let isChangingView = false;
     let pendingUserPosition = null;
     let lastGpsPosition = null;
-    let navigationCameraAnimationActive = false;
-    let pendingNavigationCameraDuration = 0;
-    let navigationCameraAnimationGeneration = 0;
+    let navigationCompassHeading = null;
+    let navigationCameraFrameId = null;
+    let navigationCameraFrameGeneration = 0;
+    let lastNavigationCameraFrameTime = null;
+    let isMouseCameraGestureActive = false;
 
     const MIN_HEADING_SPEED = 0.8;
     const HEADING_SMOOTHING_FACTOR = 0.6;
+    const NAVIGATION_CENTER_SMOOTHING_MS = 180;
+    const NAVIGATION_BEARING_SMOOTHING_MS = 90;
+    const NAVIGATION_CENTER_TOLERANCE_METERS = 0.5;
+    const NAVIGATION_BEARING_TOLERANCE_DEGREES = 0.5;
+    const MAX_NAVIGATION_FRAME_DELTA_MS = 64;
 
     function smoothHeading(currentHeading, targetHeading) {
         // Normalise les angles entre 0 et 360 degrés.
@@ -43,6 +50,7 @@ export function createCameraController(
         }
 
         isChangingView = true;
+        cancelNavigationCameraFrames();
 
         // Empêche la boussole de perturber la transition 2D / 3D.
         isCompassCameraPaused = true;
@@ -88,6 +96,8 @@ export function createCameraController(
             if (is3D && isFollowingUser) {
                 await onCompassActivationRequested();
             }
+
+            requestNavigationCameraFrame();
         }
     }
 
@@ -118,59 +128,126 @@ export function createCameraController(
             isFollowingUser &&
             !isChangingView &&
             !isCameraInteractionActive &&
+            !isMouseCameraGestureActive &&
             !isCompassCameraPaused
         );
     }
 
-    function updateNavigationCamera(duration) {
-        if (!canCoordinateNavigationCamera()) {
-            pendingNavigationCameraDuration = 0;
-            return;
+    function cancelNavigationCameraFrames() {
+        navigationCameraFrameGeneration++;
+
+        if (navigationCameraFrameId !== null) {
+            cancelAnimationFrame(navigationCameraFrameId);
+            navigationCameraFrameId = null;
         }
 
-        if (navigationCameraAnimationActive) {
-            pendingNavigationCameraDuration = Math.max(
-                pendingNavigationCameraDuration,
-                duration,
-            );
-            return;
-        }
+        lastNavigationCameraFrameTime = null;
+    }
 
-        const center = lastGpsPosition
+    function getNavigationCameraTargets() {
+        const targetCenter = lastGpsPosition
             ? [lastGpsPosition.longitude, lastGpsPosition.latitude]
             : map.getCenter();
-        const bearing = lastStableHeading ?? map.getBearing();
-        const centerDistance = map.getCenter().distanceTo(center);
-        const bearingDifference = Math.abs(
-            ((bearing - map.getBearing() + 540) % 360) - 180,
-        );
+        const targetBearing = navigationCompassHeading ?? map.getBearing();
 
-        if (centerDistance < 0.5 && bearingDifference < 0.5) {
+        return { targetCenter, targetBearing };
+    }
+
+    function requestNavigationCameraFrame() {
+        if (!canCoordinateNavigationCamera()) {
             return;
         }
 
-        const animationGeneration = ++navigationCameraAnimationGeneration;
-        navigationCameraAnimationActive = true;
+        if (navigationCameraFrameId !== null) {
+            return;
+        }
 
-        map.easeTo({
-            center,
-            bearing,
-            duration,
-            easing: (t) => t,
-            essential: true,
-        });
+        const frameGeneration = navigationCameraFrameGeneration;
 
-        map.once('moveend', () => {
-            if (animationGeneration !== navigationCameraAnimationGeneration) {
+        navigationCameraFrameId = requestAnimationFrame((timestamp) => {
+            if (frameGeneration !== navigationCameraFrameGeneration) {
                 return;
             }
 
-            navigationCameraAnimationActive = false;
+            navigationCameraFrameId = null;
 
-            if (pendingNavigationCameraDuration > 0) {
-                const nextDuration = pendingNavigationCameraDuration;
-                pendingNavigationCameraDuration = 0;
-                updateNavigationCamera(nextDuration);
+            if (!canCoordinateNavigationCamera()) {
+                lastNavigationCameraFrameTime = null;
+                return;
+            }
+
+            const { targetCenter, targetBearing } = getNavigationCameraTargets();
+            const currentCenter = map.getCenter();
+            const currentBearing = map.getBearing();
+            const centerDistance = currentCenter.distanceTo(targetCenter);
+            const bearingDifference =
+                ((targetBearing - currentBearing + 540) % 360) - 180;
+
+            if (
+                centerDistance <= NAVIGATION_CENTER_TOLERANCE_METERS &&
+                Math.abs(bearingDifference) <= NAVIGATION_BEARING_TOLERANCE_DEGREES
+            ) {
+                lastNavigationCameraFrameTime = null;
+                return;
+            }
+
+            const elapsed =
+                lastNavigationCameraFrameTime === null
+                    ? 1000 / 60
+                    : timestamp - lastNavigationCameraFrameTime;
+            const frameDelta = Math.min(
+                Math.max(elapsed, 0),
+                MAX_NAVIGATION_FRAME_DELTA_MS,
+            );
+
+            lastNavigationCameraFrameTime = timestamp;
+
+            const centerAlpha =
+                1 - Math.exp(-frameDelta / NAVIGATION_CENTER_SMOOTHING_MS);
+            const bearingAlpha =
+                1 - Math.exp(-frameDelta / NAVIGATION_BEARING_SMOOTHING_MS);
+            const nextCenter =
+                centerDistance <= NAVIGATION_CENTER_TOLERANCE_METERS
+                    ? [currentCenter.lng, currentCenter.lat]
+                    : [
+                          currentCenter.lng +
+                              (targetCenter[0] - currentCenter.lng) * centerAlpha,
+                          currentCenter.lat +
+                              (targetCenter[1] - currentCenter.lat) * centerAlpha,
+                      ];
+            const nextBearing =
+                Math.abs(bearingDifference) <=
+                NAVIGATION_BEARING_TOLERANCE_DEGREES
+                    ? currentBearing
+                    : ((currentBearing + bearingDifference * bearingAlpha) % 360 +
+                          360) %
+                      360;
+
+            map.jumpTo(
+                {
+                    center: nextCenter,
+                    bearing: nextBearing,
+                },
+                { navigationCamera: true },
+            );
+
+            if (frameGeneration === navigationCameraFrameGeneration) {
+                const latestTargets = getNavigationCameraTargets();
+                const centerStillMoving =
+                    map.getCenter().distanceTo(latestTargets.targetCenter) >
+                    NAVIGATION_CENTER_TOLERANCE_METERS;
+                const bearingStillMoving =
+                    Math.abs(
+                        ((latestTargets.targetBearing - map.getBearing() + 540) %
+                            360) -
+                            180,
+                    ) > NAVIGATION_BEARING_TOLERANCE_DEGREES;
+
+                if (centerStillMoving || bearingStillMoving) {
+                    requestNavigationCameraFrame();
+                } else {
+                    lastNavigationCameraFrameTime = null;
+                }
             }
         });
     }
@@ -213,7 +290,8 @@ export function createCameraController(
         lastStableHeading = smoothHeading(currentBearing, compassHeading);
 
         if (!shouldUseGpsHeading()) {
-            updateNavigationCamera(100);
+            navigationCompassHeading = lastStableHeading;
+            requestNavigationCameraFrame();
             return;
         }
 
@@ -238,12 +316,15 @@ export function createCameraController(
         // Réactive le suivi.
         setFollowing(true);
 
+        cancelNavigationCameraFrames();
+
         // Termine les animations précédentes.
         map.stop();
 
         // Attend la fin du recentrage avant de réactiver la boussole.
         map.once('moveend', () => {
             isCompassCameraPaused = false;
+            requestNavigationCameraFrame();
         });
 
         // Une seule animation pour le recentrage et le zoom.
@@ -295,7 +376,7 @@ export function createCameraController(
         lastGpsPosition = position;
 
         if (is3D && !shouldUseGpsHeading()) {
-            updateNavigationCamera(200);
+            requestNavigationCameraFrame();
             return;
         }
 
@@ -326,7 +407,7 @@ export function createCameraController(
     function initManualCameraControl() {
         function suspendCameraControl() {
             clearTimeout(cameraResumeTimeout);
-            pendingNavigationCameraDuration = 0;
+            cancelNavigationCameraFrames();
 
             console.log('Suspension caméra déclenchée', {
                 following: isFollowingUser,
@@ -345,6 +426,23 @@ export function createCameraController(
             }, 500);
         }
 
+        function pauseNavigationCameraForMouseDown() {
+            isMouseCameraGestureActive = true;
+            cancelNavigationCameraFrames();
+        }
+
+        function resumeNavigationCameraAfterMouseUp() {
+            if (!isMouseCameraGestureActive) {
+                return;
+            }
+
+            isMouseCameraGestureActive = false;
+            requestNavigationCameraFrame();
+        }
+
+        const canvasContainer = map.getCanvasContainer();
+        const ownerDocument = canvasContainer.ownerDocument;
+
         // Début des interactions tactiles
         map.on('touchstart', suspendCameraControl);
 
@@ -361,24 +459,37 @@ export function createCameraController(
             suspendCameraControl();
             scheduleCameraResume();
         });
+
+        // Suspend le suivi si une autre action démarre un mouvement caméra.
+        // Les mouvements du coordinateur portent un marqueur dans eventData.
+        map.on('movestart', (event) => {
+            if (
+                !event.navigationCamera &&
+                canCoordinateNavigationCamera()
+            ) {
+                suspendCameraControl();
+            }
+        });
+
+        // jumpTo() réinitialise les gestionnaires d'entrée MapLibre. Suspend
+        // le rendu avant que ceux-ci commencent à traiter un geste souris.
+        canvasContainer.addEventListener(
+            'mousedown',
+            pauseNavigationCameraForMouseDown,
+            true,
+        );
+        ownerDocument.addEventListener(
+            'mouseup',
+            resumeNavigationCameraAfterMouseUp,
+            true,
+        );
     }
 
     function clearPendingPosition() {
         pendingUserPosition = null;
         lastGpsPosition = null;
-        pendingNavigationCameraDuration = 0;
-
-        const shouldStopNavigationCameraAnimation =
-            navigationCameraAnimationActive;
-
-        navigationCameraAnimationGeneration++;
-        navigationCameraAnimationActive = false;
-
-        if (shouldStopNavigationCameraAnimation) {
-            // MapLibre ne peut avoir qu'une seule caméra animée à la fois;
-            // ici, l'animation active appartient au coordinateur.
-            map.stop();
-        }
+        navigationCompassHeading = null;
+        cancelNavigationCameraFrames();
     }
 
     return {
