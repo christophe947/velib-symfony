@@ -23,8 +23,18 @@ export function createNavigationEngine(effects) {
     // Paramètres de détection des sorties d'itinéraire.
     const OFF_ROUTE_THRESHOLD = 30;
     const OFF_ROUTE_CONFIRMATIONS = 3;
+    const MAX_GPS_FIX_AGE_MS = 10_000;
+    // Écarte les rafales sub-seconde tout en gardant la cadence de la simulation.
+    const MIN_OFF_ROUTE_CONFIRMATION_INTERVAL_MS = 500;
 
     let consecutiveOffRoutePositions = 0;
+    let lastProcessedGpsTimestamp = null;
+    let lastOffRouteConfirmationTimestamp = null;
+
+    function resetOffRouteConfirmations() {
+        consecutiveOffRoutePositions = 0;
+        lastOffRouteConfirmationTimestamp = null;
+    }
 
     /**
      * Enregistre l'itinéraire et sa destination.
@@ -33,6 +43,8 @@ export function createNavigationEngine(effects) {
         currentRouteCoordinates = coordinates;
         lastRouteProgressIndex = 0;
         navigationDestination = destination;
+        resetOffRouteConfirmations();
+        lastProcessedGpsTimestamp = null;
     }
 
     /**
@@ -77,7 +89,7 @@ export function createNavigationEngine(effects) {
             lastRouteProgressIndex = 0;
 
             // Réinitialise la détection de déviation.
-            consecutiveOffRoutePositions = 0;
+            resetOffRouteConfirmations();
 
             // Met à jour la ligne sur la carte.
             updateWalkingRoute(coordinates);
@@ -199,31 +211,93 @@ export function createNavigationEngine(effects) {
             }
         }
 
-        // Détection d'une éventuelle sortie d'itinéraire.
-        if (closestDistance > OFF_ROUTE_THRESHOLD) {
-            consecutiveOffRoutePositions++;
+        // Seules les mesures GPS fraîches, uniques et suffisamment précises
+        // peuvent confirmer une sortie d'itinéraire.
+        const timestamp = position.timestamp;
+        const age = Date.now() - timestamp;
+        const hasValidTimestamp =
+            Number.isFinite(timestamp) && timestamp > 0;
+        const isFreshAndDistinct =
+            hasValidTimestamp &&
+            age >= 0 &&
+            age <= MAX_GPS_FIX_AGE_MS &&
+            (lastProcessedGpsTimestamp === null ||
+                timestamp > lastProcessedGpsTimestamp);
 
-            console.log(
-                `Écart à l'itinéraire : ${Math.round(closestDistance)} m`,
-                `(${consecutiveOffRoutePositions}/${OFF_ROUTE_CONFIRMATIONS})`,
-            );
+        if (!hasValidTimestamp || age < 0) {
+            resetOffRouteConfirmations();
+        } else if (age > MAX_GPS_FIX_AGE_MS) {
+            resetOffRouteConfirmations();
+        } else if (isFreshAndDistinct) {
+            lastProcessedGpsTimestamp = timestamp;
 
-            if (consecutiveOffRoutePositions >= OFF_ROUTE_CONFIRMATIONS) {
-                console.warn('Sortie d’itinéraire confirmée.');
+            const accuracy = position.accuracy;
+            const hasValidAccuracy =
+                Number.isFinite(accuracy) && accuracy >= 0;
 
-                // Évite de compter indéfiniment les positions
-                // pendant que le recalcul est en cours.
-                consecutiveOffRoutePositions = 0;
+            if (!hasValidAccuracy) {
+                resetOffRouteConfirmations();
+            } else {
+                const reliableOffRouteThreshold =
+                    OFF_ROUTE_THRESHOLD + accuracy;
 
-                recalculateNavigationRoute(position);
+                if (closestDistance > reliableOffRouteThreshold) {
+                    if (
+                        lastOffRouteConfirmationTimestamp !== null &&
+                        timestamp - lastOffRouteConfirmationTimestamp >
+                            MAX_GPS_FIX_AGE_MS
+                    ) {
+                        resetOffRouteConfirmations();
+                    }
+
+                    const timeSinceLastConfirmation =
+                        lastOffRouteConfirmationTimestamp === null
+                            ? null
+                            : timestamp - lastOffRouteConfirmationTimestamp;
+
+                    if (
+                        timeSinceLastConfirmation === null ||
+                        timeSinceLastConfirmation >=
+                            MIN_OFF_ROUTE_CONFIRMATION_INTERVAL_MS
+                    ) {
+                        consecutiveOffRoutePositions++;
+                        lastOffRouteConfirmationTimestamp = timestamp;
+
+                        console.log(
+                            `Écart à l'itinéraire : ${Math.round(closestDistance)} m`,
+                            `(${consecutiveOffRoutePositions}/${OFF_ROUTE_CONFIRMATIONS})`,
+                        );
+
+                        if (
+                            consecutiveOffRoutePositions >=
+                            OFF_ROUTE_CONFIRMATIONS
+                        ) {
+                            console.warn('Sortie d’itinéraire confirmée.');
+
+                            // Évite de compter indéfiniment les positions
+                            // pendant que le recalcul est en cours.
+                            resetOffRouteConfirmations();
+
+                            recalculateNavigationRoute(position);
+                        }
+                    }
+
+                    // Une position hors itinéraire ne doit pas
+                    // faire avancer artificiellement la progression.
+                    return;
+                }
+
+                // Une mesure fiable revenue dans la marge remet la série à zéro.
+                resetOffRouteConfirmations();
             }
-            // Une position hors itinéraire ne doit pas
-            // faire avancer artificiellement la progression.
-            return;
         }
 
-        // La position est revenue suffisamment près du tracé.
-        consecutiveOffRoutePositions = 0;
+        // Conserve le comportement existant : une position au-delà de 30 m
+        // ne fait pas avancer la progression si elle ne peut pas confirmer
+        // une sortie fiable.
+        if (closestDistance > OFF_ROUTE_THRESHOLD) {
+            return;
+        }
 
         // La progression ne peut jamais reculer.
         lastRouteProgressIndex = Math.max(
@@ -312,6 +386,8 @@ export function createNavigationEngine(effects) {
                 latitude,
                 heading,
                 speed: 1.4,
+                accuracy: 5,
+                timestamp: Date.now(),
             };
 
             showUserMarker(position);
@@ -384,9 +460,15 @@ export function createNavigationEngine(effects) {
 
             console.log(`🧪 Position artificielle hors itinéraire : ${count}/3`);
 
-            showUserMarker(simulatedPosition);
+            const position = {
+                ...simulatedPosition,
+                accuracy: 5,
+                timestamp: Date.now(),
+            };
 
-            updateNavigationProgress(simulatedPosition);
+            showUserMarker(position);
+
+            updateNavigationProgress(position);
 
             if (count >= 3) {
                 clearInterval(intervalId);
@@ -425,7 +507,8 @@ export function createNavigationEngine(effects) {
         lastRouteProgressIndex = 0;
         navigationDestination = null;
         isRecalculatingRoute = false;
-        consecutiveOffRoutePositions = 0;
+        resetOffRouteConfirmations();
+        lastProcessedGpsTimestamp = null;
 
         console.log('🛑 Traitements de navigation arrêtés.');
     }
