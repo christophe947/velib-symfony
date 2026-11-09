@@ -1,7 +1,7 @@
 import { createMap } from 'maplibre/map';
 import { initStationPanel } from './navigation/stationPanel.js';
 import { initSearch } from './search/search.js';
-import { setSelectedStation } from './state.js';
+import { setSelectedStation } from './shared/state.js';
 
 
 const { map, styleReady } = createMap();

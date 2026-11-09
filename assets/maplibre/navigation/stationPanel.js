@@ -1,5 +1,5 @@
 import { CupertinoPane } from 'cupertino-pane';
-import { subscribeToSelectedStation, setDisplayMode } from '../state.js';
+import { subscribeToSelectedStation, setDisplayMode } from '../shared/state.js';
 import {
     requestUserPosition,
     showUserMarker,
