@@ -22,6 +22,7 @@ import {
     reactivateCompassIfEligible,
 } from '../map.js';
 import { createNavigationEngine } from './navigation.js';
+import { createScreenWakeLock } from './screenWakeLock.js';
 import { formatDistance, formatDuration } from './routeFormatting.js';
 import { stopCompass } from './compass.js';
 
@@ -38,6 +39,7 @@ let positionWatchId = null;
 // Dernière position GPS connue.
 let lastKnownUserPosition = null;
 let navigationEngine = null;
+const screenWakeLock = createScreenWakeLock();
 
 const mobileQuery = window.matchMedia('(max-width: 767px)');
 
@@ -329,6 +331,7 @@ function stopNavigation(map, station, styleReady) {
     // Invalide les opérations asynchrones de la session.
     navigationSessionId++;
     navigationStarted = false;
+    screenWakeLock.stop();
 
     // Arrête le suivi GPS.
     if (positionWatchId !== null) {
@@ -492,6 +495,7 @@ async function updateStationPanel(station, map, styleReady) {
             navigationStarted = true;
             setNavigationActive(true);
             setUserFollowing(true);
+            screenWakeLock.start();
 
             const isSessionActive = () =>
                 navigationStarted && sessionId === navigationSessionId;
