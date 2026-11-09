@@ -65,12 +65,44 @@
 }
 
 .user-location-marker {
-    width: 18px;
-    height: 18px;
+    position: relative;
+    width: 20px;
+    height: 20px;
+}
+
+.user-location-dot {
+    position: absolute;
+    z-index: 1;
+    inset: 1px;
     box-sizing: border-box;
     border: 2px solid #ffffff;
     border-radius: 50%;
     background: #2563eb;
+}
+
+.user-location-beam {
+    position: absolute;
+    bottom: calc(100% - 4px);
+    left: 50%;
+    width: 58px;
+    height: 52px;
+    transform: translateX(-50%);
+    clip-path: polygon(50% 100%, 4% 0, 96% 0);
+    background: linear-gradient(
+        to top,
+        rgb(37 99 235 / 24%),
+        rgb(37 99 235 / 7%)
+    );
+    filter: blur(4px);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 120ms ease;
+}
+
+.user-location-marker.has-compass-heading .user-location-beam {
+    opacity: 1;
+    visibility: visible;
 }
 
 

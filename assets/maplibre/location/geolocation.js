@@ -7,16 +7,28 @@ const userMarkers = new WeakMap();
 let userPosition = null;
 
 export function showUserMarker(map, position) {
-    let userMarker = userMarkers.get(map);
+    let userMarkerState = userMarkers.get(map);
 
-    if (!userMarker) {
+    if (!userMarkerState) {
         const element = document.createElement('div');
         element.className = 'user-location-marker';
         element.setAttribute('aria-label', 'Votre position');
 
-        userMarker = new maplibregl.Marker({
+        const beam = document.createElement('span');
+        beam.className = 'user-location-beam';
+        beam.setAttribute('aria-hidden', 'true');
+
+        const dot = document.createElement('span');
+        dot.className = 'user-location-dot';
+        dot.setAttribute('aria-hidden', 'true');
+
+        element.append(beam, dot);
+
+        const marker = new maplibregl.Marker({
             element,
             anchor: 'center',
+            rotationAlignment: 'map',
+            pitchAlignment: 'viewport',
         })
             .setLngLat([position.longitude, position.latitude])
             .setPopup(
@@ -24,11 +36,56 @@ export function showUserMarker(map, position) {
             )
             .addTo(map);
 
-        userMarkers.set(map, userMarker);
+        userMarkerState = {
+            marker,
+            element,
+            compassExpiryTimeout: null,
+        };
+        userMarkers.set(map, userMarkerState);
         return;
     }
 
-    userMarker.setLngLat([position.longitude, position.latitude]);
+    userMarkerState.marker.setLngLat([position.longitude, position.latitude]);
+}
+
+export function showUserMarkerCompass(map, heading, timestamp) {
+    const userMarkerState = userMarkers.get(map);
+
+    if (!userMarkerState) {
+        return;
+    }
+
+    const readingAge = Date.now() - timestamp;
+
+    if (
+        !Number.isFinite(heading) ||
+        !Number.isFinite(timestamp) ||
+        readingAge < 0 ||
+        readingAge >= 1500
+    ) {
+        hideUserMarkerCompass(map);
+        return;
+    }
+
+    clearTimeout(userMarkerState.compassExpiryTimeout);
+    userMarkerState.marker.setRotation(((heading % 360) + 360) % 360);
+    userMarkerState.element.classList.add('has-compass-heading');
+    userMarkerState.compassExpiryTimeout = setTimeout(() => {
+        userMarkerState.element.classList.remove('has-compass-heading');
+        userMarkerState.compassExpiryTimeout = null;
+    }, 1500 - readingAge);
+}
+
+export function hideUserMarkerCompass(map) {
+    const userMarkerState = userMarkers.get(map);
+
+    if (!userMarkerState) {
+        return;
+    }
+
+    clearTimeout(userMarkerState.compassExpiryTimeout);
+    userMarkerState.compassExpiryTimeout = null;
+    userMarkerState.element.classList.remove('has-compass-heading');
 }
 
 export function initGeolocation({

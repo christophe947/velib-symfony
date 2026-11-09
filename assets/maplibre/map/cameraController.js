@@ -3,6 +3,7 @@ export function createCameraController(
     {
         onViewModeChange = () => {},
         onCompassActivationRequested = async () => {},
+        onCompassControlSuspended = () => {},
         shouldUseGpsHeading = () => true,
     } = {},
 ) {
@@ -51,6 +52,7 @@ export function createCameraController(
 
         isChangingView = true;
         cancelNavigationCameraFrames();
+        onCompassControlSuspended();
 
         // Empêche la boussole de perturber la transition 2D / 3D.
         isCompassCameraPaused = true;
@@ -111,6 +113,10 @@ export function createCameraController(
 
     function setFollowing(enabled) {
         isFollowingUser = enabled;
+
+        if (!enabled) {
+            onCompassControlSuspended();
+        }
     }
 
     function isFollowing() {
@@ -254,7 +260,7 @@ export function createCameraController(
 
     function updateFromCompass(reading) {
         if (!reading) {
-            return;
+            return false;
         }
 
         // La boussole pilote la caméra uniquement en navigation 3D,
@@ -264,24 +270,27 @@ export function createCameraController(
             !isFollowingUser ||
             isChangingView ||
             isCameraInteractionActive ||
-            isCompassCameraPaused
+            isCompassCameraPaused ||
+            isMouseCameraGestureActive
         ) {
-            return;
+            return false;
         }
 
         // Vérifie que la mesure est récente.
+        const readingAge = Date.now() - reading.timestamp;
         const isReadingFresh =
             Number.isFinite(reading.timestamp) &&
-            Date.now() - reading.timestamp < 1500;
+            readingAge >= 0 &&
+            readingAge < 1500;
 
         if (!isReadingFresh) {
-            return;
+            return false;
         }
 
         const compassHeading = reading.compassHeading;
 
         if (!Number.isFinite(compassHeading)) {
-            return;
+            return false;
         }
 
         // Conserve le lissage du cap.
@@ -292,7 +301,7 @@ export function createCameraController(
         if (!shouldUseGpsHeading()) {
             navigationCompassHeading = lastStableHeading;
             requestNavigationCameraFrame();
-            return;
+            return true;
         }
 
         // Anime progressivement l'orientation de la caméra.
@@ -301,6 +310,8 @@ export function createCameraController(
             duration: 100,
             essential: true,
         });
+
+        return true;
     }
 
     function recenter(position) {
@@ -309,6 +320,10 @@ export function createCameraController(
         }
 
         lastGpsPosition = position;
+        onCompassControlSuspended();
+        clearTimeout(cameraResumeTimeout);
+        cameraResumeTimeout = null;
+        isCameraInteractionActive = false;
 
         // Suspend temporairement le contrôle automatique de la caméra.
         isCompassCameraPaused = true;
@@ -408,6 +423,7 @@ export function createCameraController(
         function suspendCameraControl() {
             clearTimeout(cameraResumeTimeout);
             cancelNavigationCameraFrames();
+            onCompassControlSuspended();
 
             console.log('Suspension caméra déclenchée', {
                 following: isFollowingUser,
@@ -429,6 +445,7 @@ export function createCameraController(
         function pauseNavigationCameraForMouseDown() {
             isMouseCameraGestureActive = true;
             cancelNavigationCameraFrames();
+            onCompassControlSuspended();
         }
 
         function resumeNavigationCameraAfterMouseUp() {
@@ -437,6 +454,7 @@ export function createCameraController(
             }
 
             isMouseCameraGestureActive = false;
+            scheduleCameraResume();
             requestNavigationCameraFrame();
         }
 
@@ -465,7 +483,14 @@ export function createCameraController(
         map.on('movestart', (event) => {
             if (
                 !event.navigationCamera &&
-                canCoordinateNavigationCamera()
+                (canCoordinateNavigationCamera() ||
+                    (isMouseCameraGestureActive &&
+                        is3D &&
+                        !shouldUseGpsHeading() &&
+                        isFollowingUser &&
+                        !isChangingView &&
+                        !isCameraInteractionActive &&
+                        !isCompassCameraPaused))
             ) {
                 suspendCameraControl();
             }

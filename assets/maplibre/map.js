@@ -7,6 +7,8 @@ import { addZoneLayer } from './map/layers/zoneLayer.js';
 import { addCommuneLayer } from './map/layers/communeLayer.js';
 import {
     showUserMarker,
+    showUserMarkerCompass,
+    hideUserMarkerCompass,
     requestUserPosition,
 } from './location/geolocation.js';
 import * as userTracking from './location/userTracking.js';
@@ -238,6 +240,9 @@ export function createMap() {
         onViewModeChange: (is3D) => {
             viewModeControl?.updateMode(is3D);
         },
+        onCompassControlSuspended: () => {
+            hideUserMarkerCompass(map);
+        },
         onCompassActivationRequested: async () => {
             if (!isNavigationActive) {
                 await activateCompass(map);
@@ -307,10 +312,10 @@ export function setNavigationActive(enabled) {
 
 function updateCameraFromCompass(map, reading) {
     if (!map || !reading) {
-        return;
+        return false;
     }
 
-    getCameraController()?.updateFromCompass(reading);
+    return getCameraController()?.updateFromCompass(reading) === true;
 }
 
 function recenterOnUser(map, position) {
@@ -371,12 +376,24 @@ export async function activateCompass(
     canControlCamera = () => true,
 ) {
     await startCompass((reading) => {
-        if (canControlCamera()) {
-            updateCameraFromCompass(map, reading);
+        const isReadingAccepted =
+            canControlCamera() && updateCameraFromCompass(map, reading);
+
+        if (isReadingAccepted) {
+            showUserMarkerCompass(
+                map,
+                reading.compassHeading,
+                reading.timestamp,
+            );
+        } else {
+            hideUserMarkerCompass(map);
         }
 
         onReading?.(reading);
-    }, onError);
+    }, (error) => {
+        hideUserMarkerCompass(map);
+        onError?.(error);
+    });
 }
 
 export async function reactivateCompassIfEligible(map) {
