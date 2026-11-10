@@ -116,6 +116,37 @@ function waitForMapMovement(map) {
     });
 }
 
+async function restoreNavigationCamera(map, station, sessionId) {
+    const viewButton = map
+        .getContainer()
+        .querySelector('.map-view-button');
+
+    if (viewButton?.textContent.trim() === '3D') {
+        viewButton.click();
+    }
+
+    await waitForMapMovement(map);
+
+    if (
+        !navigationStarted ||
+        navigationSessionId !== sessionId ||
+        !stationsMatch(activeNavigationStation, station) ||
+        !stationsMatch(displayedStation, station)
+    ) {
+        return false;
+    }
+
+    if (isFreshGpsPosition(lastKnownUserPosition)) {
+        recenterOnUser(map, lastKnownUserPosition);
+        await waitForMapMovement(map);
+    } else {
+        // Le prochain relevé GPS reprendra le suivi sans recentrer sur une position périmée.
+        setUserFollowing(true);
+    }
+
+    return true;
+}
+
 function clearNavigationPaneCollapseTimeout() {
     clearTimeout(paneCollapseTimeoutId);
     paneCollapseTimeoutId = null;
@@ -740,26 +771,7 @@ async function startDestinationChange(map, station, styleReady) {
         updateStationPanel(station, map, styleReady, false);
         scheduleNavigationPaneCollapse(station, request.sessionId);
 
-        const navigationSession = request.sessionId;
-
-        const viewButton = map
-            .getContainer()
-            .querySelector('.map-view-button');
-
-        if (viewButton?.textContent.trim() === '3D') {
-            viewButton.click();
-        }
-
-        await waitForMapMovement(map);
-
-        if (
-            navigationStarted &&
-            navigationSession === navigationSessionId &&
-            stationsMatch(activeNavigationStation, station) &&
-            isFreshGpsPosition(lastKnownUserPosition)
-        ) {
-            recenterOnUser(map, lastKnownUserPosition);
-        }
+        await restoreNavigationCamera(map, station, request.sessionId);
     } catch (error) {
         if (!isCurrentDestinationChange(request)) {
             return;
@@ -988,13 +1000,13 @@ async function updateStationPanel(
         }
 
         const destination = activeNavigationStation;
-        setUserFollowing(true);
-
-        if (isFreshGpsPosition(lastKnownUserPosition)) {
-            followUserPosition(map, lastKnownUserPosition);
-        }
-
+        const sessionId = navigationSessionId;
         updateStationPanel(destination, map, styleReady, false);
+        scheduleNavigationPaneCollapse(destination, sessionId);
+
+        restoreNavigationCamera(map, destination, sessionId).catch((error) => {
+            console.error('Impossible de reprendre le suivi de navigation :', error);
+        });
     });
 
     replaceButton?.addEventListener('click', () => {
@@ -1080,69 +1092,18 @@ async function updateStationPanel(
                 return;
             }
 
-            const waitForCameraMove = () =>
-                new Promise((resolve) => {
-                    if (!map.isMoving()) {
-                        resolve();
-                        return;
-                    }
-
-                    map.once('moveend', resolve);
-                });
-
-            if (!isSessionActive()) {
-                return;
-            }
-
-            const viewButton = map
-                .getContainer()
-                .querySelector('.map-view-button');
-
-            // Position GPS connue au moment du démarrage.
-            const cameraCenter = lastKnownUserPosition
-                ? [
-                      lastKnownUserPosition.longitude,
-                      lastKnownUserPosition.latitude,
-                  ]
-                : [map.getCenter().lng, map.getCenter().lat];
-
             if (lastKnownUserPosition) {
                 showUserMarker(map, lastKnownUserPosition);
             }
 
-            // 1. Centrer et zoomer d'abord en 2D.
-            map.easeTo({
-                center: cameraCenter,
-                zoom: 17,
-                pitch: 0,
-                duration: 500,
-                essential: true,
-            });
-
-            await waitForCameraMove();
+            await restoreNavigationCamera(map, activeNavigationStation, sessionId);
 
             if (!isSessionActive()) {
                 return;
             }
 
-            // 2. Passer ensuite en 3D.
-            if (viewButton?.textContent.trim() === '3D') {
-                viewButton.click();
-
-                await waitForCameraMove();
-                if (!isSessionActive()) {
-                    return;
-                }
-            }
-
-            // 3. La caméra est prête : la boussole peut reprendre la main.
+            // La caméra est prête : la boussole peut reprendre la main.
             isInitialCameraSetup = false;
-
-            await waitForCameraMove();
-
-            if (!isSessionActive()) {
-                return;
-            }
 
             positionWatchId = startWatchingPosition(
                 (position) => {
