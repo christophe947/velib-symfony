@@ -34,7 +34,6 @@ export {
     showDestinationMarker,
     updateWalkingRoute,
 };
-//import { getLastCompassReading } from './navigation/compass.js';
 
 let isNavigationActive = false;
 
@@ -128,23 +127,10 @@ class RecenterControl {
                 // Affiche le marqueur de position.
                 showUserMarker(this.map, userPosition);
 
-                // Si la navigation est active, réactive le suivi.
-                //if (isNavigationActive) {
                 recenterOnUser(this.map, userPosition);
 
                 startBackgroundUserTracking(this.map);
-                //} else {
-                // Sinon, recentrage ponctuel sans démarrer la navigation.
-                /*this.map.easeTo({
-                center: [
-                    userPosition.longitude,
-                    userPosition.latitude
-                ],
-                zoom: 17,
-                duration: 500,
-                essential: true
-            });
-        }*/
+
             } catch (error) {
                 console.error(
                     'Impossible de récupérer la position GPS :',
@@ -292,14 +278,12 @@ export function createMap() {
 
         addStationLayer(map, 'bikes');
 
-        //map.resize();
     });
 
     return { map, styleReady };
 }
 
 /**
-
 * Active ou désactive le suivi automatique de la caméra.
 */
 export function setUserFollowing(enabled) {

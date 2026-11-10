@@ -215,7 +215,7 @@ export function initGeolocation({
     });
 }
 
-export function requestUserPosition() {
+export function requestUserPosition({ maximumAge = 60000 } = {}) {
     return new Promise((resolve, reject) => {
         if (!navigator.geolocation) {
             reject(new Error('Geolocation unavailable'));
@@ -227,6 +227,8 @@ export function requestUserPosition() {
                 userPosition = {
                     latitude: position.coords.latitude,
                     longitude: position.coords.longitude,
+                    accuracy: position.coords.accuracy,
+                    timestamp: position.timestamp,
                 };
 
                 resolve(userPosition);
@@ -237,7 +239,7 @@ export function requestUserPosition() {
             {
                 enableHighAccuracy: true,
                 timeout: 10000,
-                maximumAge: 60000,
+                maximumAge,
             },
         );
     });

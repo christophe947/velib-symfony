@@ -178,7 +178,7 @@ function scheduleNavigationPaneCollapse(station, sessionId) {
         }
 
         pane.moveToBreak('bottom');
-    }, 2000);
+    }, 750);
 }
 
 /**
@@ -678,34 +678,10 @@ async function startDestinationChange(map, station, styleReady) {
         return;
     }
 
-    const userPosition = lastReliableUserPosition;
-
-    if (!isFreshReliableGpsPosition(userPosition)) {
-        showDestinationChangeError(
-            map,
-            station,
-            styleReady,
-            'La position GPS est absente, trop imprécise ou trop ancienne. Attends un nouveau relevé puis réessaie.',
-        );
-        return;
-    }
-
-    const engineRequestId = navigationEngine.beginRouteReplacement();
-
-    if (engineRequestId === null) {
-        showDestinationChangeError(
-            map,
-            station,
-            styleReady,
-            'Le changement de destination ne peut pas démarrer pour le moment. Réessaie.',
-        );
-        return;
-    }
-
     const request = {
         id: ++destinationChangeRequestId,
         sessionId: navigationSessionId,
-        engineRequestId,
+        engineRequestId: null,
         station,
     };
     const previousDestination = activeNavigationStation;
@@ -718,6 +694,73 @@ async function startDestinationChange(map, station, styleReady) {
     let destinationMarkerTouched = false;
 
     try {
+        let userPosition = lastReliableUserPosition;
+
+        if (!isFreshReliableGpsPosition(userPosition)) {
+            try {
+                userPosition = await requestUserPosition({ maximumAge: 0 });
+            } catch (error) {
+                userPosition = null;
+            }
+
+            if (!isCurrentDestinationChange(request)) {
+                return;
+            }
+
+            if (
+                isFreshReliableGpsPosition(lastReliableUserPosition) &&
+                (!isFreshReliableGpsPosition(userPosition) ||
+                    lastReliableUserPosition.timestamp > userPosition.timestamp)
+            ) {
+                userPosition = lastReliableUserPosition;
+            }
+
+            if (!isFreshReliableGpsPosition(userPosition)) {
+                pendingDestinationChange = null;
+                destinationChangeError = {
+                    station,
+                    message:
+                        'La position GPS est absente, trop imprécise ou trop ancienne. Attends un nouveau relevé puis réessaie.',
+                };
+                updateStationPanel(displayedStation ?? station, map, styleReady, false);
+                return;
+            }
+
+            if (
+                (!Number.isFinite(lastKnownUserPosition?.timestamp) ||
+                    userPosition.timestamp > lastKnownUserPosition.timestamp) &&
+                isFreshGpsPosition(userPosition)
+            ) {
+                lastKnownUserPosition = userPosition;
+            }
+
+            if (
+                !Number.isFinite(lastReliableUserPosition?.timestamp) ||
+                userPosition.timestamp > lastReliableUserPosition.timestamp
+            ) {
+                lastReliableUserPosition = userPosition;
+            }
+        }
+
+        if (!isCurrentDestinationChange(request)) {
+            return;
+        }
+
+        const engineRequestId = navigationEngine.beginRouteReplacement();
+
+        if (engineRequestId === null) {
+            pendingDestinationChange = null;
+            destinationChangeError = {
+                station,
+                message:
+                    'Le changement de destination ne peut pas démarrer pour le moment. Réessaie.',
+            };
+            updateStationPanel(displayedStation ?? station, map, styleReady, false);
+            return;
+        }
+
+        request.engineRequestId = engineRequestId;
+
         const route = await getWalkingRoute(userPosition, {
             latitude: station.latitude,
             longitude: station.longitude,
@@ -777,7 +820,9 @@ async function startDestinationChange(map, station, styleReady) {
             return;
         }
 
-        navigationEngine.cancelRouteReplacement(request.engineRequestId);
+        if (request.engineRequestId !== null) {
+            navigationEngine.cancelRouteReplacement(request.engineRequestId);
+        }
 
         if (destinationMarkerTouched) {
             try {
@@ -1090,6 +1135,36 @@ async function updateStationPanel(
 
             if (!isSessionActive()) {
                 return;
+            }
+
+            if (!isFreshGpsPosition(lastKnownUserPosition)) {
+                try {
+                    const userPosition = await requestUserPosition({
+                        maximumAge: 0,
+                    });
+
+                    if (!isSessionActive()) {
+                        return;
+                    }
+
+                    if (
+                        isFreshGpsPosition(userPosition) &&
+                        (!Number.isFinite(lastKnownUserPosition?.timestamp) ||
+                            userPosition.timestamp >
+                                lastKnownUserPosition.timestamp)
+                    ) {
+                        lastKnownUserPosition = userPosition;
+                    }
+                } catch (error) {
+                    if (!isSessionActive()) {
+                        return;
+                    }
+
+                    console.warn(
+                        'Impossible d’obtenir une position GPS récente au démarrage :',
+                        error,
+                    );
+                }
             }
 
             if (lastKnownUserPosition) {
