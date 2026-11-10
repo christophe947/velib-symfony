@@ -4,11 +4,13 @@ import {
     getStationsForZone,
 } from '../geography/zones.js';
 import { setUserFollowing } from '../map.js';
+import { subscribeToDisplayMode } from '../shared/state.js';
 import { classifySearch } from './searchIntent.js';
 import {
     rankStationResults,
     renderAreaResults,
     renderSearchResults,
+    updateSearchResultAvailability,
 } from './searchResults.js';
 import { searchNearbyStations } from './locationSearch.js';
 import { initGeolocation } from '../location/geolocation.js';
@@ -23,7 +25,7 @@ export async function initSearch(map) {
         return;
     }
 
-    const stations = window.stations ?? [];
+    let stations = window.stations ?? [];
 
     let geographicData;
 
@@ -58,26 +60,105 @@ export async function initSearch(map) {
         console.log('blur');
     });
 
-    const searchableStations = stations.map((station) => ({
-        station,
-        searchText: [station.name, station.address]
-            .filter(Boolean)
-            .join(' ')
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .toLowerCase(),
-    }));
+    function createSearchableStations(stationList) {
+        return stationList.map((station) => ({
+            station,
+            searchText: [station.name, station.address]
+                .filter(Boolean)
+                .join(' ')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase(),
+        }));
+    }
 
-    const fuse = new Fuse(searchableStations, {
-        keys: ['searchText'],
-        threshold: 0.28,
-        ignoreLocation: true,
-        minMatchCharLength: 3,
-    });
+    function getSearchIndexSignature(stationList) {
+        return JSON.stringify(
+            stationList
+                .map((station) => [
+                    String(station.id),
+                    station.name ?? '',
+                    station.address ?? '',
+                ])
+                .sort(([firstId], [secondId]) =>
+                    firstId.localeCompare(secondId),
+                ),
+        );
+    }
+
+    function createFuse(searchableStationList) {
+        return new Fuse(searchableStationList, {
+            keys: ['searchText'],
+            threshold: 0.28,
+            ignoreLocation: true,
+            minMatchCharLength: 3,
+        });
+    }
+
+    let searchableStations = createSearchableStations(stations);
+    let searchIndexSignature = getSearchIndexSignature(stations);
+    let fuse = createFuse(searchableStations);
 
     let debounceTimer = null;
     let searchVersion = 0;
     let displayedStations = [];
+    let currentMode = 'bikes';
+
+    function updateStations(updatedStations) {
+        if (!Array.isArray(updatedStations)) {
+            return;
+        }
+
+        const updatedSearchIndexSignature = getSearchIndexSignature(
+            updatedStations,
+        );
+        const latestStationsById = new Map(
+            updatedStations.map((station) => [String(station.id), station]),
+        );
+
+        stations = updatedStations;
+
+        if (updatedSearchIndexSignature !== searchIndexSignature) {
+            searchableStations = createSearchableStations(updatedStations);
+            searchIndexSignature = updatedSearchIndexSignature;
+            fuse = createFuse(searchableStations);
+        } else {
+            searchableStations.forEach((item) => {
+                const latestStation = latestStationsById.get(
+                    String(item.station.id),
+                );
+
+                if (latestStation) {
+                    item.station = latestStation;
+                }
+            });
+        }
+
+        displayedStations = displayedStations.map((displayedStation) => {
+            if (!displayedStation) {
+                return null;
+            }
+
+            const latestStation = latestStationsById.get(
+                String(displayedStation.id),
+            );
+
+            if (!latestStation) {
+                return null;
+            }
+
+            return Number.isFinite(displayedStation.distance)
+                ? { ...latestStation, distance: displayedStation.distance }
+                : latestStation;
+        });
+
+        updateSearchResultAvailability(results, displayedStations, currentMode);
+    }
+
+    subscribeToDisplayMode((mode) => {
+        currentMode = mode;
+        updateSearchResultAvailability(results, displayedStations, currentMode);
+    });
 
     // Un seul gestionnaire de clic pour tous les résultats.
     results.addEventListener('click', (event) => {
@@ -164,6 +245,7 @@ export async function initSearch(map) {
                     results,
                     intent.label,
                     areaStations,
+                    currentMode,
                 );
 
                 return;
@@ -180,6 +262,7 @@ export async function initSearch(map) {
                     results,
                     directStations,
                     [],
+                    currentMode,
                 );
             } else {
                 results.innerHTML = `
@@ -197,7 +280,7 @@ export async function initSearch(map) {
             const locationGroups = await searchNearbyStations(
                 intent.query ?? query,
                 intent.type,
-                stations,
+                () => stations,
             );
 
             // Ignore une réponse d’une saisie plus ancienne.
@@ -205,8 +288,12 @@ export async function initSearch(map) {
                 return;
             }
 
+            const latestDirectStations =
+                intent.type === 'address'
+                    ? []
+                    : rankStationResults(fuse, stations, query);
             const directIds = new Set(
-                directStations.map((station) => String(station.id)),
+                latestDirectStations.map((station) => String(station.id)),
             );
 
             const cleanGroups = locationGroups
@@ -220,8 +307,9 @@ export async function initSearch(map) {
 
             displayedStations = renderSearchResults(
                 results,
-                directStations,
+                latestDirectStations,
                 cleanGroups,
+                currentMode,
             );
         }, 300);
     });
@@ -234,11 +322,14 @@ export async function initSearch(map) {
 
     initGeolocation({
         map,
-        stations,
+        getStations: () => stations,
+        getDisplayMode: () => currentMode,
         results,
         input,
         onDisplayedStations: (stationsToDisplay) => {
             displayedStations = stationsToDisplay;
         },
     });
+
+    return updateStations;
 }

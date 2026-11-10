@@ -90,7 +90,8 @@ export function hideUserMarkerCompass(map) {
 
 export function initGeolocation({
     map,
-    stations,
+    getStations,
+    getDisplayMode = () => 'bikes',
     results,
     input,
     onDisplayedStations,
@@ -165,7 +166,7 @@ export function initGeolocation({
                 const nearbyStations = findNearbyStations(
                     latitude,
                     longitude,
-                    stations,
+                    getStations(),
                     8,
                     3000,
                 );
@@ -181,6 +182,7 @@ export function initGeolocation({
                             stations: nearbyStations,
                         },
                     ],
+                    getDisplayMode(),
                 );
 
                 onDisplayedStations?.(displayedStations);

@@ -134,8 +134,19 @@ function escapeHtml(value = '') {
     );
 }
 
-function renderStation(station, index, className) {
-    const color = getAvailabilityColor(station, 'bikes');
+function getAvailabilityValue(station, mode) {
+    const property = {
+        bikes: 'bikes',
+        electric: 'electricBikes',
+        docks: 'docks',
+    }[mode];
+
+    return station[property] ?? 0;
+}
+
+function renderStation(station, index, className, mode) {
+    const color = getAvailabilityColor(station, mode);
+    const availability = getAvailabilityValue(station, mode);
 
     const distanceLabel = Number.isFinite(station.distance)
         ? `À ${Math.round(station.distance)} m`
@@ -150,7 +161,7 @@ function renderStation(station, index, className) {
                 <span class="search-availability-dot search-availability-${color}"></span>
                 <strong>${escapeHtml(station.name)}</strong>
                 <span class="search-nearby-bikes">
-                    ${station.bikes ?? 0}
+                    ${availability}
                 </span>
             </div>
 
@@ -161,7 +172,7 @@ function renderStation(station, index, className) {
     `;
 }
 
-export function renderAreaResults(container, label, stations) {
+export function renderAreaResults(container, label, stations, mode = 'bikes') {
     container.innerHTML = `
         <div class="search-result search-zone-result">
             <strong>📍 ${escapeHtml(label)}</strong>
@@ -171,7 +182,12 @@ export function renderAreaResults(container, label, stations) {
         <div class="search-zone-stations">
             ${stations
                 .map((station, index) =>
-                    renderStation(station, index, 'search-direct-station'),
+                    renderStation(
+                        station,
+                        index,
+                        'search-direct-station',
+                        mode,
+                    ),
                 )
                 .join('')}
         </div>
@@ -182,7 +198,12 @@ export function renderAreaResults(container, label, stations) {
     return stations;
 }
 
-export function renderSearchResults(container, directStations, locationGroups) {
+export function renderSearchResults(
+    container,
+    directStations,
+    locationGroups,
+    mode = 'bikes',
+) {
     let stationIndex = 0;
     const displayedStations = [];
 
@@ -192,7 +213,7 @@ export function renderSearchResults(container, directStations, locationGroups) {
             stationIndex += 1;
             displayedStations.push(station);
 
-            return renderStation(station, index, 'search-direct-station');
+            return renderStation(station, index, 'search-direct-station', mode);
         })
         .join('');
 
@@ -212,6 +233,7 @@ export function renderSearchResults(container, directStations, locationGroups) {
                         station,
                         index,
                         'search-nearby-station',
+                        mode,
                     );
                 })
                 .join('');
@@ -267,4 +289,57 @@ export function renderSearchResults(container, directStations, locationGroups) {
     container.style.display = 'block';
 
     return displayedStations;
+}
+
+export function updateSearchResultAvailability(
+    container,
+    displayedStations,
+    mode,
+) {
+    const resultElements = container.querySelectorAll('[data-station-index]');
+
+    resultElements.forEach((resultElement) => {
+        const index = Number(resultElement.dataset.stationIndex);
+        const station = displayedStations[index];
+
+        if (resultElement.hidden !== !station) {
+            resultElement.hidden = !station;
+        }
+
+        if (!station) {
+            return;
+        }
+
+        const availabilityElement = resultElement.querySelector(
+            '.search-nearby-bikes',
+        );
+        const availability = String(getAvailabilityValue(station, mode));
+
+        if (
+            availabilityElement &&
+            availabilityElement.textContent.trim() !== availability
+        ) {
+            availabilityElement.textContent = availability;
+        }
+
+        const dot = resultElement.querySelector('.search-availability-dot');
+
+        if (!dot) {
+            return;
+        }
+
+        const colorClass = `search-availability-${getAvailabilityColor(station, mode)}`;
+
+        if (!dot.classList.contains(colorClass)) {
+            for (const color of ['gray', 'red', 'orange', 'green']) {
+                const existingClass = `search-availability-${color}`;
+
+                if (existingClass !== colorClass) {
+                    dot.classList.remove(existingClass);
+                }
+            }
+
+            dot.classList.add(colorClass);
+        }
+    });
 }

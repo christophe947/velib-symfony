@@ -138,7 +138,7 @@ function selectOnePlaceLocation(locations, destination) {
     return [...locations].sort((a, b) => b.score - a.score).slice(0, 1);
 }
 
-export async function searchNearbyStations(query, type, stations) {
+export async function searchNearbyStations(query, type, getStations) {
     const locations = await geocodeCandidates(query, type);
     let relevantLocations = locations;
 
@@ -153,6 +153,8 @@ export async function searchNearbyStations(query, type, stations) {
             getDestination(query),
         );
     }
+
+    const stations = getStations();
 
     return relevantLocations
         .map((location) => ({

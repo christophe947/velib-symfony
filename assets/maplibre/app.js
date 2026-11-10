@@ -20,13 +20,20 @@ styleReady.catch((error) => {
 
 initStationPanel(map, styleReady);
 
-initSearch(map);
+const searchReady = initSearch(map).catch((error) => {
+    console.error('Impossible d’initialiser la recherche des stations :', error);
+    return null;
+});
 
 startStationRefresh({
     initialStations,
     onSnapshot: (snapshot, { dataChanged }) => {
         if (dataChanged) {
             updateStationData(snapshot.stations);
+
+            void searchReady.then((updateSearchStations) => {
+                updateSearchStations?.(snapshot.stations);
+            });
         }
     },
 });
