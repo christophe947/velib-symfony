@@ -61,6 +61,14 @@ export function createPaneController(element) {
         paneCollapseTimeoutId = null;
     }
 
+    function moveToBreak(name) {
+        if (!pane || !mobileQuery.matches) {
+            return;
+        }
+
+        return pane.moveToBreak(name);
+    }
+
     async function updateMiddleHeight(height, movePane = true) {
         if (!pane) {
             return;
@@ -115,7 +123,7 @@ export function createPaneController(element) {
                 return;
             }
 
-            pane.moveToBreak('bottom');
+            moveToBreak('bottom');
         }, 750);
     }
 
@@ -124,7 +132,7 @@ export function createPaneController(element) {
         if (panelManuallyAtBottom === true) return;
 
         //panelManuallyAtBottom = false;
-        pane.moveToBreak('bottom');
+        moveToBreak('bottom');
     }
 
     function restoreSearchPanel() {
@@ -141,7 +149,7 @@ export function createPaneController(element) {
             return;
         }
         if (panelManuallyAtBottom === false) {
-            pane.moveToBreak('middle');
+            moveToBreak('middle');
             console.log('doi revenir');
         }
     }
