@@ -15,21 +15,17 @@ export function createNavigationEngine(effects) {
     let lastAcceptedRouteProgress = 0;
     let lastAcceptedProgressTimestamp = null;
     let lastCameraGpsTimestamp = null;
-    let simulationIntervalId = null;
-
     let navigationDestination = null;
 
     let isRecalculatingRoute = false;
     let isReplacingRoute = false;
 
     let navigationSessionId = 0;
-    let offRouteSimulationIntervalId = null;
-
     // Paramètres de détection des sorties d'itinéraire.
     const OFF_ROUTE_THRESHOLD = 30;
     const OFF_ROUTE_CONFIRMATIONS = 3;
     const MAX_GPS_FIX_AGE_MS = 10_000;
-    // Écarte les rafales sub-seconde tout en gardant la cadence de la simulation.
+    // Écarte les rafales sub-seconde pour compter des fixes distincts.
     const MIN_OFF_ROUTE_CONFIRMATION_INTERVAL_MS = 500;
 
     let consecutiveOffRoutePositions = 0;
@@ -289,7 +285,7 @@ export function createNavigationEngine(effects) {
      * Met à jour la progression de l'utilisateur
      * et détecte les sorties d'itinéraire.
      */
-    function updateNavigationProgress(position, options = {}) {
+    function updateNavigationProgress(position) {
         if (currentRouteCoordinates.length < 2) {
             return;
         }
@@ -355,12 +351,11 @@ export function createNavigationEngine(effects) {
                   )
                 : 0;
         const maxForwardProgress =
-            options.maxForwardProgress ??
             lastAcceptedRouteProgress +
-                (lastAcceptedProgressTimestamp === null
-                    ? initialGpsDisplacement
-                    : MAX_PLAUSIBLE_WALKING_SPEED * elapsedSeconds) +
-                ROUTE_PROGRESS_MARGIN_METERS;
+            (lastAcceptedProgressTimestamp === null
+                ? initialGpsDisplacement
+                : MAX_PLAUSIBLE_WALKING_SPEED * elapsedSeconds) +
+            ROUTE_PROGRESS_MARGIN_METERS;
         const minForwardProgress = lastAcceptedRouteProgress;
 
         for (let i = 0; i < currentRouteCoordinates.length - 1; i++) {
@@ -566,186 +561,11 @@ export function createNavigationEngine(effects) {
     }
 
     /**
-     * Calcule le cap entre deux coordonnées géographiques.
-     *
-     * Les coordonnées sont au format [longitude, latitude].
-     * Le résultat est exprimé en degrés, entre 0 et 360.
-     */
-    function calculateHeading(start, end) {
-        const toRadians = (degrees) => (degrees * Math.PI) / 180;
-
-        const [longitude1, latitude1] = start;
-        const [longitude2, latitude2] = end;
-
-        const lat1 = toRadians(latitude1);
-        const lat2 = toRadians(latitude2);
-        const deltaLongitude = toRadians(longitude2 - longitude1);
-
-        const y = Math.sin(deltaLongitude) * Math.cos(lat2);
-
-        const x =
-            Math.cos(lat1) * Math.sin(lat2) -
-            Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLongitude);
-
-        const heading = (Math.atan2(y, x) * 180) / Math.PI;
-
-        return (heading + 360) % 360;
-    }
-
-    /**
-     * Simule le déplacement de l'utilisateur le long de l'itinéraire.
-     */
-    function startNavigationSimulation(onFinish) {
-        if (currentRouteCoordinates.length < 2) {
-            console.warn('Aucun itinéraire à simuler.');
-            return;
-        }
-
-        let index = lastRouteProgressIndex;
-        //let simulationIntervalId = null;
-        if (simulationIntervalId !== null) {
-            return;
-        }
-
-        simulationIntervalId = setInterval(() => {
-            index += 3;
-
-            if (index >= currentRouteCoordinates.length - 1) {
-                index = currentRouteCoordinates.length - 1;
-            }
-
-            const [longitude, latitude] = currentRouteCoordinates[index];
-
-            // Point suivant sur l'itinéraire pour calculer la direction.
-            const nextIndex = Math.min(
-                index + 1,
-                currentRouteCoordinates.length - 1,
-            );
-
-            const heading = calculateHeading(
-                currentRouteCoordinates[index],
-                currentRouteCoordinates[nextIndex],
-            );
-
-            const position = {
-                longitude,
-                latitude,
-                heading,
-                speed: 1.4,
-                accuracy: 5,
-                timestamp: Date.now(),
-            };
-
-            updateNavigationProgress(position, {
-                maxForwardProgress: cumulativeRouteDistances[index],
-            });
-
-            // On arrête et on replace le marqueur à la fin de l'itinéraire.
-            if (index >= currentRouteCoordinates.length - 1) {
-                clearInterval(simulationIntervalId);
-                simulationIntervalId = null;
-                onFinish?.();
-            }
-        }, 500);
-    }
-
-    /**
-     * Arrête la simulation normale si elle est en cours.
-     */
-    function stopNavigationSimulation() {
-        if (simulationIntervalId !== null) {
-            clearInterval(simulationIntervalId);
-            simulationIntervalId = null;
-
-            console.log('⏸️ Simulation normale suspendue pour le test.');
-        }
-    }
-
-    /**
-     * Simule trois positions consécutives hors itinéraire.
-     */
-    function startOffRouteSimulation() {
-        if (currentRouteCoordinates.length < 2) {
-            console.warn('Aucun itinéraire à tester.');
-            return;
-        }
-
-        if (offRouteSimulationIntervalId !== null) {
-            return;
-        }
-
-        // Évite que deux simulations envoient des positions simultanément.
-        stopNavigationSimulation();
-
-        // Chaque nouveau test repart avec un compteur propre.
-        consecutiveOffRoutePositions = 0;
-
-        console.log('🧪 Début du test de sortie d’itinéraire.');
-
-        // On choisit un point suffisamment loin du début
-        // pour ne pas perturber le démarrage du parcours.
-        const index = Math.min(
-            lastRouteProgressIndex + 10,
-            currentRouteCoordinates.length - 1,
-        );
-
-        const [longitude, latitude] = currentRouteCoordinates[index];
-
-        // Décalage artificiel d'environ 50 mètres vers l'est.
-        const longitudeOffset =
-            50 / (111320 * Math.cos((latitude * Math.PI) / 180));
-
-        const simulatedPosition = {
-            longitude: longitude + longitudeOffset,
-            latitude,
-        };
-
-        let count = 0;
-
-        const intervalId = setInterval(() => {
-            count++;
-
-            console.log(`🧪 Position artificielle hors itinéraire : ${count}/3`);
-
-            const position = {
-                ...simulatedPosition,
-                accuracy: 5,
-                timestamp: Date.now(),
-            };
-
-            updateNavigationProgress(position);
-
-            if (count >= 3) {
-                clearInterval(intervalId);
-                offRouteSimulationIntervalId = null;
-
-                console.log(
-                    '✅ Test terminé : consulte les messages de détection ci-dessus.',
-                );
-            }
-        }, 1000);
-
-        offRouteSimulationIntervalId = intervalId;
-    }
-
-    /**
      * Arrête les traitements internes de navigation.
      */
     function stopNavigationProcessing() {
         // Invalide les recalculs déjà lancés.
         navigationSessionId++;
-
-        // Arrête la simulation normale.
-        if (simulationIntervalId !== null) {
-            clearInterval(simulationIntervalId);
-            simulationIntervalId = null;
-        }
-
-        // Arrête la simulation de déviation.
-        if (offRouteSimulationIntervalId !== null) {
-            clearInterval(offRouteSimulationIntervalId);
-            offRouteSimulationIntervalId = null;
-        }
 
         // Réinitialise les états de navigation.
         currentRouteCoordinates = [];
@@ -769,8 +589,6 @@ export function createNavigationEngine(effects) {
         cancelRouteReplacement,
         commitRouteReplacement,
         updateNavigationProgress,
-        startNavigationSimulation,
-        startOffRouteSimulation,
         stopNavigationProcessing,
     };
 }
