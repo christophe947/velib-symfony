@@ -18,7 +18,7 @@ export function addZoneLayer(map, zones) {
 
         paint: {
             'fill-color': '#0d6efd',
-            'fill-opacity': 0.08,
+            'fill-opacity': 0.065,
         },
     });
 
@@ -58,11 +58,11 @@ export function addZoneLayer(map, zones) {
                 ['zoom'],
 
                 10,
-                19,
-                12,
-                22,
                 13,
-                27,
+                12,
+                18,
+                13,
+                22,
             ],
             'circle-color': '#000000',
             'circle-opacity': 0.7,
@@ -86,14 +86,14 @@ export function addZoneLayer(map, zones) {
                 ['zoom'],
 
                 10,
+                9,
                 12,
-                12,
-                15,
+                14,
                 13,
-                19,
+                18,
             ],
             'circle-color': '#0d6efd',
-            'circle-stroke-width': 3,
+            'circle-stroke-width': 2.5,
             'circle-stroke-color': '#ffffff',
         },
     });

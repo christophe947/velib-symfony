@@ -73,7 +73,7 @@ export function addCommuneLayer(map, communes) {
 
         paint: {
             'fill-color': '#4dabf7',
-            'fill-opacity': 0.07,
+            'fill-opacity': 0.06,
         },
     });
 
@@ -117,11 +117,11 @@ export function addCommuneLayer(map, communes) {
                 ['zoom'],
 
                 10,
-                19,
-                12,
-                22,
                 13,
-                27,
+                12,
+                18,
+                13,
+                22,
             ],
             'circle-color': '#000000',
             'circle-opacity': 0.7,
@@ -146,14 +146,14 @@ export function addCommuneLayer(map, communes) {
                 ['zoom'],
 
                 10,
+                9,
                 12,
-                12,
-                15,
+                14,
                 13,
-                19,
+                18,
             ],
             'circle-color': '#4dabf7',
-            'circle-stroke-width': 3,
+            'circle-stroke-width': 2.5,
             'circle-stroke-color': '#ffffff',
         },
     });

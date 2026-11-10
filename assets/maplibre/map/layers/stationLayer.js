@@ -40,6 +40,30 @@ export function addStationLayer(map, displayMode = 'bikes') {
     const { availableProperty, colorExpression } =
         getDisplayProperties(displayMode);
 
+    map.addLayer(
+        {
+            id: 'station-overview-points',
+            type: 'circle',
+            source: 'stations',
+            maxzoom: 13,
+
+            paint: {
+                //'circle-radius': 3,
+                'circle-radius': [
+                    'interpolate',
+                    ['linear'],
+                    ['zoom'],
+                    8, 1,
+                    12, 2,
+                    13, 5,
+                ],
+                'circle-color': colorExpression,
+                'circle-opacity': 0.6,
+            },
+        },
+        'commune-count-shadow',
+    );
+
     map.addLayer({
         id: 'station-selected-halo',
         type: 'circle',
@@ -174,6 +198,11 @@ export function addStationLayer(map, displayMode = 'bikes') {
             getDisplayProperties(mode);
 
         map.setPaintProperty('stations', 'circle-color', colorExpression);
+        map.setPaintProperty(
+            'station-overview-points',
+            'circle-color',
+            colorExpression,
+        );
 
         map.setLayoutProperty('station-count', 'text-field', [
             'get',
