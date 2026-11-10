@@ -26,6 +26,7 @@ import { createNavigationEngine } from './navigation.js';
 import { createScreenWakeLock } from './screenWakeLock.js';
 import { formatDistance, formatDuration } from './routeFormatting.js';
 import { stopCompass } from './compass.js';
+import { showConfirmationDialog } from './ui/confirmationDialog.js';
 
 let pane = null;
 let element = null;
@@ -475,73 +476,13 @@ function showStopNavigationConfirmation(
         onConfirm = () => stopNavigation(map, station, styleReady),
     } = options;
 
-    // Évite d'afficher plusieurs fenêtres.
-    if (document.querySelector('.navigation-confirmation-overlay')) {
-        return;
-    }
-
-    const overlay = document.createElement('div');
-    overlay.className = 'navigation-confirmation-overlay';
-
-    overlay.innerHTML = `
-        <div
-            class="navigation-confirmation"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="navigation-confirmation-title"
-        >
-            <h3 id="navigation-confirmation-title">${title}</h3>
-
-            <p>${message}</p>
-
-            <div class="navigation-confirmation-actions">
-                <button
-                    type="button"
-                    class="navigation-confirmation-cancel"
-                >
-                    ${cancelLabel}
-                </button>
-
-                <button
-                    type="button"
-                    class="navigation-confirmation-stop"
-                >
-                    ${confirmLabel}
-                </button>
-            </div>
-        </div>
-    `;
-
-    //element.appendChild(overlay);
-    document.body.appendChild(overlay);
-
-    const cancelButton = overlay.querySelector(
-        '.navigation-confirmation-cancel',
-    );
-
-    const confirmButton = overlay.querySelector(
-        '.navigation-confirmation-stop',
-    );
-
-    // Ferme la fenêtre sans interrompre la navigation.
-    cancelButton.addEventListener('click', () => {
-        overlay.remove();
+    showConfirmationDialog({
+        title,
+        message,
+        cancelLabel,
+        confirmLabel,
+        onConfirm,
     });
-
-    // Confirme l'arrêt de la navigation.
-    confirmButton.addEventListener('click', () => {
-        overlay.remove();
-        onConfirm();
-    });
-
-    // Ferme aussi la fenêtre en cliquant sur le fond.
-    overlay.addEventListener('click', (event) => {
-        if (event.target === overlay) {
-            overlay.remove();
-        }
-    });
-
-    cancelButton.focus();
 }
 
 /**
