@@ -985,7 +985,7 @@ async function updateStationPanel(
         );
     }
 
-    if (shouldPresentPane && mobileQuery.matches && pane) {
+    if (mobileQuery.matches && pane) {
         const title = element.querySelector('.station-panel-title');
 
         if (title) {
