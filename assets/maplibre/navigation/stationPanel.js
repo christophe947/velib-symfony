@@ -261,7 +261,7 @@ function renderActiveNavigationControls(map, station, styleReady) {
     });
 }
 
-async function updateMiddleHeight(height) {
+async function updateMiddleHeight(height, movePane = true) {
     if (!pane) {
         return;
     }
@@ -270,6 +270,10 @@ async function updateMiddleHeight(height) {
 
     // Recalcule réellement les breakpoints internes
     await pane.breakpoints.buildBreakpoints(pane.settings.breaks, 0, false);
+
+    if (!movePane) {
+        return;
+    }
 
     // Le nouveau middle devient le breakpoint courant
     pane.breakpoints.currentBreakpoint = pane.breakpoints.breaks.middle;
@@ -1362,11 +1366,17 @@ async function updateStationPanel(
     initModeSelector();
 
     if (mobileQuery.matches && pane) {
+        const content = element.querySelector('.station-panel-content');
+
         if (!shouldPresentPane) {
+            if (content) {
+                const middleHeight = content.getBoundingClientRect().height;
+
+                await updateMiddleHeight(middleHeight, false);
+            }
+
             return;
         }
-
-        const content = element.querySelector('.station-panel-content');
 
         pane.present({
             animate: true,
