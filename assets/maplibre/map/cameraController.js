@@ -29,6 +29,7 @@ export function createCameraController(
     const NAVIGATION_CENTER_TOLERANCE_METERS = 0.5;
     const NAVIGATION_BEARING_TOLERANCE_DEGREES = 0.5;
     const MAX_NAVIGATION_FRAME_DELTA_MS = 64;
+    const THREE_D_PITCH_THRESHOLD = 30;
 
     function smoothHeading(currentHeading, targetHeading) {
         // Normalise les angles entre 0 et 360 degrés.
@@ -516,6 +517,19 @@ export function createCameraController(
         navigationCompassHeading = null;
         cancelNavigationCameraFrames();
     }
+
+    map.on('pitch', () => {
+        if (isChangingView) {
+            return;
+        }
+
+        const pitchIndicates3D = map.getPitch() >= THREE_D_PITCH_THRESHOLD;
+
+        if (pitchIndicates3D !== is3D) {
+            is3D = pitchIndicates3D;
+            onViewModeChange(is3D);
+        }
+    });
 
     return {
         toggleView,
