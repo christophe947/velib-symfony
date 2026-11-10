@@ -1,0 +1,4 @@
+framework:
+    lock:
+        resources:
+            velib_stations_refresh: 'flock://%kernel.project_dir%/var/lock'
