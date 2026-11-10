@@ -1,5 +1,9 @@
 import { getWalkingRoute, decodePolyline } from './routing.js';
 import { formatDistance, formatDuration } from './routeFormatting.js';
+import {
+    calculateDistanceBetweenCoordinates,
+    calculateProjectionOnSegment,
+} from '../geography/geometry.js';
 
 export function createNavigationEngine(effects) {
     const {
@@ -36,26 +40,6 @@ export function createNavigationEngine(effects) {
     const ROUTE_PROGRESS_MARGIN_METERS = 15;
     // Un écart inférieur au bruit GPS courant ne suffit pas à préférer une branche future.
     const ROUTE_BRANCH_DISTANCE_ADVANTAGE_METERS = 8;
-
-    function calculateDistanceBetweenCoordinates(start, end) {
-        const earthRadius = 6371000;
-        const toRadians = (degrees) => (degrees * Math.PI) / 180;
-        const latitude1 = toRadians(start[1]);
-        const latitude2 = toRadians(end[1]);
-        const latitudeDifference = latitude2 - latitude1;
-        const longitudeDifference = toRadians(end[0] - start[0]);
-        const haversine =
-            Math.sin(latitudeDifference / 2) ** 2 +
-            Math.cos(latitude1) *
-                Math.cos(latitude2) *
-                Math.sin(longitudeDifference / 2) ** 2;
-
-        return (
-            2 *
-            earthRadius *
-            Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine))
-        );
-    }
 
     function setRouteProgressGeometry(coordinates) {
         currentRouteCoordinates = coordinates;
@@ -205,80 +189,6 @@ export function createNavigationEngine(effects) {
                 isRecalculatingRoute = false;
             }
         }
-    }
-
-    /**
-     * Calcule la distance minimale entre une position GPS
-     * et un segment de l'itinéraire.
-     *
-     * Les coordonnées sont au format [longitude, latitude].
-     * Le résultat est exprimé en mètres.
-     */
-    /**
-     * Calcule la projection d'une position GPS sur un segment.
-     *
-     * Retourne :
-     * - la distance minimale en mètres ;
-     * - les coordonnées du point le plus proche sur le segment.
-     */
-    function calculateProjectionOnSegment(
-        position,
-        start,
-        end,
-        minT = 0,
-        maxT = 1,
-    ) {
-        const earthRadius = 6371000;
-
-        const toRadians = (degrees) => (degrees * Math.PI) / 180;
-
-        const referenceLatitude = toRadians(position.latitude);
-
-        const project = (coordinate) => {
-            const [longitude, latitude] = coordinate;
-
-            return {
-                x:
-                    toRadians(longitude - position.longitude) *
-                    earthRadius *
-                    Math.cos(referenceLatitude),
-
-                y: toRadians(latitude - position.latitude) * earthRadius,
-            };
-        };
-
-        // Projection locale du segment en mètres.
-        const a = project(start);
-        const b = project(end);
-
-        const abX = b.x - a.x;
-        const abY = b.y - a.y;
-
-        const segmentLengthSquared = abX * abX + abY * abY;
-
-        let t = 0;
-
-        if (segmentLengthSquared > 0) {
-            t = -(a.x * abX + a.y * abY) / segmentLengthSquared;
-
-            t = Math.max(minT, Math.min(maxT, t));
-        }
-
-        // Point le plus proche de la position GPS.
-        const closestX = a.x + t * abX;
-        const closestY = a.y + t * abY;
-
-        // Coordonnées géographiques de ce point.
-        const coordinate = [
-            start[0] + t * (end[0] - start[0]),
-            start[1] + t * (end[1] - start[1]),
-        ];
-
-        return {
-            distance: Math.hypot(closestX, closestY),
-            coordinate,
-            factor: t,
-        };
     }
 
     /**
