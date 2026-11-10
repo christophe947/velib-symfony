@@ -889,11 +889,19 @@ async function updateStationPanel(
                 return;
             }
 
+            const coordinates = decodePolyline(route.legs[0].shape);
+
+            if (
+                !isValidRouteCoordinates(coordinates) ||
+                !Number.isFinite(route.summary?.length) ||
+                !Number.isFinite(route.summary?.time)
+            ) {
+                throw new Error('Valhalla returned an invalid route.');
+            }
+
             const distance = formatDistance(route.summary.length);
 
             const duration = formatDuration(route.summary.time);
-
-            const coordinates = decodePolyline(route.legs[0].shape);
 
             routeStep = 'map';
             await styleReady;
