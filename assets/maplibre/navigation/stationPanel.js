@@ -56,6 +56,63 @@ let navigationEngine = null;
 const screenWakeLock = createScreenWakeLock();
 
 let currentMode = 'bikes';
+let latestStationsById = new Map();
+
+function getStationWithLatestAvailability(station) {
+    const latestStation = latestStationsById.get(String(station.id));
+
+    if (!latestStation) {
+        return station;
+    }
+
+    return {
+        ...station,
+        bikes: latestStation.bikes,
+        electricBikes: latestStation.electricBikes,
+        docks: latestStation.docks,
+    };
+}
+
+function updateStationAvailability(stations, stale = false) {
+    if (!Array.isArray(stations) || stale) {
+        return;
+    }
+
+    latestStationsById = new Map(
+        stations
+            .filter((station) => station?.id !== undefined)
+            .map((station) => [String(station.id), station]),
+    );
+
+    if (!displayedStation || !element) {
+        return;
+    }
+
+    const latestStation = latestStationsById.get(
+        String(displayedStation.id),
+    );
+
+    if (!latestStation) {
+        return;
+    }
+
+    const values = {
+        bikes: latestStation.bikes ?? 0,
+        electricBikes: latestStation.electricBikes ?? 0,
+        docks: latestStation.docks ?? 0,
+    };
+
+    Object.entries(values).forEach(([key, value]) => {
+        const valueElement = element.querySelector(
+            `[data-station-availability="${key}"]`,
+        );
+        const text = String(value);
+
+        if (valueElement && valueElement.textContent.trim() !== text) {
+            valueElement.textContent = text;
+        }
+    });
+}
 
 function isFreshGpsPosition(position) {
     if (
@@ -270,6 +327,8 @@ export function initStationPanel(map, styleReady) {
         updateStationPanel(station, map, styleReady),
     );
     paneController.bindSearchEvents();
+
+    return updateStationAvailability;
 }
 
 function renderEmptyPanel() {
@@ -610,7 +669,7 @@ async function updateStationPanel(
         navigationStarted && !isActiveNavigationPanel;
 
     element.innerHTML = renderStationPanel({
-        station,
+        station: getStationWithLatestAvailability(station),
         mode: currentMode,
         navigationState: {
             isActiveNavigationPanel,

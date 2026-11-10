@@ -118,19 +118,19 @@ export function renderStationPanel({ station, mode, navigationState }) {
 
                 <div class="station-panel-stat">
                     <span class="station-panel-stat-icon">🚲</span>
-                    <strong>${station.bikes ?? 0}</strong>
+                    <strong data-station-availability="bikes">${station.bikes ?? 0}</strong>
                     <span>vélos</span>
                 </div>
 
                 <div class="station-panel-stat">
                     <span class="station-panel-stat-icon">🔋</span>
-                    <strong>${station.electricBikes ?? 0}</strong>
+                    <strong data-station-availability="electricBikes">${station.electricBikes ?? 0}</strong>
                     <span>électriques</span>
                 </div>
 
                 <div class="station-panel-stat">
                     <span class="station-panel-stat-icon">🅿️</span>
-                    <strong>${station.docks ?? 0}</strong>
+                    <strong data-station-availability="docks">${station.docks ?? 0}</strong>
                     <span>places</span>
                 </div>
 

@@ -18,7 +18,7 @@ styleReady.catch((error) => {
     }
 });
 
-initStationPanel(map, styleReady);
+const updatePanelAvailability = initStationPanel(map, styleReady);
 
 const searchReady = initSearch(map).catch((error) => {
     console.error('Impossible d’initialiser la recherche des stations :', error);
@@ -30,6 +30,7 @@ startStationRefresh({
     onSnapshot: (snapshot, { dataChanged }) => {
         if (dataChanged) {
             updateStationData(snapshot.stations);
+            updatePanelAvailability?.(snapshot.stations, snapshot.stale);
 
             void searchReady.then((updateSearchStations) => {
                 updateSearchStations?.(snapshot.stations);
