@@ -93,7 +93,7 @@ export function addZoneLayer(map, zones) {
                 18,
             ],
             'circle-color': '#0d6efd',
-            'circle-stroke-width': 2.5,
+            'circle-stroke-width': 2,
             'circle-stroke-color': '#ffffff',
         },
     });
@@ -108,12 +108,17 @@ export function addZoneLayer(map, zones) {
 
         layout: {
             'text-field': ['to-string', ['get', 'stationCount']],
-            'text-size': 14,
-            'text-font': ['Open Sans Bold'],
+            'text-size': 12,
+            //'text-font': ['Open Sans Bold'],
+            'text-allow-overlap': true,
+            'text-ignore-placement': true,
         },
 
         paint: {
             'text-color': '#ffffff',
+            'text-halo-color': '#ffffff',
+            'text-halo-width': 0.35,
+            'text-halo-blur': 0,
         },
     });
 

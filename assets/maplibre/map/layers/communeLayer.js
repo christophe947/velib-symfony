@@ -153,7 +153,7 @@ export function addCommuneLayer(map, communes) {
                 18,
             ],
             'circle-color': '#4dabf7',
-            'circle-stroke-width': 2.5,
+            'circle-stroke-width': 2,
             'circle-stroke-color': '#ffffff',
         },
     });
@@ -170,12 +170,17 @@ export function addCommuneLayer(map, communes) {
 
         layout: {
             'text-field': ['to-string', ['get', 'stationCount']],
-            'text-size': 14,
-            'text-font': ['Open Sans Bold'],
+            'text-size': 12,
+            //'text-font': ['Open Sans Bold'],
+            'text-allow-overlap': true,
+            'text-ignore-placement': true,
         },
 
         paint: {
             'text-color': '#ffffff',
+            'text-halo-color': '#ffffff',
+            'text-halo-width': 0.35,
+            'text-halo-blur': 0,
         },
     });
 
