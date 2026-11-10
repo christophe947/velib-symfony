@@ -27,6 +27,10 @@ import { createScreenWakeLock } from './screenWakeLock.js';
 import { formatDistance, formatDuration } from './routeFormatting.js';
 import { stopCompass } from './compass.js';
 import { showConfirmationDialog } from './ui/confirmationDialog.js';
+import {
+    renderEmptyPanel as renderEmptyPanelHtml,
+    renderStationPanel,
+} from './ui/stationPanelView.js';
 
 let pane = null;
 let element = null;
@@ -400,48 +404,8 @@ export function initStationPanel(map, styleReady) {
     //console.log(pane.currentBreak());
 }
 
-function renderModeSelector() {
-    return `
-        <div class="station-panel-mode-selector">
-
-            <button
-                type="button"
-                class="${currentMode === 'bikes' ? 'active' : ''}"
-                data-mode="bikes"
-            >
-                🚲 Vélos
-            </button>
-
-            <button
-                type="button"
-                class="${currentMode === 'electric' ? 'active' : ''}"
-                data-mode="electric"
-            >
-                🔋 Électriques
-            </button>
-
-            <button
-                type="button"
-                class="${currentMode === 'docks' ? 'active' : ''}"
-                data-mode="docks"
-            >
-                🅿️ Places
-            </button>
-
-            <span class="station-panel-mode-indicator"></span>
-
-        </div>
-    `;
-}
-
 function renderEmptyPanel() {
-    element.innerHTML = `
-        <div class="station-panel-empty">
-
-            ${renderModeSelector()}
-
-        </div>
-    `;
+    element.innerHTML = renderEmptyPanelHtml(currentMode);
     initModeSelector();
 
     if (pane) {
@@ -779,106 +743,14 @@ async function updateStationPanel(
     const isNavigationContextPanel =
         navigationStarted && !isActiveNavigationPanel;
 
-    let navigationControls = `
-        <div class="station-panel-navigation-controls">
-            <button type="button" class="station-panel-join">
-                Rejoindre
-            </button>
-        </div>
-    `;
-
-    if (isActiveNavigationPanel) {
-        navigationControls = `
-            <div class="station-panel-navigation-controls">
-                <button type="button" class="station-panel-join" disabled>
-                    Navigation en cours
-                </button>
-                <button
-                    type="button"
-                    class="station-panel-stop"
-                    aria-label="Arrêter la navigation"
-                    title="Arrêter la navigation"
-                >
-                    ✕
-                </button>
-            </div>
-        `;
-    } else if (isNavigationContextPanel) {
-        navigationControls = `
-            <div class="station-panel-navigation-active" role="status">
-                Navigation en cours
-            </div>
-            <div class="station-panel-navigation-controls station-panel-navigation-controls--context">
-                <div class="station-panel-context-actions">
-                    <button
-                        type="button"
-                        class="station-panel-join station-panel-context-resume"
-                    >
-                        Reprendre l'itinéraire
-                    </button>
-                    <button
-                        type="button"
-                        class="station-panel-stop"
-                        aria-label="Arrêter la navigation"
-                        title="Arrêter la navigation"
-                    >
-                        ✕
-                    </button>
-                </div>
-                <button
-                    type="button"
-                    class="station-panel-join station-panel-context-replace"
-                    title="Calculer un itinéraire vers cette station"
-                >
-                    Naviguer vers cette station
-                </button>
-            </div>
-        `;
-    }
-
-    element.innerHTML = `
-        <div class="station-panel-content">
-
-            <h2 class="station-panel-title">
-                ${station.name ?? 'Station Vélib'}
-            </h2>
-
-            <p class="station-panel-address">
-                ${station.address ?? ''}
-            </p>
-
-            <div class="station-panel-stats">
-
-                <div class="station-panel-stat">
-                    <span class="station-panel-stat-icon">🚲</span>
-                    <strong>${station.bikes ?? 0}</strong>
-                    <span>vélos</span>
-                </div>
-
-                <div class="station-panel-stat">
-                    <span class="station-panel-stat-icon">🔋</span>
-                    <strong>${station.electricBikes ?? 0}</strong>
-                    <span>électriques</span>
-                </div>
-
-                <div class="station-panel-stat">
-                    <span class="station-panel-stat-icon">🅿️</span>
-                    <strong>${station.docks ?? 0}</strong>
-                    <span>places</span>
-                </div>
-
-            </div>
-
-            <div class="station-panel-route-summary"></div>
-
-            <div class="station-panel-message" role="status" aria-live="polite" hidden></div>
-
-            ${navigationControls}
-
-            ${renderModeSelector()}
-
-        </div>
-    `;
+    element.innerHTML = renderStationPanel({
+        station,
+        mode: currentMode,
+        navigationState: {
+            isActiveNavigationPanel,
+            isNavigationContextPanel,
+        },
+    });
 
     if (isActiveNavigationPanel && activeNavigationRouteSummary) {
         updateRouteSummary(
