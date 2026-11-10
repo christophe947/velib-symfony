@@ -2,6 +2,7 @@
 
 namespace App\Service;
 
+use DateTimeImmutable;
 use Psr\Cache\CacheItemPoolInterface;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Contracts\HttpClient\Exception\ServerExceptionInterface;
@@ -56,6 +57,18 @@ class VelibApiService
 
     public function getStations(): array
     {
+        return $this->getStationsWithMetadata()['stations'];
+    }
+
+    /**
+     * @return array{
+     *     stations: list<array<string, mixed>>,
+     *     fetchedAt: string,
+     *     stale: bool
+     * }
+     */
+    public function getStationsWithMetadata(): array
+    {
         $cachedData = $this->readCachedStations();
         $now = time();
 
@@ -64,7 +77,7 @@ class VelibApiService
             && $now >= $cachedData['fetchedAt']
             && $now - $cachedData['fetchedAt'] < self::FRESHNESS_SECONDS
         ) {
-            return $cachedData['stations'];
+            return $this->createStationsSnapshot($cachedData, false);
         }
 
         try {
@@ -79,15 +92,34 @@ class VelibApiService
                 && $fallbackAge >= 0
                 && $fallbackAge < self::MAX_STALE_SECONDS
             ) {
-                return $cachedData['stations'];
+                return $this->createStationsSnapshot($cachedData, true);
             }
 
             throw $exception;
         }
 
-        $this->saveCachedStations($stations);
+        $fetchedAt = time();
+        $cachedData = [
+            'stations' => $stations,
+            'fetchedAt' => $fetchedAt,
+        ];
+        $this->saveCachedStations($stations, $fetchedAt);
 
-        return $stations;
+        return $this->createStationsSnapshot($cachedData, false);
+    }
+
+    /**
+     * @param array{stations: list<array<string, mixed>>, fetchedAt: int} $cachedData
+     * @return array{stations: list<array<string, mixed>>, fetchedAt: string, stale: bool}
+     */
+    private function createStationsSnapshot(array $cachedData, bool $stale): array
+    {
+        return [
+            'stations' => $cachedData['stations'],
+            'fetchedAt' => (new DateTimeImmutable('@'.$cachedData['fetchedAt']))
+                ->format(DATE_ATOM),
+            'stale' => $stale,
+        ];
     }
 
     /**
@@ -118,12 +150,12 @@ class VelibApiService
     /**
      * @param list<array<string, mixed>> $stations
      */
-    private function saveCachedStations(array $stations): void
+    private function saveCachedStations(array $stations, int $fetchedAt): void
     {
         $item = $this->stationsCache->getItem(self::CACHE_KEY);
         $item->set([
             'stations' => $stations,
-            'fetchedAt' => time(),
+            'fetchedAt' => $fetchedAt,
         ]);
         $item->expiresAfter(self::MAX_STALE_SECONDS);
         $this->stationsCache->save($item);
@@ -145,10 +177,29 @@ class VelibApiService
             ->request('GET', self::INFO_URL)
             ->toArray();
 
+        $statusStations = $status['data']['stations'] ?? null;
+        $informationStations = $information['data']['stations'] ?? null;
+
+        if (
+            !is_array($statusStations)
+            || [] === $statusStations
+            || !is_array($informationStations)
+            || [] === $informationStations
+        ) {
+            throw new \UnexpectedValueException(
+                'Incomplete Vélib API response: station feeds are missing or empty.',
+            );
+        }
 
         $stationsInfo = [];
 
-        foreach ($information['data']['stations'] as $station) {
+        foreach ($informationStations as $station) {
+            if (!is_array($station) || !isset($station['station_id'])) {
+                throw new \UnexpectedValueException(
+                    'Incomplete Vélib API response: station information is invalid.',
+                );
+            }
+
             $stationsInfo[$station['station_id']] = $station;
         }
 
@@ -157,8 +208,23 @@ class VelibApiService
 
         
 
-        foreach ($status['data']['stations'] as $station) {
-
+        foreach ($statusStations as $station) {
+            if (
+                !is_array($station)
+                || !isset(
+                    $station['station_id'],
+                    $station['num_bikes_available'],
+                    $station['num_bikes_available_types'],
+                    $station['num_docks_available'],
+                )
+                || !is_array($station['num_bikes_available_types'])
+                || !is_numeric($station['num_bikes_available'])
+                || !is_numeric($station['num_docks_available'])
+            ) {
+                throw new \UnexpectedValueException(
+                    'Incomplete Vélib API response: station status is invalid.',
+                );
+            }
 
             $mechanicalBikes = 0;
             $electricBikes = 0;
