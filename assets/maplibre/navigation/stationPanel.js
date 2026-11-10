@@ -31,6 +31,7 @@ import {
     renderStationPanel,
 } from './ui/stationPanelView.js';
 import { createPaneController } from './ui/paneController.js';
+import { initModeSelector } from './ui/modeSelector.js';
 
 let paneController = null;
 let element = null;
@@ -273,7 +274,12 @@ export function initStationPanel(map, styleReady) {
 
 function renderEmptyPanel() {
     element.innerHTML = renderEmptyPanelHtml(currentMode);
-    initModeSelector();
+    initModeSelector(element, {
+        onModeChange: (mode) => {
+            currentMode = mode;
+            setDisplayMode(mode);
+        },
+    });
 
     if (paneController?.isAvailable()) {
         requestAnimationFrame(() => {
@@ -998,7 +1004,12 @@ async function updateStationPanel(
         }
     });
 
-    initModeSelector();
+    initModeSelector(element, {
+        onModeChange: (mode) => {
+            currentMode = mode;
+            setDisplayMode(mode);
+        },
+    });
 
     if (paneController.isAvailable()) {
         const content = element.querySelector('.station-panel-content');
@@ -1028,56 +1039,4 @@ async function updateStationPanel(
 
     // Desktop
     element.classList.add('is-open');
-}
-
-function initModeSelector() {
-    const selector = element.querySelector('.station-panel-mode-selector');
-
-    if (!selector) {
-        return;
-    }
-
-    const buttons = selector.querySelectorAll('button');
-    const indicator = selector.querySelector('.station-panel-mode-indicator');
-
-    function updateIndicator() {
-        const activeButton = selector.querySelector('button.active');
-
-        if (!activeButton || !indicator) {
-            return;
-        }
-
-        indicator.style.width = `${activeButton.offsetWidth}px`;
-
-        indicator.style.transform = `
-            translateX(${activeButton.offsetLeft}px)
-        `;
-    }
-
-    buttons.forEach((button) => {
-        button.addEventListener('click', (event) => {
-            event.stopPropagation();
-
-            const mode = button.dataset.mode;
-
-            if (!mode) {
-                return;
-            }
-
-            currentMode = mode;
-
-            setDisplayMode(mode);
-
-            buttons.forEach((item) => {
-                item.classList.toggle(
-                    'active',
-                    item.dataset.mode === currentMode,
-                );
-            });
-
-            updateIndicator();
-        });
-    });
-
-    updateIndicator();
 }
