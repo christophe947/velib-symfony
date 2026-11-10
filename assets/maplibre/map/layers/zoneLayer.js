@@ -93,6 +93,7 @@ export function addZoneLayer(map, zones) {
                 18,
             ],
             'circle-color': '#0d6efd',
+            'circle-opacity': 0.85,
             'circle-stroke-width': 2,
             'circle-stroke-color': '#ffffff',
         },

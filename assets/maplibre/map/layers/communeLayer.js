@@ -153,6 +153,7 @@ export function addCommuneLayer(map, communes) {
                 18,
             ],
             'circle-color': '#4dabf7',
+            'circle-opacity': 0.85,
             'circle-stroke-width': 2,
             'circle-stroke-color': '#ffffff',
         },

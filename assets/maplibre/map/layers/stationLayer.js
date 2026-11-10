@@ -139,6 +139,7 @@ export function addStationLayer(map, displayMode = 'bikes') {
                 18,
             ],
             'circle-color': colorExpression,
+            //'circle-opacity': 0.9,
             'circle-stroke-width': 2,
             'circle-stroke-color': '#ffffff',
         },
