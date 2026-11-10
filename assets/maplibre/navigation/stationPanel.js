@@ -342,7 +342,7 @@ function stopNavigation(map, station, styleReady) {
     // Arrête la boussole.
     stopCompass();
 
-    // Arrête les simulations et invalide les recalculs.
+    // Arrête les traitements de navigation et invalide les recalculs.
     navigationEngine.stopNavigationProcessing();
 
     // Nettoie le tracé et le marqueur de destination.
@@ -363,7 +363,6 @@ function stopNavigation(map, station, styleReady) {
     }
 
     // Réinitialise l'état local.
-    //navigationStarted = false;
     lastKnownUserPosition = null;
     lastReliableUserPosition = null;
     stationPanelRenderId++;
@@ -407,12 +406,6 @@ function isCurrentDestinationChange(request) {
         request.sessionId === navigationSessionId &&
         navigationStarted
     );
-}
-
-function showDestinationChangeError(map, station, styleReady, message) {
-    destinationChangeError = { station, message };
-
-    updateStationPanel(displayedStation ?? station, map, styleReady, false);
 }
 
 async function startDestinationChange(map, station, styleReady) {
@@ -815,7 +808,6 @@ async function updateStationPanel(
 
                     navigationEngine.updateNavigationProgress(position);
 
-                    console.log('Nouvelle position GPS :', position);
                 },
                 (error) => {
                     console.error('Erreur GPS :', error);

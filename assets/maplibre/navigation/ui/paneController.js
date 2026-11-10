@@ -51,8 +51,6 @@ export function createPaneController(element) {
             paneDragActive = false;
             paneInteractionId++;
             panelManuallyAtBottom = pane.currentBreak() === 'bottom';
-
-            console.log('Panneau manuellement en bas :', panelManuallyAtBottom);
         });
     }
 
@@ -150,7 +148,6 @@ export function createPaneController(element) {
         }
         if (panelManuallyAtBottom === false) {
             moveToBreak('middle');
-            console.log('doi revenir');
         }
     }
 
