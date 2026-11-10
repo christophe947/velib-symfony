@@ -1,4 +1,3 @@
-import { CupertinoPane } from 'cupertino-pane';
 import { subscribeToSelectedStation, setDisplayMode } from '../shared/state.js';
 import {
     requestUserPosition,
@@ -31,18 +30,10 @@ import {
     renderEmptyPanel as renderEmptyPanelHtml,
     renderStationPanel,
 } from './ui/stationPanelView.js';
-import {
-    recalculateBottomBreakpoint,
-    recalculateMiddleBreakpoint,
-} from './ui/paneController.js';
+import { createPaneController } from './ui/paneController.js';
 
-let pane = null;
+let paneController = null;
 let element = null;
-
-let panelManuallyAtBottom = true;
-let paneDragActive = false;
-let paneInteractionId = 0;
-let paneCollapseTimeoutId = null;
 
 let navigationStarted = false;
 let navigationSessionId = 0;
@@ -62,8 +53,6 @@ let lastKnownUserPosition = null;
 let lastReliableUserPosition = null;
 let navigationEngine = null;
 const screenWakeLock = createScreenWakeLock();
-
-const mobileQuery = window.matchMedia('(max-width: 767px)');
 
 let currentMode = 'bikes';
 
@@ -157,37 +146,19 @@ async function restoreNavigationCamera(map, station, sessionId) {
 }
 
 function clearNavigationPaneCollapseTimeout() {
-    clearTimeout(paneCollapseTimeoutId);
-    paneCollapseTimeoutId = null;
+    paneController?.clearCollapse();
 }
 
 function scheduleNavigationPaneCollapse(station, sessionId) {
-    clearNavigationPaneCollapseTimeout();
-
-    if (!pane || !mobileQuery.matches) {
-        return;
-    }
-
     const renderId = stationPanelRenderId;
-    const interactionId = paneInteractionId;
 
-    paneCollapseTimeoutId = setTimeout(() => {
-        paneCollapseTimeoutId = null;
-
-        if (
-            !pane ||
-            paneDragActive ||
-            paneInteractionId !== interactionId ||
-            stationPanelRenderId !== renderId ||
-            !navigationStarted ||
-            navigationSessionId !== sessionId ||
-            !stationsMatch(displayedStation, station)
-        ) {
-            return;
-        }
-
-        pane.moveToBreak('bottom');
-    }, 750);
+    paneController?.scheduleCollapse(
+        () =>
+            stationPanelRenderId === renderId &&
+            navigationStarted &&
+            navigationSessionId === sessionId &&
+            stationsMatch(displayedStation, station),
+    );
 }
 
 /**
@@ -270,39 +241,10 @@ function renderActiveNavigationControls(map, station, styleReady) {
     });
 }
 
-async function updateMiddleHeight(height, movePane = true) {
-    if (!pane) {
-        return;
-    }
-
-    await recalculateMiddleBreakpoint(pane, height);
-
-    if (!movePane) {
-        return;
-    }
-
-    // Le nouveau middle devient le breakpoint courant
-    pane.breakpoints.currentBreakpoint = pane.breakpoints.breaks.middle;
-
-    pane.breakpoints.prevBreakpoint = 'middle';
-
-    panelManuallyAtBottom = false;
-    // Position visuelle
-    await pane.moveToHeight(height);
-}
-
-async function updateBottomHeight(height) {
-    if (!pane) {
-        return;
-    }
-
-    await recalculateBottomBreakpoint(pane, height);
-}
-
 export function initStationPanel(map, styleReady) {
     element = document.querySelector('#station-content');
 
-    if (!element) {
+    if (!element || paneController) {
         return;
     }
     navigationEngine = createNavigationEngine({
@@ -317,97 +259,23 @@ export function initStationPanel(map, styleReady) {
     // sur mobile comme sur desktop.
     renderEmptyPanel();
 
-    if (mobileQuery.matches) {
-        pane = new CupertinoPane(element, {
-            parentElement: 'body',
-            initialBreak: 'bottom',
+    paneController = createPaneController(element);
 
-            showCloseButton: false,
-            dragByCursor: true,
-            clickBottomOpen: false,
-            //animationDuration: 500,
-
-            breaks: {
-                top: {
-                    enabled: true,
-                    height: window.innerHeight - 80,
-                    bounce: true,
-                },
-
-                middle: {
-                    enabled: true,
-                    height: 270,
-                    bounce: true,
-                },
-
-                bottom: {
-                    enabled: true,
-                    height: 70,
-                },
-            },
-        });
-
-        pane.present({
-            animate: false,
-        });
-        pane.on('onDragStart', () => {
-            paneDragActive = true;
-            paneInteractionId++;
-        });
-        pane.on('onDragEnd', () => {
-            paneDragActive = false;
-            paneInteractionId++;
-            panelManuallyAtBottom = pane.currentBreak() === 'bottom';
-
-            console.log('Panneau manuellement en bas :', panelManuallyAtBottom);
-        });
-    } else {
+    if (!paneController.isAvailable()) {
         // Desktop : panneau classique
         element.classList.add('is-open');
     }
     subscribeToSelectedStation((station) =>
         updateStationPanel(station, map, styleReady),
     );
-
-    const lowerSearchPanel = () => {
-        if (!pane || !mobileQuery.matches) return;
-        if (panelManuallyAtBottom === true) return;
-
-        //panelManuallyAtBottom = false;
-        pane.moveToBreak('bottom');
-    };
-
-    const restoreSearchPanel = () => {
-        if (!pane || !mobileQuery.matches) return;
-        if (panelManuallyAtBottom === true) {
-            return;
-        }
-        const searchResults = document.getElementById('map-search-results');
-        if (
-            searchResults &&
-            getComputedStyle(searchResults).display !== 'none' &&
-            searchResults.querySelector('[data-station-index]')
-        ) {
-            return;
-        }
-        if (panelManuallyAtBottom === false) {
-            pane.moveToBreak('middle');
-            console.log('doi revenir');
-        }
-    };
-
-    document.addEventListener('search:focus', lowerSearchPanel);
-    document.addEventListener('search:results', lowerSearchPanel);
-    document.addEventListener('search:blur', restoreSearchPanel);
-    document.addEventListener('search:results:close', restoreSearchPanel);
-    //console.log(pane.currentBreak());
+    paneController.bindSearchEvents();
 }
 
 function renderEmptyPanel() {
     element.innerHTML = renderEmptyPanelHtml(currentMode);
     initModeSelector();
 
-    if (pane) {
+    if (paneController?.isAvailable()) {
         requestAnimationFrame(() => {
             const content = element.querySelector('.station-panel-empty');
 
@@ -417,7 +285,7 @@ function renderEmptyPanel() {
 
             const bottomHeight = content.getBoundingClientRect().height;
 
-            updateBottomHeight(bottomHeight);
+            paneController.updateBottomHeight(bottomHeight);
         });
     }
 }
@@ -758,13 +626,13 @@ async function updateStationPanel(
         );
     }
 
-    if (mobileQuery.matches && pane) {
+    if (paneController.isAvailable()) {
         const title = element.querySelector('.station-panel-title');
 
         if (title) {
             const bottomHeight = title.getBoundingClientRect().height + 30;
 
-            await updateBottomHeight(bottomHeight);
+            await paneController.updateBottomHeight(bottomHeight);
         }
 
         if (renderId !== stationPanelRenderId) {
@@ -1059,12 +927,12 @@ async function updateStationPanel(
             if (routeSummary) {
                 updateRouteSummary(distance, duration);
 
-                if (pane && mobileQuery.matches) {
+                if (paneController.isAvailable()) {
                     const content = element.querySelector(
                         '.station-panel-content',
                     );
 
-                    pane.present({
+                    paneController.present({
                         animate: true,
                     });
 
@@ -1072,7 +940,7 @@ async function updateStationPanel(
                         const middleHeight =
                             content.getBoundingClientRect().height;
 
-                        updateMiddleHeight(middleHeight);
+                        paneController.updateMiddleHeight(middleHeight);
                     }
                 }
             }
@@ -1106,12 +974,12 @@ async function updateStationPanel(
                     routeMessage.textContent =
                         '📍 Ta position n’a pas pu être récupérée. Vérifie les autorisations de localisation et réessaie.';
                 }
-                if (mobileQuery.matches && pane) {
+                if (paneController.isAvailable()) {
                     const content = element.querySelector(
                         '.station-panel-content',
                     );
 
-                    pane.present({
+                    paneController.present({
                         animate: true,
                     });
 
@@ -1119,7 +987,7 @@ async function updateStationPanel(
                         const middleHeight =
                             content.getBoundingClientRect().height;
 
-                        updateMiddleHeight(middleHeight);
+                        paneController.updateMiddleHeight(middleHeight);
                     }
 
                     return;
@@ -1140,27 +1008,27 @@ async function updateStationPanel(
 
     initModeSelector();
 
-    if (mobileQuery.matches && pane) {
+    if (paneController.isAvailable()) {
         const content = element.querySelector('.station-panel-content');
 
         if (!shouldPresentPane) {
             if (content) {
                 const middleHeight = content.getBoundingClientRect().height;
 
-                await updateMiddleHeight(middleHeight, false);
+                await paneController.updateMiddleHeight(middleHeight, false);
             }
 
             return;
         }
 
-        pane.present({
+        paneController.present({
             animate: true,
         });
 
         if (content) {
             const middleHeight = content.getBoundingClientRect().height;
 
-            updateMiddleHeight(middleHeight);
+            paneController.updateMiddleHeight(middleHeight);
         }
 
         return;
