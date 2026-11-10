@@ -2,9 +2,11 @@ import { createMap } from 'maplibre/map';
 import { initStationPanel } from './navigation/stationPanel.js';
 import { initSearch } from './search/search.js';
 import { setSelectedStation } from './shared/state.js';
+import { startStationRefresh } from './shared/stationRefresh.js';
 
 
-const { map, styleReady } = createMap();
+const initialStations = window.stations ?? [];
+const { map, styleReady, updateStationData } = createMap();
 
 styleReady.catch((error) => {
     console.error('Le fond cartographique est indisponible :', error);
@@ -19,6 +21,15 @@ styleReady.catch((error) => {
 initStationPanel(map, styleReady);
 
 initSearch(map);
+
+startStationRefresh({
+    initialStations,
+    onSnapshot: (snapshot, { dataChanged }) => {
+        if (dataChanged) {
+            updateStationData(snapshot.stations);
+        }
+    },
+});
 
 
 document.addEventListener('station:selected', (event) => {

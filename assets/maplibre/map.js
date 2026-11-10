@@ -248,15 +248,35 @@ export function createMap() {
 
     const stations = window.stations ?? [];
 
-    const geoJSON = stationsToGeoJSON(stations);
+    const initialStationsGeoJSON = stationsToGeoJSON(stations);
+    let pendingStationsGeoJSON = null;
+
+    const updateStationData = (updatedStations) => {
+        const geoJSON = stationsToGeoJSON(updatedStations);
+        const stationsSource = map.getSource('stations');
+
+        if (stationsSource) {
+            stationsSource.setData(geoJSON).catch((error) => {
+                console.error(
+                    'Impossible de mettre à jour les stations sur la carte :',
+                    error,
+                );
+            });
+            pendingStationsGeoJSON = null;
+            return;
+        }
+
+        pendingStationsGeoJSON = geoJSON;
+    };
 
     map.on('load', async () => {
         //map.resize();
 
         map.addSource('stations', {
             type: 'geojson',
-            data: geoJSON,
+            data: pendingStationsGeoJSON ?? initialStationsGeoJSON,
         });
+        pendingStationsGeoJSON = null;
 
         let geographicData;
 
@@ -280,7 +300,7 @@ export function createMap() {
 
     });
 
-    return { map, styleReady };
+    return { map, styleReady, updateStationData };
 }
 
 /**
