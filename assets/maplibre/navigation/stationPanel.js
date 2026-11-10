@@ -31,6 +31,10 @@ import {
     renderEmptyPanel as renderEmptyPanelHtml,
     renderStationPanel,
 } from './ui/stationPanelView.js';
+import {
+    recalculateBottomBreakpoint,
+    recalculateMiddleBreakpoint,
+} from './ui/paneController.js';
 
 let pane = null;
 let element = null;
@@ -271,10 +275,7 @@ async function updateMiddleHeight(height, movePane = true) {
         return;
     }
 
-    pane.settings.breaks.middle.height = height;
-
-    // Recalcule réellement les breakpoints internes
-    await pane.breakpoints.buildBreakpoints(pane.settings.breaks, 0, false);
+    await recalculateMiddleBreakpoint(pane, height);
 
     if (!movePane) {
         return;
@@ -295,9 +296,7 @@ async function updateBottomHeight(height) {
         return;
     }
 
-    pane.settings.breaks.bottom.height = height;
-
-    await pane.breakpoints.buildBreakpoints(pane.settings.breaks, 0, false);
+    await recalculateBottomBreakpoint(pane, height);
 }
 
 export function initStationPanel(map, styleReady) {
