@@ -261,35 +261,6 @@ function renderActiveNavigationControls(map, station, styleReady) {
     });
 }
 
-function appendNavigationSimulationButtons(routeSummary) {
-    const simulationButton = document.createElement('button');
-    simulationButton.type = 'button';
-    simulationButton.textContent = '🧪 Simuler le trajet';
-    simulationButton.className = 'station-panel-simulate';
-
-    simulationButton.addEventListener('click', () => {
-        simulationButton.disabled = true;
-        simulationButton.textContent = 'Simulation en cours…';
-
-        navigationEngine.startNavigationSimulation(() => {
-            simulationButton.disabled = false;
-            simulationButton.textContent = '🧪 Simuler le trajet';
-        });
-    });
-
-    routeSummary.after(simulationButton);
-
-    const offRouteButton = document.createElement('button');
-    offRouteButton.type = 'button';
-    offRouteButton.textContent = '🧭 Tester une déviation';
-    offRouteButton.className = 'station-panel-simulate';
-    offRouteButton.addEventListener('click', () => {
-        navigationEngine.startOffRouteSimulation();
-    });
-
-    simulationButton.after(offRouteButton);
-}
-
 async function updateMiddleHeight(height) {
     if (!pane) {
         return;
@@ -638,17 +609,13 @@ function stopNavigation(map, station, styleReady) {
         `;
     }
 
-    // Réinitialise le résumé et les boutons de test.
+    // Réinitialise le résumé d'itinéraire.
     const routeSummary = element.querySelector('.station-panel-route-summary');
 
     if (routeSummary) {
         routeSummary.innerHTML = '';
         routeSummary.style.display = 'none';
     }
-
-    element
-        .querySelectorAll('.station-panel-simulate')
-        .forEach((button) => button.remove());
 
     // Réafficher le panneau de la station avec ses gestionnaires de clic.
     if (station) {
@@ -979,9 +946,6 @@ async function updateStationPanel(
         updateRouteSummary(
             activeNavigationRouteSummary.distance,
             activeNavigationRouteSummary.duration,
-        );
-        appendNavigationSimulationButtons(
-            element.querySelector('.station-panel-route-summary'),
         );
     }
 
@@ -1315,7 +1279,6 @@ async function updateStationPanel(
 
             if (routeSummary) {
                 updateRouteSummary(distance, duration);
-                appendNavigationSimulationButtons(routeSummary);
 
                 if (pane && mobileQuery.matches) {
                     const content = element.querySelector(
