@@ -933,6 +933,34 @@
         margin-top: 12px;
     }
 
+    #map-search-results {
+        margin-top: 7px;
+    }
+
+    .search-result {
+        gap: 2px;
+        padding-top: 10px;
+        padding-bottom: 10px;
+    }
+
+    .search-result small {
+        font-size: 12px;
+    }
+
+    .search-results-section-title {
+        padding-top: 9px;
+        padding-bottom: 5px;
+    }
+
+    .station-panel-content {
+        padding-bottom: 22px;
+    }
+
+    .station-panel-address {
+        margin-bottom: 20px;
+        font-size: 13px;
+    }
+
 }
 
 
