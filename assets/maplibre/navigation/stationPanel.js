@@ -378,6 +378,14 @@ export function initStationPanel(map, styleReady) {
         if (panelManuallyAtBottom === true) {
             return;
         }
+        const searchResults = document.getElementById('map-search-results');
+        if (
+            searchResults &&
+            getComputedStyle(searchResults).display !== 'none' &&
+            searchResults.querySelector('[data-station-index]')
+        ) {
+            return;
+        }
         if (panelManuallyAtBottom === false) {
             pane.moveToBreak('middle');
             console.log('doi revenir');
@@ -587,15 +595,6 @@ function stopNavigation(map, station, styleReady) {
     lastKnownUserPosition = null;
     lastReliableUserPosition = null;
     stationPanelRenderId++;
-
-    // Réinitialise l'affichage de la boussole.
-    const compassDisplay = element.querySelector(
-        '.station-panel-compass-status',
-    );
-
-    if (compassDisplay) {
-        compassDisplay.textContent = '';
-    }
 
     // Restaure le bouton permettant de recalculer l'itinéraire.
     const controls = element.querySelector(
@@ -931,12 +930,6 @@ async function updateStationPanel(
 
             <div class="station-panel-route-summary"></div>
 
-            <div
-                class="station-panel-compass-status"
-                role="status"
-                aria-live="polite"
-            ></div>
-
             <div class="station-panel-message" role="status" aria-live="polite" hidden></div>
 
             ${navigationControls}
@@ -1064,39 +1057,9 @@ async function updateStationPanel(
 
             await activateCompass(
                 map,
-
-                (reading) => {
-                    if (
-                        !stationsMatch(displayedStation, activeNavigationStation)
-                    ) {
-                        return;
-                    }
-
-                    const compassDisplay = element.querySelector(
-                        '.station-panel-compass-status',
-                    );
-
-                    if (compassDisplay) {
-                        compassDisplay.textContent =
-                            reading.compassHeading !== null
-                                ? `🧭 Boussole active — Cap : ${Math.round(reading.compassHeading)}°`
-                                : '🧭 Boussole active — Cap indisponible';
-                    }
-                },
+                undefined,
                 (error) => {
-                    if (
-                        !stationsMatch(displayedStation, activeNavigationStation)
-                    ) {
-                        return;
-                    }
-
-                    const compassDisplay = element.querySelector(
-                        '.station-panel-compass-status',
-                    );
-
-                    if (compassDisplay) {
-                        compassDisplay.textContent = `⚠️ Boussole indisponible : ${error.message}`;
-                    }
+                    console.error('Boussole indisponible :', error);
                 },
                 () => !isInitialCameraSetup,
             );
