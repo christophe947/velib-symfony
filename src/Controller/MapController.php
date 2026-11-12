@@ -3,24 +3,28 @@
 namespace App\Controller;
 
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use App\Service\VelibApiService;
 
 final class MapController extends AbstractController
 {
     #[Route('/carte', name: 'app_map')]
-    public function index(): Response { 
-        return $this->redirectToRoute( 
-            'app_maplibre', 
-            [], 
-            Response::HTTP_MOVED_PERMANENTLY 
-        ); 
+    public function index(): Response
+    {
+        return $this->redirectToRoute(
+            'app_home',
+            [],
+            Response::HTTP_MOVED_PERMANENTLY,
+        );
     }
 
-    /*#[Route('/carte', name: 'app_map')]
-    public function index(Request $request, VelibApiService $velibApiService): Response
+    #[Route('/ancienne-carte', name: 'app_legacy_map')]
+    public function legacyMap(
+        Request $request,
+        VelibApiService $velibApiService,
+    ): Response
     {
         $selectedStation = $request->query->get('station');
         $stations = $velibApiService->getStations();
@@ -29,7 +33,5 @@ final class MapController extends AbstractController
             'stations' => $stations,
             'selectedStation' => $selectedStation
         ]);
-    }*/
-
-
+    }
 }

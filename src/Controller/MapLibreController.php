@@ -11,13 +11,13 @@ use Symfony\Component\Routing\Attribute\Route;
 final class MapLibreController extends AbstractController
 {
     #[Route('/maplibre', name: 'app_maplibre')]
-    public function index(VelibApiService $velibApiService): Response
+    public function index(): Response
     {
-        $stations = $velibApiService->getStations();
-
-        return $this->render('map_libre/index.html.twig', [
-            'stations' => $stations,
-        ]);
+        return $this->redirectToRoute(
+            'app_home',
+            [],
+            Response::HTTP_MOVED_PERMANENTLY,
+        );
     }
 
     #[Route('/api/velib/stations', name: 'api_velib_stations', methods: ['GET'])]
