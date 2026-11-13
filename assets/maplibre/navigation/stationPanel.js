@@ -12,7 +12,7 @@ import {
     updateWalkingRoute,
     setUserFollowing,
     setNavigationActive,
-    followUserPosition,
+    updateNavigationPosition,
     recenterOnUser,
     clearNavigationMap,
     ensure2DView,
@@ -312,8 +312,8 @@ export function initStationPanel(map, styleReady) {
         return;
     }
     navigationEngine = createNavigationEngine({
-        showUserMarker: (position) => showUserMarker(map, position),
-        followUserPosition: (position) => followUserPosition(map, position),
+        updateNavigationPosition: (gpsPosition, displayedPosition) =>
+            updateNavigationPosition(map, gpsPosition, displayedPosition),
         updateWalkingRoute: (coordinates) =>
             updateWalkingRoute(map, coordinates),
         updateRouteSummary,
@@ -860,7 +860,12 @@ async function updateStationPanel(
             activeNavigationStation = station;
             activeNavigationRouteSummary = routeSummaryData;
             navigationStarted = true;
-            setNavigationActive(true);
+            setNavigationActive(
+                true,
+                isFreshGpsPosition(lastKnownUserPosition)
+                    ? lastKnownUserPosition
+                    : null,
+            );
             setUserFollowing(true);
             screenWakeLock.start();
 

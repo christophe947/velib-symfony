@@ -7,8 +7,7 @@ import {
 
 export function createNavigationEngine(effects) {
     const {
-        showUserMarker,
-        followUserPosition,
+        updateNavigationPosition,
         updateWalkingRoute,
         updateRouteSummary,
     } = effects;
@@ -235,10 +234,6 @@ export function createNavigationEngine(effects) {
             return;
         }
 
-        if (isNewCameraFix) {
-            followUserPosition(position);
-        }
-
         let closestRouteDistance = Infinity;
         let closestProgressCandidate = null;
 
@@ -403,7 +398,9 @@ export function createNavigationEngine(effects) {
 
                     // Une position hors itinéraire ne doit pas
                     // faire avancer artificiellement la progression.
-                    showUserMarker(position);
+                    if (isNewCameraFix) {
+                        updateNavigationPosition(position, position);
+                    }
                     return;
                 }
 
@@ -419,7 +416,9 @@ export function createNavigationEngine(effects) {
             !closestProgressCandidate ||
             closestProgressCandidate.distance > OFF_ROUTE_THRESHOLD
         ) {
-            showUserMarker(position);
+            if (isNewCameraFix) {
+                updateNavigationPosition(position, position);
+            }
             return;
         }
 
@@ -467,7 +466,9 @@ export function createNavigationEngine(effects) {
               }
             : position;
 
-        showUserMarker(displayedPosition);
+        if (isNewCameraFix) {
+            updateNavigationPosition(position, displayedPosition);
+        }
     }
 
     /**

@@ -226,6 +226,9 @@ export function createMap() {
         onViewModeChange: (is3D) => {
             viewModeControl?.updateMode(is3D);
         },
+        onNavigationPositionFrame: (position) => {
+            showUserMarker(map, position);
+        },
         onCompassControlSuspended: () => {
             hideUserMarkerCompass(map);
         },
@@ -310,8 +313,16 @@ export function setUserFollowing(enabled) {
     getCameraController()?.setFollowing(enabled);
 }
 
-export function setNavigationActive(enabled) {
+export function setNavigationActive(enabled, initialPosition = null) {
     isNavigationActive = enabled;
+
+    const cameraController = getCameraController();
+
+    if (enabled) {
+        cameraController?.beginNavigationPositionTracking(initialPosition);
+    } else {
+        cameraController?.clearNavigationVisualPosition();
+    }
 }
 
 function updateCameraFromCompass(map, reading) {
@@ -334,6 +345,19 @@ export function followUserPosition(map, position) {
     if (!map || !position) return;
 
     getCameraController()?.followPosition(position);
+}
+
+export function updateNavigationPosition(map, gpsPosition, displayedPosition) {
+    if (!map || !gpsPosition || !displayedPosition) {
+        return false;
+    }
+
+    return (
+        getCameraController()?.updateNavigationVisualPosition(
+            gpsPosition,
+            displayedPosition,
+        ) === true
+    );
 }
 
 export function startBackgroundUserTracking(map) {
