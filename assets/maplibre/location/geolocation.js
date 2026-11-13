@@ -247,6 +247,34 @@ export function requestUserPosition({ maximumAge = 60000 } = {}) {
     });
 }
 
+export function getUserPositionErrorMessage(error) {
+    if (error?.code === 1) {
+        return 'Autorisation de localisation refusée. Autorise le GPS puis réessaie.';
+    }
+
+    if (error?.code === 2) {
+        return 'Position GPS temporairement indisponible. Vérifie le signal puis réessaie.';
+    }
+
+    if (error?.code === 3) {
+        return 'La recherche GPS a expiré. Réessaie lorsque le signal sera disponible.';
+    }
+
+    if (error?.code === 'POSITION_STALE') {
+        return 'La position GPS reçue est trop ancienne. Réessaie.';
+    }
+
+    if (error?.code === 'POSITION_INVALID') {
+        return 'La position GPS reçue est invalide. Réessaie.';
+    }
+
+    if (error?.message === 'Geolocation unavailable') {
+        return 'La géolocalisation n’est pas disponible sur cet appareil.';
+    }
+
+    return 'La position GPS n’a pas pu être obtenue. Vérifie les autorisations et réessaie.';
+}
+
 export function startWatchingPosition(onPosition, onError) {
     if (!navigator.geolocation) {
         onError?.(new Error('Geolocation unavailable'));

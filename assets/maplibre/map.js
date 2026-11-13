@@ -19,7 +19,9 @@ import {
 import { createCameraController } from './map/cameraController.js';
 import {
     clearRouteLayer,
+    clearRoutePreview,
     drawWalkingRoute,
+    drawRoutePreview,
     fitWalkingRoute,
     showDestinationMarker,
     updateWalkingRoute,
@@ -29,7 +31,9 @@ const STYLE_URL =
     'https://openmaptiles.data.gouv.fr/styles/osm-bright/style.json';
 
 export {
+    clearRoutePreview,
     drawWalkingRoute,
+    drawRoutePreview,
     fitWalkingRoute,
     showDestinationMarker,
     updateWalkingRoute,

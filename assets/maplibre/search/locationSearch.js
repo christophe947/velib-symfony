@@ -2,6 +2,8 @@ import { geocodeCandidates } from './geocoding.js';
 
 import { findNearbyStations } from './nearbyStations.js';
 
+const NEARBY_STATIONS_RADIUS_METERS = 3000;
+
 function normalizeText(value = '') {
     return String(value)
         .normalize('NFD')
@@ -138,6 +140,21 @@ function selectOnePlaceLocation(locations, destination) {
     return [...locations].sort((a, b) => b.score - a.score).slice(0, 1);
 }
 
+export function findNearbyLocationGroups(locations, stations, limit = 8) {
+    return locations
+        .map((location) => ({
+            location,
+            stations: findNearbyStations(
+                location.latitude,
+                location.longitude,
+                stations,
+                limit,
+                NEARBY_STATIONS_RADIUS_METERS,
+            ),
+        }))
+        .filter((group) => group.stations.length > 0);
+}
+
 export async function searchNearbyStations(query, type, getStations) {
     const locations = await geocodeCandidates(query, type);
     let relevantLocations = locations;
@@ -156,20 +173,14 @@ export async function searchNearbyStations(query, type, getStations) {
 
     const stations = getStations();
 
-    return relevantLocations
-        .map((location) => ({
+    return findNearbyLocationGroups(relevantLocations, stations).map(
+        ({ location, stations: nearbyStations }) => ({
             label: location.label,
             city: location.city,
             score: location.score,
-            stations: findNearbyStations(
-                location.latitude,
-                location.longitude,
-                stations,
-                8,
-                3000,
-            ),
-        }))
-        .filter((group) => group.stations.length > 0);
+            stations: nearbyStations,
+        }),
+    );
 }
 
 

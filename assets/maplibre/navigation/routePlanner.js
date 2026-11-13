@@ -1,4 +1,7 @@
-import { requestUserPosition } from '../location/geolocation.js';
+import {
+    getUserPositionErrorMessage,
+    requestUserPosition,
+} from '../location/geolocation.js';
 import { renderRoutePlaceSuggestions } from './ui/routePlannerView.js';
 
 const MIN_QUERY_LENGTH = 3;
@@ -21,7 +24,22 @@ function isValidPosition(position) {
     );
 }
 
-export function createRoutePlannerController(element) {
+function invalidPositionError(position) {
+    const hasValidCoordinates =
+        Number.isFinite(position?.latitude) &&
+        position.latitude >= -90 &&
+        position.latitude <= 90 &&
+        Number.isFinite(position?.longitude) &&
+        position.longitude >= -180 &&
+        position.longitude <= 180;
+    const error = new Error('The GPS position is invalid or stale.');
+
+    error.code = hasValidCoordinates ? 'POSITION_STALE' : 'POSITION_INVALID';
+
+    return error;
+}
+
+export function createRoutePlannerController(element, { onChange } = {}) {
     if (!element) {
         return null;
     }
@@ -53,7 +71,66 @@ export function createRoutePlannerController(element) {
 
     let searchApi = null;
     let destroyed = false;
+    let isCalculating = false;
     const eventController = new AbortController();
+
+    function getSelections() {
+        const getLatestSelection = (field) => {
+            if (
+                field.selected?.type === 'station' &&
+                searchApi?.resolveRouteCandidate
+            ) {
+                return searchApi.resolveRouteCandidate(field.selected);
+            }
+
+            return field.selected;
+        };
+
+        return {
+            origin: getLatestSelection(fields.get('origin')),
+            destination: getLatestSelection(fields.get('destination')),
+            mode: element.querySelector('[name="route-type"]:checked')?.value ?? 'walking',
+        };
+    }
+
+    function notifyChange() {
+        onChange?.(getSelections());
+    }
+
+    function isResolvedPlace(place) {
+        return (
+            Number.isFinite(place?.latitude) &&
+            place.latitude >= -90 &&
+            place.latitude <= 90 &&
+            Number.isFinite(place?.longitude) &&
+            place.longitude >= -180 &&
+            place.longitude <= 180
+        );
+    }
+
+    function updateCalculateButton() {
+        const button = element.querySelector('.route-planner-calculate');
+        const { origin, destination, mode } = getSelections();
+
+        if (button) {
+            button.disabled =
+                isCalculating ||
+                mode !== 'walking' ||
+                !isResolvedPlace(origin) ||
+                !isResolvedPlace(destination);
+
+            if (isCalculating) {
+                button.setAttribute('aria-busy', 'true');
+            } else {
+                button.removeAttribute('aria-busy');
+            }
+        }
+    }
+
+    function stateChanged() {
+        updateCalculateButton();
+        notifyChange();
+    }
 
     function hideSuggestions(field) {
         clearTimeout(field.debounceId);
@@ -112,6 +189,7 @@ export function createRoutePlannerController(element) {
                 showCurrentLocation: name === 'origin',
                 showNoResults: true,
             });
+            stateChanged();
         } catch (error) {
             if (destroyed || field.requestId !== requestId) {
                 return;
@@ -123,6 +201,7 @@ export function createRoutePlannerController(element) {
                 error: true,
                 showCurrentLocation: name === 'origin',
             });
+            stateChanged();
         }
     }
 
@@ -135,6 +214,7 @@ export function createRoutePlannerController(element) {
         field.debounceId = null;
 
         const query = field.input.value.replace(/\s+/g, ' ').trim();
+        stateChanged();
 
         if (query.length < MIN_QUERY_LENGTH) {
             if (name === 'origin' && query.length === 0) {
@@ -185,7 +265,9 @@ export function createRoutePlannerController(element) {
         field.requestId += 1;
         const requestId = field.requestId;
         const inputValue = field.input.value;
+        field.selected = null;
         field.candidates = [];
+        stateChanged();
         renderSuggestions(field, { loading: true });
 
         try {
@@ -200,7 +282,7 @@ export function createRoutePlannerController(element) {
             }
 
             if (!isValidPosition(position)) {
-                throw new Error('La position GPS reçue est invalide ou trop ancienne.');
+                throw invalidPositionError(position);
             }
 
             field.selected = {
@@ -213,6 +295,7 @@ export function createRoutePlannerController(element) {
             };
             field.input.value = field.selected.label;
             hideSuggestions(field);
+            stateChanged();
         } catch (error) {
             if (destroyed || field.requestId !== requestId) {
                 return;
@@ -221,10 +304,10 @@ export function createRoutePlannerController(element) {
             console.warn('Impossible de récupérer la position de départ :', error);
             renderSuggestions(field, {
                 error: true,
-                errorMessage:
-                    'Position GPS indisponible. Vérifie l’autorisation et réessaie.',
+                errorMessage: getUserPositionErrorMessage(error),
                 showCurrentLocation: true,
             });
+            stateChanged();
         }
     }
 
@@ -250,6 +333,12 @@ export function createRoutePlannerController(element) {
             }
         }, { signal: eventController.signal });
         field.input.addEventListener('input', () => handleInput(name, field), {
+            signal: eventController.signal,
+        });
+    });
+
+    element.querySelectorAll('[name="route-type"]').forEach((input) => {
+        input.addEventListener('change', stateChanged, {
             signal: eventController.signal,
         });
     });
@@ -299,6 +388,7 @@ export function createRoutePlannerController(element) {
             }
 
             selectCandidate(field, latestCandidate);
+            stateChanged();
         }
 
         if (
@@ -379,22 +469,30 @@ export function createRoutePlannerController(element) {
         hideSuggestions() {
             fields.forEach(hideSuggestions);
         },
+        setCalculating(value) {
+            isCalculating = value === true;
+            updateCalculateButton();
+        },
+        updateCurrentLocation(position) {
+            const origin = fields.get('origin');
+
+            if (origin.selected?.type !== 'current-location') {
+                return false;
+            }
+
+            origin.selected = {
+                ...origin.selected,
+                latitude: position.latitude,
+                longitude: position.longitude,
+                timestamp: position.timestamp,
+                accuracy: position.accuracy,
+            };
+            updateCalculateButton();
+
+            return true;
+        },
         getSelections() {
-            const getLatestSelection = (field) => {
-                if (
-                    field.selected?.type === 'station' &&
-                    searchApi?.resolveRouteCandidate
-                ) {
-                    return searchApi.resolveRouteCandidate(field.selected);
-                }
-
-                return field.selected;
-            };
-
-            return {
-                origin: getLatestSelection(fields.get('origin')),
-                destination: getLatestSelection(fields.get('destination')),
-            };
+            return getSelections();
         },
         destroy() {
             destroyed = true;

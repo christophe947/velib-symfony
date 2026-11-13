@@ -145,6 +145,13 @@ export function renderRoutePlanner() {
             <button type="button" class="route-planner-calculate" disabled>
                 Calculer l’itinéraire
             </button>
+            <div
+                class="route-planner-calculation-message"
+                data-route-calculation-message
+                role="status"
+                aria-live="polite"
+                hidden
+            ></div>
         </section>
     `;
 }

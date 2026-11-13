@@ -190,7 +190,7 @@ export function loadGeographicData(stations) {
     return promise;
 }
 
-function isPointInsideGeometry(longitude, latitude, geometry) {
+export function isPointInsideGeometry(longitude, latitude, geometry) {
     if (!geometry) {
         return false;
     }

@@ -41,9 +41,10 @@ export function decodePolyline(encoded) {
     return coordinates;
 }
 
-export async function getWalkingRoute(from, to) {
+export async function getWalkingRoute(from, to, { signal } = {}) {
     const response = await fetch(VALHALLA_URL, {
         method: 'POST',
+        signal,
 
         headers: {
             'Content-Type': 'application/json',

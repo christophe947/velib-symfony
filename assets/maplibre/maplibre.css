@@ -659,6 +659,93 @@
     opacity: 0.55;
 }
 
+.route-planner-calculation-message {
+    margin-top: 10px;
+    color: #6c757d;
+    font-size: 13px;
+}
+
+.route-planner-calculation-message.is-error {
+    color: #b02a37;
+}
+
+.route-planner-calculation-message[hidden] {
+    display: none !important;
+}
+
+#route-preview[hidden] {
+    display: none !important;
+}
+
+.route-preview-panel {
+    padding: 18px 20px 24px;
+    text-align: left;
+}
+
+.route-preview-panel h2 {
+    margin: 0 0 12px;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.route-preview-mode {
+    margin: 0 0 12px;
+    color: #495057;
+    font-size: 14px;
+}
+
+.route-preview-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 12px;
+    font-weight: 600;
+}
+
+.route-preview-start-note {
+    margin: 0 0 14px;
+    color: #6c757d;
+    font-size: 12px;
+}
+
+.route-preview-start-note.is-error {
+    color: #b02a37;
+}
+
+.route-preview-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.route-preview-actions button {
+    min-height: 46px;
+    border: 0;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    touch-action: manipulation;
+}
+
+.route-preview-start {
+    background: #198754;
+    color: #fff;
+}
+
+.route-preview-start:disabled {
+    opacity: 0.55;
+}
+
+.route-preview-edit {
+    background: #e9ecef;
+    color: #343a40;
+}
+
+.route-preview-stop {
+    background: #dc3545;
+    color: #fff;
+}
+
 /*.station-panel-mode-current {
     display: inline-flex;
     align-items: center;

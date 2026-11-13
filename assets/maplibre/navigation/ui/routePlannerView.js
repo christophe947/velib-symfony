@@ -12,6 +12,58 @@ function escapeHtml(value = '') {
     );
 }
 
+export function renderRoutePreview({
+    distance,
+    duration,
+    navigationActive = false,
+    starting = false,
+    message = '',
+    isError = false,
+}) {
+    const actions = navigationActive
+        ? `
+            <button type="button" class="route-preview-start" disabled>
+                Navigation en cours
+            </button>
+            <button
+                type="button"
+                class="route-preview-stop"
+                data-route-stop-navigation
+                aria-label="Arrêter la navigation"
+                title="Arrêter la navigation"
+            >
+                ✕
+            </button>
+        `
+        : `
+            <button type="button" class="route-preview-start" ${starting ? 'disabled' : ''}>
+                ${starting ? 'Vérification GPS…' : 'Démarrer'}
+            </button>
+            <button type="button" class="route-preview-edit" data-edit-route-planner>
+                Modifier
+            </button>
+        `;
+    const note = message ||
+        'Pour démarrer, ta position doit se trouver près du départ choisi.';
+
+    return `
+        <section class="route-preview-panel" aria-labelledby="route-preview-title">
+            <h2 id="route-preview-title">${navigationActive ? 'Navigation en cours' : 'Aperçu d’itinéraire'}</h2>
+            <p class="route-preview-mode">🚶 À pied</p>
+            <div class="route-preview-summary">
+                <span data-route-preview-distance>📍 ${escapeHtml(distance)}</span>
+                <span data-route-preview-duration>⏱️ ${escapeHtml(duration)}</span>
+            </div>
+            <p class="route-preview-start-note ${isError ? 'is-error' : ''}" data-route-preview-message role="status" aria-live="polite" ${navigationActive ? 'hidden' : ''}>
+                ${escapeHtml(note)}
+            </p>
+            <div class="route-preview-actions">
+                ${actions}
+            </div>
+        </section>
+    `;
+}
+
 const CANDIDATE_TYPE_LABELS = {
     station: 'Station Vélib',
     address: 'Adresse',

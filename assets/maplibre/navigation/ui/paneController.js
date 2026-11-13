@@ -197,6 +197,7 @@ export function createPaneController(
         present: (options) => pane?.present(options),
         openPlanner,
         closePlanner,
+        moveToBreak,
         updateMiddleHeight,
         updateBottomHeight,
         clearCollapse,

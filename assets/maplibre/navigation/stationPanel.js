@@ -1,5 +1,6 @@
 import { subscribeToSelectedStation, setDisplayMode } from '../shared/state.js';
 import {
+    getUserPositionErrorMessage,
     requestUserPosition,
     showUserMarker,
     startWatchingPosition,
@@ -7,6 +8,8 @@ import {
 import { getWalkingRoute, decodePolyline } from './routing.js';
 import {
     drawWalkingRoute,
+    drawRoutePreview,
+    clearRoutePreview,
     fitWalkingRoute,
     showDestinationMarker,
     updateWalkingRoute,
@@ -34,13 +37,26 @@ import {
 import { createPaneController } from './ui/paneController.js';
 import { initModeSelector } from './ui/modeSelector.js';
 import { createRoutePlannerController } from './routePlanner.js';
+import { renderRoutePreview } from './ui/routePlannerView.js';
+import { calculateDistanceBetweenCoordinates } from '../geography/geometry.js';
+
+const PLANNER_START_DISTANCE_LIMIT_METERS = 50;
 
 let paneController = null;
 let element = null;
 let paneElement = null;
 let plannerElement = null;
+let routePreviewElement = null;
 let routePlannerController = null;
 let isRoutePlannerOpen = false;
+let isRoutePreviewOpen = false;
+let routePreviewRequestId = 0;
+let routePreviewData = null;
+let isRouteCalculationPending = false;
+let activeRouteCalculationRequestId = null;
+let routePreviewAbortController = null;
+let isPlannerNavigationStarting = false;
+let isPlannerRouteOutdated = false;
 
 let navigationStarted = false;
 let navigationSessionId = 0;
@@ -167,6 +183,90 @@ function isValidRouteCoordinates(coordinates) {
     );
 }
 
+function isValidRoutePlace(place) {
+    return (
+        Number.isFinite(place?.latitude) &&
+        place.latitude >= -90 &&
+        place.latitude <= 90 &&
+        Number.isFinite(place?.longitude) &&
+        place.longitude >= -180 &&
+        place.longitude <= 180
+    );
+}
+
+function isValidPlannerRoute(route = routePreviewData) {
+    const segment = route?.segments?.[0];
+
+    return (
+        segment?.mode === 'walking' &&
+        isValidRouteCoordinates(segment.geometry) &&
+        isValidRoutePlace(segment.origin) &&
+        isValidRoutePlace(segment.destination) &&
+        Number.isFinite(segment.distance) &&
+        segment.distance >= 0 &&
+        Number.isFinite(segment.duration) &&
+        segment.duration >= 0 &&
+        Number.isFinite(route.distance) &&
+        Number.isFinite(route.duration)
+    );
+}
+
+function isPlannerNavigationActive() {
+    return navigationStarted && !activeNavigationStation && isValidPlannerRoute();
+}
+
+function renderPlannerPreview(navigationActive = false, message = '') {
+    if (!routePreviewElement || !isValidPlannerRoute()) {
+        return;
+    }
+
+    const summary =
+        navigationActive && activeNavigationRouteSummary
+            ? activeNavigationRouteSummary
+            : {
+                  distance: formatDistance(routePreviewData.distance),
+                  duration: formatDuration(routePreviewData.duration),
+              };
+
+    routePreviewElement.innerHTML = renderRoutePreview({
+        distance: summary.distance,
+        duration: summary.duration,
+        navigationActive,
+        message,
+        starting: isPlannerNavigationStarting,
+    });
+}
+
+function setPlannerPreviewMessage(message, isError = false) {
+    const status = routePreviewElement?.querySelector(
+        '[data-route-preview-message]',
+    );
+
+    if (!status) {
+        return;
+    }
+
+    status.textContent = message;
+    status.hidden = !message;
+    status.classList.toggle('is-error', isError);
+}
+
+function handleRoutePlannerStateChange() {
+    routePreviewRequestId++;
+    routePreviewAbortController?.abort();
+    routePreviewAbortController = null;
+
+    const message = plannerElement?.querySelector(
+        '[data-route-calculation-message]',
+    );
+
+    if (message) {
+        message.hidden = true;
+        message.textContent = '';
+    }
+
+}
+
 function waitForMapMovement(map) {
     return new Promise((resolve) => {
         if (!map.isMoving()) {
@@ -189,11 +289,15 @@ async function restoreNavigationCamera(map, station, sessionId) {
 
     await waitForMapMovement(map);
 
+    const hasCurrentTarget = station
+        ? stationsMatch(activeNavigationStation, station) &&
+          stationsMatch(displayedStation, station)
+        : isPlannerNavigationActive();
+
     if (
         !navigationStarted ||
         navigationSessionId !== sessionId ||
-        !stationsMatch(activeNavigationStation, station) ||
-        !stationsMatch(displayedStation, station)
+        !hasCurrentTarget
     ) {
         return false;
     }
@@ -234,6 +338,26 @@ function updateRouteSummary(distance, duration) {
 
     if (navigationStarted) {
         activeNavigationRouteSummary = routeSummaryData;
+    }
+
+    if (isPlannerNavigationActive()) {
+        const distanceElement = routePreviewElement?.querySelector(
+            '[data-route-preview-distance]',
+        );
+        const durationElement = routePreviewElement?.querySelector(
+            '[data-route-preview-duration]',
+        );
+
+        if (distanceElement) {
+            distanceElement.textContent = `📍 ${distance}`;
+        }
+
+        if (durationElement) {
+            durationElement.textContent = `⏱️ ${duration}`;
+        }
+
+        isPlannerRouteOutdated = true;
+        return;
     }
 
     if (!element) {
@@ -305,12 +429,194 @@ function renderActiveNavigationControls(map, station, styleReady) {
     });
 }
 
+function showNavigationDestinationMarker(map, destination) {
+    const isStation =
+        destination?.type === 'station' ||
+        destination?.stationId !== undefined ||
+        destination?.id !== undefined;
+
+    showDestinationMarker(
+        map,
+        destination,
+        isStation
+            ? undefined
+            : {
+                  icon: '📍',
+                  label: destination?.label ?? 'Destination',
+              },
+    );
+}
+
+async function startNavigationSession(
+    map,
+    styleReady,
+    sessionId,
+    {
+        station,
+        route,
+        summary,
+        compassActivation,
+        onCameraReady,
+    },
+) {
+    stopBackgroundUserTracking();
+    activeNavigationStation = station;
+    activeNavigationRouteSummary = summary;
+    routeSummaryData = summary;
+    navigationStarted = true;
+    setNavigationActive(
+        true,
+        isFreshGpsPosition(lastKnownUserPosition)
+            ? lastKnownUserPosition
+            : null,
+    );
+    setUserFollowing(true);
+    screenWakeLock.start();
+
+    let isInitialCameraSetup = true;
+    const isSessionActive = () =>
+        navigationStarted && sessionId === navigationSessionId;
+    const compassPromise =
+        compassActivation ??
+        activateCompass(
+            map,
+            undefined,
+            (error) => {
+                console.error('Boussole indisponible :', error);
+            },
+            () => !isInitialCameraSetup,
+        );
+
+    if (
+        !station &&
+        isRoutePlannerOpen &&
+        isRoutePreviewOpen &&
+        isValidPlannerRoute()
+    ) {
+        renderPlannerPreview(true);
+        routePreviewElement.hidden = false;
+        plannerElement.hidden = true;
+        element.hidden = true;
+    }
+
+    await compassPromise;
+
+    if (!isSessionActive()) {
+        return false;
+    }
+
+    if (!isFreshGpsPosition(lastKnownUserPosition)) {
+        try {
+            const userPosition = await requestUserPosition({
+                maximumAge: 0,
+            });
+
+            if (!isSessionActive()) {
+                return false;
+            }
+
+            if (
+                isFreshGpsPosition(userPosition) &&
+                (!Number.isFinite(lastKnownUserPosition?.timestamp) ||
+                    userPosition.timestamp > lastKnownUserPosition.timestamp)
+            ) {
+                lastKnownUserPosition = userPosition;
+            }
+        } catch (error) {
+            if (!isSessionActive()) {
+                return false;
+            }
+
+            console.warn(
+                'Impossible d’obtenir une position GPS récente au démarrage :',
+                error,
+            );
+        }
+    }
+
+    if (route) {
+        const segment = route.segments[0];
+
+        drawWalkingRoute(map, segment.geometry);
+        showNavigationDestinationMarker(map, segment.destination);
+        navigationEngine.setNavigationRoute(segment.geometry, {
+            latitude: segment.destination.latitude,
+            longitude: segment.destination.longitude,
+        });
+        clearRoutePreview(map);
+    }
+
+    if (lastKnownUserPosition) {
+        showUserMarker(map, lastKnownUserPosition);
+    }
+
+    await restoreNavigationCamera(map, station, sessionId);
+
+    if (!isSessionActive()) {
+        return false;
+    }
+
+    isInitialCameraSetup = false;
+    onCameraReady?.();
+
+    positionWatchId = startWatchingPosition(
+        (position) => {
+            const lastKnownTimestamp = lastKnownUserPosition?.timestamp;
+
+            if (
+                isFreshGpsPosition(position) &&
+                (!Number.isFinite(lastKnownTimestamp) ||
+                    position.timestamp > lastKnownTimestamp)
+            ) {
+                lastKnownUserPosition = position;
+            }
+
+            if (
+                isFreshReliableGpsPosition(position) &&
+                (!Number.isFinite(lastReliableUserPosition?.timestamp) ||
+                    position.timestamp > lastReliableUserPosition.timestamp)
+            ) {
+                lastReliableUserPosition = position;
+            }
+
+            navigationEngine.updateNavigationProgress(position);
+        },
+        (error) => {
+            console.error('Erreur GPS :', error);
+        },
+    );
+
+    if (station && stationsMatch(displayedStation, station)) {
+        renderActiveNavigationControls(map, station, styleReady);
+        scheduleNavigationPaneCollapse(station, sessionId);
+    } else if (
+        !station &&
+        isPlannerNavigationActive() &&
+        isRoutePlannerOpen &&
+        isRoutePreviewOpen
+    ) {
+        renderPlannerPreview(true);
+        routePreviewElement.hidden = false;
+        plannerElement.hidden = true;
+        element.hidden = true;
+    }
+
+    return true;
+}
+
 export function initStationPanel(map, styleReady) {
     element = document.querySelector('#station-content');
     paneElement = document.querySelector('#maplibre-station-panel');
     plannerElement = document.querySelector('#route-planner');
+    routePreviewElement = document.querySelector('#route-preview');
 
-    if (!element || !paneElement || !plannerElement || paneController) {
+    if (
+        !element ||
+        !paneElement ||
+        !plannerElement ||
+        !routePreviewElement ||
+        paneController
+    ) {
         return;
     }
     navigationEngine = createNavigationEngine({
@@ -325,7 +631,9 @@ export function initStationPanel(map, styleReady) {
     // sur mobile comme sur desktop.
     renderEmptyPanel();
     plannerElement.innerHTML = renderRoutePlanner();
-    routePlannerController = createRoutePlannerController(plannerElement);
+    routePlannerController = createRoutePlannerController(plannerElement, {
+        onChange: handleRoutePlannerStateChange,
+    });
 
     element.addEventListener('click', (event) => {
         const trigger = event.target.closest('[data-open-route-planner]');
@@ -336,26 +644,63 @@ export function initStationPanel(map, styleReady) {
 
         event.preventDefault();
         event.stopPropagation();
-        showRoutePlanner(true);
+        showRoutePlanner(true, map);
     });
 
     plannerElement.addEventListener('click', (event) => {
         const closeButton = event.target.closest('[data-close-route-planner]');
+        const calculateButton = event.target.closest('.route-planner-calculate');
 
-        if (!closeButton) {
+        if (closeButton) {
+            event.preventDefault();
+            event.stopPropagation();
+            closeRoutePlanner(true);
+        } else if (calculateButton) {
+            event.preventDefault();
+            event.stopPropagation();
+            void calculatePlannerRoute(map, styleReady).catch((error) => {
+                console.error('Erreur inattendue du calcul d’itinéraire :', error);
+                setPlannerCalculationMessage(
+                    'Le calcul a échoué. Vérifie ta connexion puis réessaie.',
+                    true,
+                );
+            });
+        }
+    });
+
+    routePreviewElement.addEventListener('click', (event) => {
+        const editButton = event.target.closest('[data-edit-route-planner]');
+        const startButton = event.target.closest('.route-preview-start');
+        const stopButton = event.target.closest('[data-route-stop-navigation]');
+
+        if (startButton && !startButton.disabled) {
+            event.preventDefault();
+            event.stopPropagation();
+            void startPlannerNavigation(map, styleReady);
+            return;
+        }
+
+        if (stopButton) {
+            event.preventDefault();
+            event.stopPropagation();
+            showStopNavigationConfirmation(map, null, styleReady);
+            return;
+        }
+
+        if (!editButton) {
             return;
         }
 
         event.preventDefault();
         event.stopPropagation();
-        closeRoutePlanner(true);
+        showRoutePlanner(true, map);
     });
 
     paneController = createPaneController(paneElement, {
         shouldIgnoreSearchEvents: () => isRoutePlannerOpen,
         onUserBreakChange: (currentBreak) => {
             if (currentBreak === 'bottom') {
-                if (isRoutePlannerOpen) {
+                if (isRoutePlannerOpen && !isPlannerNavigationActive()) {
                     closeRoutePlanner(false);
                 }
 
@@ -363,7 +708,7 @@ export function initStationPanel(map, styleReady) {
             }
 
             if (!displayedStation && !isRoutePlannerOpen) {
-                showRoutePlanner(true);
+                showRoutePlanner(true, map);
             }
         },
     });
@@ -384,14 +729,95 @@ export function initStationPanel(map, styleReady) {
     };
 }
 
-function showRoutePlanner(movePane) {
-    if (!element || !plannerElement || isRoutePlannerOpen) {
+function showRoutePlanner(movePane, map) {
+    if (!element || !plannerElement || !routePreviewElement) {
+        return;
+    }
+
+    if (isPlannerNavigationActive()) {
+        if (!isRoutePlannerOpen) {
+            element.hidden = true;
+            plannerElement.hidden = true;
+            isRoutePlannerOpen = true;
+            isRoutePreviewOpen = true;
+            routePreviewElement.hidden = false;
+            renderPlannerPreview(true);
+
+            if (movePane && paneController?.isAvailable()) {
+                const preview = routePreviewElement.querySelector(
+                    '.route-preview-panel',
+                );
+
+                if (preview) {
+                    void paneController
+                        .updateMiddleHeight(preview.getBoundingClientRect().height)
+                        .catch((error) => {
+                            console.error(
+                                'Impossible de restaurer la hauteur de l’aperçu :',
+                                error,
+                            );
+                        });
+                }
+            }
+        }
+
+        return;
+    }
+
+    if (isRoutePlannerOpen) {
+        if (!isRoutePreviewOpen) {
+            return;
+        }
+
+        isRoutePreviewOpen = false;
+        routePreviewElement.hidden = true;
+        plannerElement.hidden = false;
+        clearRoutePreview(map);
+        routePreviewData = null;
+
+        if (movePane) {
+            paneController?.openPlanner();
+        }
+
         return;
     }
 
     element.hidden = true;
-    plannerElement.hidden = false;
     isRoutePlannerOpen = true;
+
+    if (routePreviewData) {
+        plannerElement.hidden = true;
+        routePreviewElement.hidden = false;
+        isRoutePreviewOpen = true;
+        renderPlannerPreview(false);
+
+        if (map && !navigationStarted) {
+            drawRoutePreview(map, routePreviewData.segments[0].geometry);
+        }
+
+        if (movePane && paneController?.isAvailable()) {
+            const preview = routePreviewElement.querySelector(
+                '.route-preview-panel',
+            );
+
+            if (preview) {
+                void paneController
+                    .updateMiddleHeight(preview.getBoundingClientRect().height)
+                    .catch((error) => {
+                        console.error(
+                            'Impossible de restaurer la hauteur de l’aperçu :',
+                            error,
+                        );
+                    });
+            }
+        }
+
+        return;
+    }
+
+    plannerElement.hidden = false;
+    routePreviewElement.hidden = true;
+    isRoutePreviewOpen = false;
 
     if (movePane) {
         paneController?.openPlanner();
@@ -399,17 +825,459 @@ function showRoutePlanner(movePane) {
 }
 
 function closeRoutePlanner(movePane) {
-    if (!element || !plannerElement || !isRoutePlannerOpen) {
+    if (
+        !element ||
+        !plannerElement ||
+        !routePreviewElement ||
+        !isRoutePlannerOpen
+    ) {
         return;
     }
 
+    const closeRequestId = ++routePreviewRequestId;
+    routePreviewAbortController?.abort();
+    routePreviewAbortController = null;
     routePlannerController?.hideSuggestions();
     plannerElement.hidden = true;
+    routePreviewElement.hidden = true;
     element.hidden = false;
     isRoutePlannerOpen = false;
+    isRoutePreviewOpen = false;
+    setPlannerCalculationMessage('');
 
-    if (movePane) {
-        paneController?.closePlanner(displayedStation ? 'middle' : 'bottom');
+    if (movePane && displayedStation && paneController?.isAvailable()) {
+        const content = element.querySelector('.station-panel-content');
+
+        if (content) {
+            const middleHeight = content.getBoundingClientRect().height;
+
+            void paneController
+                .updateMiddleHeight(middleHeight, false)
+                .then(() => {
+                    if (
+                        closeRequestId === routePreviewRequestId &&
+                        !isRoutePlannerOpen
+                    ) {
+                        paneController.closePlanner('middle');
+                    }
+                });
+        } else {
+            paneController.closePlanner('middle');
+        }
+    } else if (movePane) {
+        paneController?.closePlanner('bottom');
+    }
+}
+
+function setPlannerCalculationMessage(message, isError = false) {
+    const status = plannerElement?.querySelector(
+        '[data-route-calculation-message]',
+    );
+
+    if (!status) {
+        return;
+    }
+
+    status.textContent = message;
+    status.hidden = !message;
+    status.classList.toggle('is-error', isError);
+}
+
+async function calculatePlannerRoute(map, styleReady) {
+    if (!isRoutePlannerOpen || isRoutePreviewOpen || navigationStarted) {
+        if (navigationStarted) {
+            setPlannerCalculationMessage(
+                'Termine ou arrête la navigation en cours avant de calculer un autre itinéraire.',
+                true,
+            );
+        }
+
+        return;
+    }
+
+    if (isRouteCalculationPending || isPlannerNavigationStarting) {
+        return;
+    }
+
+    const calculateButton = plannerElement.querySelector(
+        '.route-planner-calculate',
+    );
+
+    if (!calculateButton || calculateButton.disabled) {
+        return;
+    }
+
+    const { origin, destination, mode } =
+        routePlannerController?.getSelections() ?? {};
+
+    if (mode !== 'walking') {
+        return;
+    }
+
+    if (!isValidRoutePlace(origin) || !isValidRoutePlace(destination)) {
+        setPlannerCalculationMessage(
+            'Choisis un départ et une arrivée valides avant de calculer.',
+            true,
+        );
+        return;
+    }
+
+    const requestId = ++routePreviewRequestId;
+    isRouteCalculationPending = true;
+    activeRouteCalculationRequestId = requestId;
+    routePreviewAbortController = new AbortController();
+    let routeOrigin = origin;
+    const end = {
+        latitude: destination.latitude,
+        longitude: destination.longitude,
+    };
+
+    routePlannerController?.setCalculating(true);
+    setPlannerCalculationMessage('Calcul de l’itinéraire en cours…');
+
+    try {
+        if (
+            origin.type === 'current-location' &&
+            !isFreshGpsPosition(origin)
+        ) {
+            setPlannerCalculationMessage(
+                'Actualisation de la position GPS en cours…',
+            );
+
+            const refreshedPosition = await requestUserPosition({
+                maximumAge: 0,
+            });
+
+            if (
+                requestId !== routePreviewRequestId ||
+                !isRoutePlannerOpen ||
+                navigationStarted
+            ) {
+                return;
+            }
+
+            if (!isFreshGpsPosition(refreshedPosition)) {
+                const error = new Error('The GPS fix is stale.');
+                error.code = 'POSITION_STALE';
+                throw error;
+            }
+
+            routeOrigin = {
+                ...origin,
+                latitude: refreshedPosition.latitude,
+                longitude: refreshedPosition.longitude,
+                timestamp: refreshedPosition.timestamp,
+                accuracy: refreshedPosition.accuracy,
+            };
+            routePlannerController?.updateCurrentLocation(refreshedPosition);
+        }
+
+        setPlannerCalculationMessage('Calcul de l’itinéraire en cours…');
+        const start = {
+            latitude: routeOrigin.latitude,
+            longitude: routeOrigin.longitude,
+        };
+        const trip = await getWalkingRoute(start, end, {
+            signal: routePreviewAbortController.signal,
+        });
+
+        if (
+            requestId !== routePreviewRequestId ||
+            !isRoutePlannerOpen ||
+            navigationStarted
+        ) {
+            return;
+        }
+
+        const shape = trip.legs?.[0]?.shape;
+        const coordinates =
+            typeof shape === 'string' ? decodePolyline(shape) : [];
+        const routeDistance = trip.summary?.length;
+        const routeDuration = trip.summary?.time;
+
+        if (
+            !isValidRouteCoordinates(coordinates) ||
+            !Number.isFinite(routeDistance) ||
+            routeDistance < 0 ||
+            !Number.isFinite(routeDuration) ||
+            routeDuration < 0
+        ) {
+            throw new Error('Valhalla returned an invalid route.');
+        }
+
+        const result = {
+            segments: [
+                {
+                    mode: 'walking',
+                    origin: { ...routeOrigin },
+                    destination: { ...destination },
+                    geometry: coordinates,
+                    distance: routeDistance,
+                    duration: routeDuration,
+                },
+            ],
+            distance: routeDistance,
+            duration: routeDuration,
+        };
+
+        await styleReady;
+
+        if (
+            requestId !== routePreviewRequestId ||
+            !isRoutePlannerOpen ||
+            navigationStarted
+        ) {
+            return;
+        }
+
+        drawRoutePreview(map, coordinates);
+
+        if (!navigationStarted) {
+            fitWalkingRoute(map, coordinates);
+        }
+
+        routePreviewData = result;
+        isPlannerRouteOutdated = false;
+        renderPlannerPreview();
+        setPlannerPreviewMessage('');
+        routePreviewElement.hidden = false;
+        plannerElement.hidden = true;
+        isRoutePreviewOpen = true;
+        setPlannerCalculationMessage('');
+
+        if (paneController?.isAvailable()) {
+            const preview = routePreviewElement.querySelector(
+                '.route-preview-panel',
+            );
+
+            if (preview) {
+                await paneController.updateMiddleHeight(
+                    preview.getBoundingClientRect().height,
+                );
+            }
+        }
+    } catch (error) {
+        if (requestId !== routePreviewRequestId || !isRoutePlannerOpen) {
+            return;
+        }
+
+        clearRoutePreview(map);
+        routePreviewData = null;
+        isRoutePreviewOpen = false;
+        routePreviewElement.hidden = true;
+        plannerElement.hidden = false;
+
+        console.error('Impossible de calculer l’aperçu piéton :', error);
+        const message =
+            error?.code === 1 ||
+            error?.code === 2 ||
+            error?.code === 3 ||
+            error?.code === 'POSITION_STALE' ||
+            error?.code === 'POSITION_INVALID' ||
+            error?.message === 'Geolocation unavailable'
+                ? getUserPositionErrorMessage(error)
+                : error instanceof Error &&
+                    error.message === 'Aucun itinéraire trouvé.'
+                  ? 'Aucun itinéraire piéton trouvé pour ces lieux.'
+                  : 'Le calcul a échoué. Vérifie ta connexion puis réessaie.';
+
+        setPlannerCalculationMessage(message, true);
+    } finally {
+        if (activeRouteCalculationRequestId === requestId) {
+            isRouteCalculationPending = false;
+            activeRouteCalculationRequestId = null;
+            routePreviewAbortController = null;
+            routePlannerController?.setCalculating(false);
+        }
+    }
+}
+
+async function startPlannerNavigation(map, styleReady) {
+    if (
+        isPlannerNavigationStarting ||
+        navigationStarted ||
+        !isRoutePlannerOpen ||
+        !isRoutePreviewOpen ||
+        !isValidPlannerRoute()
+    ) {
+        return;
+    }
+
+    const route = routePreviewData;
+    const requestId = ++routePreviewRequestId;
+    const segment = route.segments[0];
+    const startButton = routePreviewElement.querySelector(
+        '.route-preview-start',
+    );
+    let canControlCamera = false;
+    let sessionId = null;
+
+    isPlannerNavigationStarting = true;
+    if (startButton) {
+        startButton.disabled = true;
+        startButton.textContent = 'Vérification GPS…';
+    }
+    setPlannerPreviewMessage('Vérification de la position GPS…');
+
+    // Lance la demande de permission dans le geste du clic. Les lectures ne
+    // pilotent la caméra qu'après la restauration de la vue de navigation.
+    const compassActivation = activateCompass(
+        map,
+        undefined,
+        (error) => {
+            console.error('Boussole indisponible :', error);
+        },
+        () => canControlCamera,
+    );
+
+    const isCurrentPlannerStart = () =>
+        requestId === routePreviewRequestId &&
+        routePreviewData === route &&
+        isRoutePlannerOpen &&
+        isRoutePreviewOpen &&
+        !navigationStarted;
+
+    try {
+        let userPosition = await requestUserPosition({ maximumAge: 0 });
+
+        if (!isCurrentPlannerStart()) {
+            return;
+        }
+
+        // La demande de permission boussole a été déclenchée dans le clic.
+        // Si elle a pris du temps, on renouvelle le fix avant de démarrer.
+        await compassActivation;
+
+        if (!isCurrentPlannerStart()) {
+            return;
+        }
+
+        if (!isFreshGpsPosition(userPosition)) {
+            userPosition = await requestUserPosition({ maximumAge: 0 });
+
+            if (!isCurrentPlannerStart()) {
+                return;
+            }
+        }
+
+        if (!isFreshReliableGpsPosition(userPosition)) {
+            if (isFreshGpsPosition(userPosition)) {
+                setPlannerPreviewMessage(
+                    'La position GPS est trop imprécise pour démarrer. Attends un relevé plus précis puis réessaie.',
+                    true,
+                );
+            } else {
+                const error = new Error('The GPS fix is stale or invalid.');
+                error.code = isValidRoutePlace(userPosition)
+                    ? 'POSITION_STALE'
+                    : 'POSITION_INVALID';
+                throw error;
+            }
+
+            return;
+        }
+
+        const distanceToStart = calculateDistanceBetweenCoordinates(
+            [userPosition.longitude, userPosition.latitude],
+            segment.geometry[0],
+        );
+
+        if (distanceToStart > PLANNER_START_DISTANCE_LIMIT_METERS) {
+            setPlannerPreviewMessage(
+                `Tu es à ${Math.round(distanceToStart)} m du départ prévu. Rejoins-le ou modifie le départ avec « Ma position actuelle », puis recalcule l’itinéraire.`,
+                true,
+            );
+            return;
+        }
+
+        if (
+            !Number.isFinite(lastKnownUserPosition?.timestamp) ||
+            userPosition.timestamp > lastKnownUserPosition.timestamp
+        ) {
+            lastKnownUserPosition = userPosition;
+        }
+
+        if (
+            !Number.isFinite(lastReliableUserPosition?.timestamp) ||
+            userPosition.timestamp > lastReliableUserPosition.timestamp
+        ) {
+            lastReliableUserPosition = userPosition;
+        }
+
+        if (!isCurrentPlannerStart()) {
+            return;
+        }
+
+        sessionId = ++navigationSessionId;
+        isPlannerRouteOutdated = false;
+
+        await startNavigationSession(map, styleReady, sessionId, {
+            station: null,
+            route,
+            summary: {
+                distance: formatDistance(route.distance),
+                duration: formatDuration(route.duration),
+            },
+            compassActivation,
+            onCameraReady: () => {
+                canControlCamera = true;
+            },
+        });
+    } catch (error) {
+        if (
+            sessionId !== null &&
+            navigationStarted &&
+            navigationSessionId === sessionId
+        ) {
+            stopNavigation(map, null, styleReady);
+        }
+
+        if (
+            requestId === routePreviewRequestId &&
+            routePreviewData === route &&
+            isRoutePreviewOpen
+        ) {
+            setPlannerPreviewMessage(
+                error?.code === 1 ||
+                    error?.code === 2 ||
+                    error?.code === 3 ||
+                    error?.code === 'POSITION_STALE' ||
+                    error?.code === 'POSITION_INVALID' ||
+                    error?.message === 'Geolocation unavailable'
+                    ? getUserPositionErrorMessage(error)
+                    : 'La navigation n’a pas pu démarrer. Réessaie depuis le départ de l’itinéraire.',
+                true,
+            );
+            console.error('Impossible de démarrer l’itinéraire planifié :', error);
+        }
+    } finally {
+        isPlannerNavigationStarting = false;
+
+        if (!navigationStarted && sessionId === null) {
+            void compassActivation
+                .then(() => {
+                    if (!isPlannerNavigationStarting && !navigationStarted) {
+                        return reactivateCompassIfEligible(map);
+                    }
+                })
+                .catch((error) => {
+                    console.error(
+                        'Impossible de rétablir la boussole après le démarrage annulé :',
+                        error,
+                    );
+                });
+        }
+
+        if (!navigationStarted) {
+            const button = routePreviewElement?.querySelector(
+                '.route-preview-start',
+            );
+
+            if (button) {
+                button.disabled = false;
+                button.textContent = 'Démarrer';
+            }
+        }
     }
 }
 
@@ -467,6 +1335,12 @@ function showStopNavigationConfirmation(
  * Arrête complètement la navigation en cours.
  */
 function stopNavigation(map, station, styleReady) {
+    const wasPlannerNavigation = isPlannerNavigationActive();
+    const shouldRestorePlannerPreview =
+        wasPlannerNavigation && !station && !isPlannerRouteOutdated;
+    const plannerRouteNeedsRecalculation =
+        wasPlannerNavigation && isPlannerRouteOutdated;
+
     clearNavigationPaneCollapseTimeout();
 
     // Invalide les opérations asynchrones de la session.
@@ -478,6 +1352,10 @@ function stopNavigation(map, station, styleReady) {
     activeNavigationStation = null;
     activeNavigationRouteSummary = null;
     routeSummaryData = null;
+    if (plannerRouteNeedsRecalculation) {
+        routePreviewData = null;
+    }
+    isPlannerRouteOutdated = false;
     screenWakeLock.stop();
 
     // Arrête le suivi GPS.
@@ -541,6 +1419,41 @@ function stopNavigation(map, station, styleReady) {
     // Réafficher le panneau de la station avec ses gestionnaires de clic.
     if (station) {
         updateStationPanel(station, map, styleReady);
+    } else if (shouldRestorePlannerPreview) {
+        isRoutePlannerOpen = true;
+        isRoutePreviewOpen = true;
+        element.hidden = true;
+        plannerElement.hidden = true;
+        routePreviewElement.hidden = false;
+        renderPlannerPreview(false);
+        drawRoutePreview(map, routePreviewData.segments[0].geometry);
+
+        if (paneController?.isAvailable()) {
+            const preview = routePreviewElement.querySelector(
+                '.route-preview-panel',
+            );
+
+            if (preview) {
+                void paneController
+                    .updateMiddleHeight(preview.getBoundingClientRect().height, false)
+                    .catch((error) => {
+                        console.error(
+                            'Impossible de restaurer la hauteur de l’aperçu :',
+                            error,
+                        );
+                    });
+            }
+        }
+    } else if (plannerRouteNeedsRecalculation && !station) {
+        isRoutePlannerOpen = true;
+        isRoutePreviewOpen = false;
+        element.hidden = true;
+        routePreviewElement.hidden = true;
+        plannerElement.hidden = false;
+        setPlannerCalculationMessage(
+            'L’itinéraire a été recalculé pendant la navigation. Calcule un nouvel aperçu avant de redémarrer.',
+            true,
+        );
     }
 
     console.log('🛑 Navigation arrêtée.');
@@ -566,7 +1479,13 @@ async function startDestinationChange(map, station, styleReady) {
         engineRequestId: null,
         station,
     };
-    const previousDestination = activeNavigationStation;
+    const previousDestination =
+        activeNavigationStation ??
+        (isPlannerNavigationActive()
+            ? routePreviewData.segments[0].destination
+            : null);
+    const replacingPlannerRoute =
+        !activeNavigationStation && isValidPlannerRoute();
 
     pendingDestinationChange = request;
     destinationChangeError = null;
@@ -688,6 +1607,10 @@ async function startDestinationChange(map, station, styleReady) {
         const duration = formatDuration(route.summary.time);
 
         activeNavigationStation = station;
+        if (replacingPlannerRoute) {
+            routePreviewData = null;
+            isPlannerRouteOutdated = false;
+        }
         activeNavigationRouteSummary = { distance, duration };
         routeSummaryData = activeNavigationRouteSummary;
         pendingDestinationChange = null;
@@ -708,7 +1631,9 @@ async function startDestinationChange(map, station, styleReady) {
 
         if (destinationMarkerTouched) {
             try {
-                showDestinationMarker(map, previousDestination);
+                if (previousDestination) {
+                    showNavigationDestinationMarker(map, previousDestination);
+                }
             } catch (restoreError) {
                 console.error(
                     'Impossible de restaurer le marqueur de destination :',
@@ -827,7 +1752,23 @@ async function updateStationPanel(
         '.station-panel-context-resume',
     );
     resumeButton?.addEventListener('click', () => {
-        if (!navigationStarted || !activeNavigationStation) {
+        if (!navigationStarted) {
+            return;
+        }
+
+        if (!activeNavigationStation && isValidPlannerRoute()) {
+            const sessionId = navigationSessionId;
+            showRoutePlanner(true, map);
+            restoreNavigationCamera(map, null, sessionId).catch((error) => {
+                console.error(
+                    'Impossible de reprendre le suivi de navigation :',
+                    error,
+                );
+            });
+            return;
+        }
+
+        if (!activeNavigationStation) {
             return;
         }
 
@@ -865,126 +1806,13 @@ async function updateStationPanel(
         const sessionId = ++navigationSessionId;
 
         if (joinButton.textContent.trim() === 'Démarrer') {
-            stopBackgroundUserTracking();
-            activeNavigationStation = station;
-            activeNavigationRouteSummary = routeSummaryData;
-            navigationStarted = true;
-            setNavigationActive(
-                true,
-                isFreshGpsPosition(lastKnownUserPosition)
-                    ? lastKnownUserPosition
-                    : null,
-            );
-            setUserFollowing(true);
-            screenWakeLock.start();
-
-            const isSessionActive = () =>
-                navigationStarted && sessionId === navigationSessionId;
-
             joinButton.disabled = true;
             joinButton.textContent = 'Démarrage…';
-
-            let isInitialCameraSetup = true;
-
-            await activateCompass(
-                map,
-                undefined,
-                (error) => {
-                    console.error('Boussole indisponible :', error);
-                },
-                () => !isInitialCameraSetup,
-            );
-
-            if (!isSessionActive()) {
-                return;
-            }
-
-            if (!isFreshGpsPosition(lastKnownUserPosition)) {
-                try {
-                    const userPosition = await requestUserPosition({
-                        maximumAge: 0,
-                    });
-
-                    if (!isSessionActive()) {
-                        return;
-                    }
-
-                    if (
-                        isFreshGpsPosition(userPosition) &&
-                        (!Number.isFinite(lastKnownUserPosition?.timestamp) ||
-                            userPosition.timestamp >
-                                lastKnownUserPosition.timestamp)
-                    ) {
-                        lastKnownUserPosition = userPosition;
-                    }
-                } catch (error) {
-                    if (!isSessionActive()) {
-                        return;
-                    }
-
-                    console.warn(
-                        'Impossible d’obtenir une position GPS récente au démarrage :',
-                        error,
-                    );
-                }
-            }
-
-            if (lastKnownUserPosition) {
-                showUserMarker(map, lastKnownUserPosition);
-            }
-
-            await restoreNavigationCamera(map, activeNavigationStation, sessionId);
-
-            if (!isSessionActive()) {
-                return;
-            }
-
-            // La caméra est prête : la boussole peut reprendre la main.
-            isInitialCameraSetup = false;
-
-            positionWatchId = startWatchingPosition(
-                (position) => {
-                    const lastKnownTimestamp =
-                        lastKnownUserPosition?.timestamp;
-
-                    if (
-                        isFreshGpsPosition(position) &&
-                        (!Number.isFinite(lastKnownTimestamp) ||
-                            position.timestamp > lastKnownTimestamp)
-                    ) {
-                        lastKnownUserPosition = position;
-                    }
-
-                    if (
-                        isFreshReliableGpsPosition(position) &&
-                        (!Number.isFinite(lastReliableUserPosition?.timestamp) ||
-                            position.timestamp >
-                                lastReliableUserPosition.timestamp)
-                    ) {
-                        lastReliableUserPosition = position;
-                    }
-
-                    navigationEngine.updateNavigationProgress(position);
-
-                },
-                (error) => {
-                    console.error('Erreur GPS :', error);
-                },
-            );
-
-            if (stationsMatch(displayedStation, activeNavigationStation)) {
-                renderActiveNavigationControls(
-                    map,
-                    activeNavigationStation,
-                    styleReady,
-                );
-            }
-
-            // 📱 Réduit le panneau après 2 secondes si l'utilisateur ne l'a pas déplacé.
-            scheduleNavigationPaneCollapse(
-                activeNavigationStation,
-                sessionId,
-            );
+            await startNavigationSession(map, styleReady, sessionId, {
+                station,
+                route: null,
+                summary: routeSummaryData,
+            });
 
             return;
         }

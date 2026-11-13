@@ -1,6 +1,7 @@
 import * as maplibregl from '/maplibre-assets/maplibre-gl.mjs';
 
 const ROUTE_ID = 'walking-route';
+const PREVIEW_ROUTE_ID = 'walking-route-preview';
 
 let destinationMarker = null;
 
@@ -82,22 +83,68 @@ export function fitWalkingRoute(map, coordinates) {
     });
 }
 
-export function showDestinationMarker(map, position) {
+export function drawRoutePreview(map, coordinates) {
+    clearRoutePreview(map);
+
+    map.addSource(PREVIEW_ROUTE_ID, {
+        type: 'geojson',
+        data: {
+            type: 'Feature',
+            geometry: {
+                type: 'LineString',
+                coordinates,
+            },
+            properties: {},
+        },
+    });
+
+    map.addLayer({
+        id: PREVIEW_ROUTE_ID,
+        type: 'line',
+        source: PREVIEW_ROUTE_ID,
+        paint: {
+            'line-color': '#198754',
+            'line-width': 5,
+            'line-opacity': 0.8,
+            'line-dasharray': [1.5, 1],
+        },
+    });
+}
+
+export function clearRoutePreview(map) {
+    if (!map) {
+        return;
+    }
+
+    if (map.getLayer(PREVIEW_ROUTE_ID)) {
+        map.removeLayer(PREVIEW_ROUTE_ID);
+    }
+
+    if (map.getSource(PREVIEW_ROUTE_ID)) {
+        map.removeSource(PREVIEW_ROUTE_ID);
+    }
+}
+
+export function showDestinationMarker(
+    map,
+    position,
+    { icon = '🚲', label = 'Station Vélib' } = {},
+) {
     destinationMarker?.remove();
 
     const element = document.createElement('div');
 
     element.className = 'destination-marker';
 
-    element.innerHTML = `
-        <span>🚲</span>
-    `;
+    const iconElement = document.createElement('span');
+    iconElement.textContent = icon;
+    element.append(iconElement);
 
     destinationMarker = new maplibregl.Marker({
         element,
     })
         .setLngLat([position.longitude, position.latitude])
-        .setPopup(new maplibregl.Popup({ offset: 25 }).setText('Station Vélib'))
+        .setPopup(new maplibregl.Popup({ offset: 25 }).setText(label))
         .addTo(map);
 }
 

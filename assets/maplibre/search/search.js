@@ -12,7 +12,10 @@ import {
     renderSearchResults,
     updateSearchResultAvailability,
 } from './searchResults.js';
-import { searchNearbyStations } from './locationSearch.js';
+import {
+    findNearbyLocationGroups,
+    searchNearbyStations,
+} from './locationSearch.js';
 import { geocodeCandidates } from './geocoding.js';
 import { initGeolocation } from '../location/geolocation.js';
 
@@ -176,16 +179,21 @@ export async function initSearch(map) {
         }
 
         const locationType = intent.type === 'address' ? 'address' : 'place';
-        const locationCandidates = locations
-            .filter(
-                (location) =>
-                    Number.isFinite(location.longitude) &&
-                    location.longitude >= -180 &&
-                    location.longitude <= 180 &&
-                    Number.isFinite(location.latitude) &&
-                    location.latitude >= -90 &&
-                    location.latitude <= 90,
-            )
+        const validLocations = locations.filter(
+            (location) =>
+                Number.isFinite(location.longitude) &&
+                location.longitude >= -180 &&
+                location.longitude <= 180 &&
+                Number.isFinite(location.latitude) &&
+                location.latitude >= -90 &&
+                location.latitude <= 90,
+        );
+        const locationCandidates = findNearbyLocationGroups(
+            validLocations,
+            stations,
+            1,
+        )
+            .map(({ location }) => location)
             .map((location) => ({
                 type: locationType,
                 label: location.label,
