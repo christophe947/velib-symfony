@@ -126,7 +126,7 @@ function buildRequests(query, type) {
     return uniqueRequests(requests);
 }
 
-async function fetchCandidates(request) {
+async function fetchCandidates(request, { throwOnHttpError = false } = {}) {
     const url = new URL(GEOCODING_URL);
 
     url.searchParams.set('q', request.query);
@@ -140,10 +140,18 @@ async function fetchCandidates(request) {
     const response = await fetch(url);
 
     if (!response.ok) {
+        if (throwOnHttpError) {
+            throw new Error(`Geocoding error: HTTP ${response.status}`);
+        }
+
         return [];
     }
 
     const data = await response.json();
+
+    if (throwOnHttpError && !Array.isArray(data.features)) {
+        throw new TypeError('Invalid geocoding response.');
+    }
 
     return (data.features ?? [])
         .filter((feature) => {
@@ -175,14 +183,18 @@ async function fetchCandidates(request) {
         });
 }
 
-export async function geocodeCandidates(query, type) {
+export async function geocodeCandidates(
+    query,
+    type,
+    { throwOnError = false } = {},
+) {
     const cleanQuery = String(query).replace(/\s+/g, ' ').trim();
 
     if (cleanQuery.length < 3) {
         return [];
     }
 
-    const cacheKey = `${type}|${normalizeText(cleanQuery)}`;
+    const cacheKey = `${type}|${normalizeText(cleanQuery)}|${throwOnError}`;
 
     if (cache.has(cacheKey)) {
         return cache.get(cacheKey);
@@ -191,17 +203,34 @@ export async function geocodeCandidates(query, type) {
     const requests = buildRequests(cleanQuery, type);
 
     const pending = Promise.all(
-        requests.map((request) =>
-            fetchCandidates(request).catch((error) => {
+        requests.map(async (request) => {
+            try {
+                return {
+                    candidates: await fetchCandidates(request, {
+                        throwOnHttpError: throwOnError,
+                    }),
+                };
+            } catch (error) {
+                if (throwOnError) {
+                    return { error };
+                }
+
                 console.warn(
                     `Échec du géocodage pour « ${request.query} ».`,
                     error,
                 );
 
-                return [];
-            }),
-        ),
-    ).then((resultSets) => {
+                return { candidates: [] };
+            }
+        }),
+    ).then((results) => {
+        const failures = results.filter((result) => result.error);
+
+        if (throwOnError && failures.length === results.length) {
+            throw new Error('Geocoding is temporarily unavailable.');
+        }
+
+        const resultSets = results.map((result) => result.candidates ?? []);
         const candidates = new Map();
 
         resultSets.flat().forEach((candidate) => {
@@ -225,6 +254,11 @@ export async function geocodeCandidates(query, type) {
     });
 
     cache.set(cacheKey, pending);
+    pending.catch(() => {
+        if (cache.get(cacheKey) === pending) {
+            cache.delete(cacheKey);
+        }
+    });
 
     return pending;
 }

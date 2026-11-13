@@ -33,11 +33,13 @@ import {
 } from './ui/stationPanelView.js';
 import { createPaneController } from './ui/paneController.js';
 import { initModeSelector } from './ui/modeSelector.js';
+import { createRoutePlannerController } from './routePlanner.js';
 
 let paneController = null;
 let element = null;
 let paneElement = null;
 let plannerElement = null;
+let routePlannerController = null;
 let isRoutePlannerOpen = false;
 
 let navigationStarted = false;
@@ -323,6 +325,7 @@ export function initStationPanel(map, styleReady) {
     // sur mobile comme sur desktop.
     renderEmptyPanel();
     plannerElement.innerHTML = renderRoutePlanner();
+    routePlannerController = createRoutePlannerController(plannerElement);
 
     element.addEventListener('click', (event) => {
         const trigger = event.target.closest('[data-open-route-planner]');
@@ -349,6 +352,7 @@ export function initStationPanel(map, styleReady) {
     });
 
     paneController = createPaneController(paneElement, {
+        shouldIgnoreSearchEvents: () => isRoutePlannerOpen,
         onUserBreakChange: (currentBreak) => {
             if (currentBreak === 'bottom') {
                 if (isRoutePlannerOpen) {
@@ -373,7 +377,11 @@ export function initStationPanel(map, styleReady) {
     );
     paneController.bindSearchEvents();
 
-    return updateStationAvailability;
+    return {
+        updateAvailability: updateStationAvailability,
+        setRouteSearchApi: (searchApi) =>
+            routePlannerController?.setSearchApi(searchApi),
+    };
 }
 
 function showRoutePlanner(movePane) {
@@ -395,6 +403,7 @@ function closeRoutePlanner(movePane) {
         return;
     }
 
+    routePlannerController?.hideSuggestions();
     plannerElement.hidden = true;
     element.hidden = false;
     isRoutePlannerOpen = false;

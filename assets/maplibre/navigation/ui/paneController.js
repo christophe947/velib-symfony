@@ -1,6 +1,9 @@
 import { CupertinoPane } from 'cupertino-pane';
 
-export function createPaneController(element, { onUserBreakChange } = {}) {
+export function createPaneController(
+    element,
+    { onUserBreakChange, shouldIgnoreSearchEvents } = {},
+) {
     const mobileQuery = window.matchMedia('(max-width: 767px)');
 
     let pane = null;
@@ -148,6 +151,7 @@ export function createPaneController(element, { onUserBreakChange } = {}) {
 
     function lowerSearchPanel() {
         if (!pane || !mobileQuery.matches) return;
+        if (shouldIgnoreSearchEvents?.()) return;
         if (panelManuallyAtBottom === true) return;
 
         //panelManuallyAtBottom = false;
@@ -156,6 +160,7 @@ export function createPaneController(element, { onUserBreakChange } = {}) {
 
     function restoreSearchPanel() {
         if (!pane || !mobileQuery.matches) return;
+        if (shouldIgnoreSearchEvents?.()) return;
         if (panelManuallyAtBottom === true) {
             return;
         }

@@ -13,6 +13,7 @@ import {
     updateSearchResultAvailability,
 } from './searchResults.js';
 import { searchNearbyStations } from './locationSearch.js';
+import { geocodeCandidates } from './geocoding.js';
 import { initGeolocation } from '../location/geolocation.js';
 
 
@@ -27,38 +28,8 @@ export async function initSearch(map) {
 
     let stations = window.stations ?? [];
 
-    let geographicData;
-
-    try {
-        geographicData = await loadGeographicData(stations);
-    } catch (error) {
-        console.error(
-            'Impossible d’initialiser la recherche géographique :',
-            error,
-        );
-        results.textContent =
-            'Les données géographiques sont indisponibles. Recharge la page pour réessayer.';
-        results.style.display = 'block';
-        return;
-    }
-
-    results.textContent = '';
-    results.style.display = 'none';
-
-    const { arrondissementsWithStationCount, communes: communesData } =
-        geographicData;
-
-    const zones = arrondissementsWithStationCount.features;
-
-    const communes = communesData.features ?? [];
-
-    input.addEventListener('focus', () => {
-        document.dispatchEvent(new Event('search:focus'));
-    });
-    input.addEventListener('blur', () => {
-        document.dispatchEvent(new Event('search:blur'));
-        console.log('blur');
-    });
+    let zones = [];
+    let communes = [];
 
     function createSearchableStations(stationList) {
         return stationList.map((station) => ({
@@ -154,6 +125,149 @@ export async function initSearch(map) {
 
         updateSearchResultAvailability(results, displayedStations, currentMode);
     }
+
+    async function searchRouteCandidates(query) {
+        const cleanQuery = String(query).replace(/\s+/g, ' ').trim();
+
+        if (cleanQuery.length < 3) {
+            return { candidates: [], error: false };
+        }
+
+        const intent = classifySearch(cleanQuery, zones, communes);
+        const matchingStations =
+            intent.type === 'area'
+                ? getStationsForZone(intent.area, stations).slice(0, 8)
+                : rankStationResults(fuse, stations, cleanQuery, 8);
+        const stationCandidates = matchingStations
+            .filter(
+                (station) =>
+                    station?.id !== undefined &&
+                    Number.isFinite(station.longitude) &&
+                    station.longitude >= -180 &&
+                    station.longitude <= 180 &&
+                    Number.isFinite(station.latitude) &&
+                    station.latitude >= -90 &&
+                    station.latitude <= 90,
+            )
+            .map((station) => ({
+                type: 'station',
+                label: station.name ?? 'Station Vélib',
+                detail: station.address ?? '',
+                latitude: station.latitude,
+                longitude: station.longitude,
+                stationId: String(station.id),
+            }));
+
+        if (intent.type === 'area') {
+            return { candidates: stationCandidates, error: false };
+        }
+
+        let locations;
+
+        try {
+            locations = await geocodeCandidates(
+                cleanQuery,
+                intent.type,
+                { throwOnError: true },
+            );
+        } catch (error) {
+            console.warn('Échec du géocodage du planificateur :', error);
+            return { candidates: stationCandidates, error: true };
+        }
+
+        const locationType = intent.type === 'address' ? 'address' : 'place';
+        const locationCandidates = locations
+            .filter(
+                (location) =>
+                    Number.isFinite(location.longitude) &&
+                    location.longitude >= -180 &&
+                    location.longitude <= 180 &&
+                    Number.isFinite(location.latitude) &&
+                    location.latitude >= -90 &&
+                    location.latitude <= 90,
+            )
+            .map((location) => ({
+                type: locationType,
+                label: location.label,
+                detail: location.city,
+                latitude: location.latitude,
+                longitude: location.longitude,
+            }));
+
+        return {
+            candidates: [...stationCandidates, ...locationCandidates],
+            error: false,
+        };
+    }
+
+    function resolveRouteCandidate(candidate) {
+        if (candidate?.type !== 'station') {
+            return candidate;
+        }
+
+        const station = stations.find(
+            (item) => String(item.id) === String(candidate.stationId),
+        );
+
+        if (
+            !station ||
+            !Number.isFinite(station.longitude) ||
+            station.longitude < -180 ||
+            station.longitude > 180 ||
+            !Number.isFinite(station.latitude) ||
+            station.latitude < -90 ||
+            station.latitude > 90
+        ) {
+            return null;
+        }
+
+        return {
+            type: 'station',
+            label: station.name ?? 'Station Vélib',
+            detail: station.address ?? '',
+            latitude: station.latitude,
+            longitude: station.longitude,
+            stationId: String(station.id),
+        };
+    }
+
+    const routeSearchApi = {
+        updateStations,
+        searchRouteCandidates,
+        resolveRouteCandidate,
+    };
+
+    let geographicData;
+
+    try {
+        geographicData = await loadGeographicData(stations);
+    } catch (error) {
+        console.error(
+            'Impossible d’initialiser la recherche géographique :',
+            error,
+        );
+        results.textContent =
+            'Les données géographiques sont indisponibles. Recharge la page pour réessayer.';
+        results.style.display = 'block';
+        return routeSearchApi;
+    }
+
+    results.textContent = '';
+    results.style.display = 'none';
+
+    const { arrondissementsWithStationCount, communes: communesData } =
+        geographicData;
+
+    zones = arrondissementsWithStationCount.features;
+    communes = communesData.features ?? [];
+
+    input.addEventListener('focus', () => {
+        document.dispatchEvent(new Event('search:focus'));
+    });
+    input.addEventListener('blur', () => {
+        document.dispatchEvent(new Event('search:blur'));
+        console.log('blur');
+    });
 
     subscribeToDisplayMode((mode) => {
         currentMode = mode;
@@ -331,5 +445,5 @@ export async function initSearch(map) {
         },
     });
 
-    return updateStations;
+    return routeSearchApi;
 }

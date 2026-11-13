@@ -18,11 +18,15 @@ styleReady.catch((error) => {
     }
 });
 
-const updatePanelAvailability = initStationPanel(map, styleReady);
+const stationPanel = initStationPanel(map, styleReady);
 
 const searchReady = initSearch(map).catch((error) => {
     console.error('Impossible d’initialiser la recherche des stations :', error);
     return null;
+});
+
+void searchReady.then((searchApi) => {
+    stationPanel?.setRouteSearchApi(searchApi);
 });
 
 startStationRefresh({
@@ -30,10 +34,10 @@ startStationRefresh({
     onSnapshot: (snapshot, { dataChanged }) => {
         if (dataChanged) {
             updateStationData(snapshot.stations);
-            updatePanelAvailability?.(snapshot.stations, snapshot.stale);
+            stationPanel?.updateAvailability(snapshot.stations, snapshot.stale);
 
-            void searchReady.then((updateSearchStations) => {
-                updateSearchStations?.(snapshot.stations);
+            void searchReady.then((searchApi) => {
+                searchApi?.updateStations(snapshot.stations);
             });
         }
     },

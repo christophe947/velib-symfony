@@ -74,25 +74,53 @@ export function renderRoutePlanner() {
             </header>
 
             <div class="route-planner-fields">
-                <label class="route-planner-field">
-                    <span>Départ</span>
-                    <input
-                        type="text"
-                        name="route-origin"
-                        placeholder="Ma position actuelle"
-                        autocomplete="off"
-                    >
-                </label>
+                <div class="route-planner-field-group">
+                    <label class="route-planner-field">
+                        <span>Départ</span>
+                        <input
+                            type="text"
+                            id="route-origin"
+                            data-route-field="origin"
+                            name="route-origin"
+                            placeholder="Ma position actuelle"
+                            autocomplete="off"
+                            role="combobox"
+                            aria-autocomplete="list"
+                            aria-expanded="false"
+                            aria-controls="route-origin-suggestions"
+                        >
+                    </label>
+                    <div
+                        id="route-origin-suggestions"
+                        class="route-planner-suggestions"
+                        data-route-suggestions="origin"
+                        hidden
+                    ></div>
+                </div>
 
-                <label class="route-planner-field">
-                    <span>Arrivée</span>
-                    <input
-                        type="text"
-                        name="route-destination"
-                        placeholder="Adresse, lieu ou station"
-                        autocomplete="off"
-                    >
-                </label>
+                <div class="route-planner-field-group">
+                    <label class="route-planner-field">
+                        <span>Arrivée</span>
+                        <input
+                            type="text"
+                            id="route-destination"
+                            data-route-field="destination"
+                            name="route-destination"
+                            placeholder="Adresse, lieu ou station"
+                            autocomplete="off"
+                            role="combobox"
+                            aria-autocomplete="list"
+                            aria-expanded="false"
+                            aria-controls="route-destination-suggestions"
+                        >
+                    </label>
+                    <div
+                        id="route-destination-suggestions"
+                        class="route-planner-suggestions"
+                        data-route-suggestions="destination"
+                        hidden
+                    ></div>
+                </div>
             </div>
 
             <fieldset class="route-planner-modes">
