@@ -1,6 +1,6 @@
 import { CupertinoPane } from 'cupertino-pane';
 
-export function createPaneController(element) {
+export function createPaneController(element, { onUserBreakChange } = {}) {
     const mobileQuery = window.matchMedia('(max-width: 767px)');
 
     let pane = null;
@@ -35,7 +35,7 @@ export function createPaneController(element) {
 
                 bottom: {
                     enabled: true,
-                    height: 70,
+                    height: 100,
                 },
             },
         });
@@ -50,7 +50,9 @@ export function createPaneController(element) {
         pane.on('onDragEnd', () => {
             paneDragActive = false;
             paneInteractionId++;
-            panelManuallyAtBottom = pane.currentBreak() === 'bottom';
+            const currentBreak = pane.currentBreak();
+            panelManuallyAtBottom = currentBreak === 'bottom';
+            onUserBreakChange?.(currentBreak);
         });
     }
 
@@ -65,6 +67,25 @@ export function createPaneController(element) {
         }
 
         return pane.moveToBreak(name);
+    }
+
+    function openPlanner() {
+        if (!pane || !mobileQuery.matches) {
+            return;
+        }
+
+        panelManuallyAtBottom = false;
+        return moveToBreak('top');
+    }
+
+    function closePlanner(returnToBreak = 'bottom') {
+        if (!pane || !mobileQuery.matches) {
+            return;
+        }
+
+        clearCollapse();
+        panelManuallyAtBottom = returnToBreak === 'bottom';
+        return moveToBreak(returnToBreak);
     }
 
     async function updateMiddleHeight(height, movePane = true) {
@@ -139,6 +160,9 @@ export function createPaneController(element) {
             return;
         }
         const searchResults = document.getElementById('map-search-results');
+
+        const planner = document.getElementById('route-planner');
+        const isPlanning = planner?.hidden === false;
         if (
             searchResults &&
             getComputedStyle(searchResults).display !== 'none' &&
@@ -147,7 +171,7 @@ export function createPaneController(element) {
             return;
         }
         if (panelManuallyAtBottom === false) {
-            moveToBreak('middle');
+            moveToBreak(isPlanning ? 'top' : 'middle');
         }
     }
 
@@ -166,6 +190,8 @@ export function createPaneController(element) {
     return {
         isAvailable: () => Boolean(pane && mobileQuery.matches),
         present: (options) => pane?.present(options),
+        openPlanner,
+        closePlanner,
         updateMiddleHeight,
         updateBottomHeight,
         clearCollapse,

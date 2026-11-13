@@ -28,6 +28,7 @@ import { stopCompass } from './compass.js';
 import { showConfirmationDialog } from './ui/confirmationDialog.js';
 import {
     renderEmptyPanel as renderEmptyPanelHtml,
+    renderRoutePlanner,
     renderStationPanel,
 } from './ui/stationPanelView.js';
 import { createPaneController } from './ui/paneController.js';
@@ -35,6 +36,9 @@ import { initModeSelector } from './ui/modeSelector.js';
 
 let paneController = null;
 let element = null;
+let paneElement = null;
+let plannerElement = null;
+let isRoutePlannerOpen = false;
 
 let navigationStarted = false;
 let navigationSessionId = 0;
@@ -301,8 +305,10 @@ function renderActiveNavigationControls(map, station, styleReady) {
 
 export function initStationPanel(map, styleReady) {
     element = document.querySelector('#station-content');
+    paneElement = document.querySelector('#maplibre-station-panel');
+    plannerElement = document.querySelector('#route-planner');
 
-    if (!element || paneController) {
+    if (!element || !paneElement || !plannerElement || paneController) {
         return;
     }
     navigationEngine = createNavigationEngine({
@@ -316,12 +322,51 @@ export function initStationPanel(map, styleReady) {
     // Le panneau vide est présent dès le lancement
     // sur mobile comme sur desktop.
     renderEmptyPanel();
+    plannerElement.innerHTML = renderRoutePlanner();
 
-    paneController = createPaneController(element);
+    element.addEventListener('click', (event) => {
+        const trigger = event.target.closest('[data-open-route-planner]');
+
+        if (!trigger) {
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        showRoutePlanner(true);
+    });
+
+    plannerElement.addEventListener('click', (event) => {
+        const closeButton = event.target.closest('[data-close-route-planner]');
+
+        if (!closeButton) {
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        closeRoutePlanner(true);
+    });
+
+    paneController = createPaneController(paneElement, {
+        onUserBreakChange: (currentBreak) => {
+            if (currentBreak === 'bottom') {
+                if (isRoutePlannerOpen) {
+                    closeRoutePlanner(false);
+                }
+
+                return;
+            }
+
+            if (!displayedStation && !isRoutePlannerOpen) {
+                showRoutePlanner(true);
+            }
+        },
+    });
 
     if (!paneController.isAvailable()) {
         // Desktop : panneau classique
-        element.classList.add('is-open');
+        paneElement.classList.add('is-open');
     }
     subscribeToSelectedStation((station) =>
         updateStationPanel(station, map, styleReady),
@@ -329,6 +374,34 @@ export function initStationPanel(map, styleReady) {
     paneController.bindSearchEvents();
 
     return updateStationAvailability;
+}
+
+function showRoutePlanner(movePane) {
+    if (!element || !plannerElement || isRoutePlannerOpen) {
+        return;
+    }
+
+    element.hidden = true;
+    plannerElement.hidden = false;
+    isRoutePlannerOpen = true;
+
+    if (movePane) {
+        paneController?.openPlanner();
+    }
+}
+
+function closeRoutePlanner(movePane) {
+    if (!element || !plannerElement || !isRoutePlannerOpen) {
+        return;
+    }
+
+    plannerElement.hidden = true;
+    element.hidden = false;
+    isRoutePlannerOpen = false;
+
+    if (movePane) {
+        paneController?.closePlanner(displayedStation ? 'middle' : 'bottom');
+    }
 }
 
 function renderEmptyPanel() {
@@ -656,6 +729,12 @@ async function updateStationPanel(
 ) {
     if (!station || !element) {
         return;
+    }
+
+    // Une sélection explicite revient au panneau station sans détruire les
+    // valeurs du planificateur, qui reste présent mais masqué dans le DOM.
+    if (isRoutePlannerOpen) {
+        closeRoutePlanner(false);
     }
 
     clearNavigationPaneCollapseTimeout();
@@ -1105,5 +1184,5 @@ async function updateStationPanel(
     }
 
     // Desktop
-    element.classList.add('is-open');
+    paneElement.classList.add('is-open');
 }

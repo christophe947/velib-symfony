@@ -38,7 +38,86 @@ export function renderEmptyPanel(mode) {
 
             ${renderModeSelector(mode)}
 
+            ${renderRoutePlannerTrigger()}
+
         </div>
+    `;
+}
+
+function renderRoutePlannerTrigger() {
+    return `
+        <button
+            type="button"
+            class="route-planner-trigger"
+            data-open-route-planner
+            aria-label="Planifier un itinéraire"
+        >
+            <span aria-hidden="true">⌃</span>
+            <span>Planifier un itinéraire</span>
+        </button>
+    `;
+}
+
+export function renderRoutePlanner() {
+    return `
+        <section class="route-planner-panel" aria-labelledby="route-planner-title">
+            <header class="route-planner-header">
+                <h2 id="route-planner-title">Planifier un itinéraire</h2>
+                <button
+                    type="button"
+                    class="route-planner-close"
+                    data-close-route-planner
+                    aria-label="Fermer le planificateur"
+                >
+                    ×
+                </button>
+            </header>
+
+            <div class="route-planner-fields">
+                <label class="route-planner-field">
+                    <span>Départ</span>
+                    <input
+                        type="text"
+                        name="route-origin"
+                        placeholder="Ma position actuelle"
+                        autocomplete="off"
+                    >
+                </label>
+
+                <label class="route-planner-field">
+                    <span>Arrivée</span>
+                    <input
+                        type="text"
+                        name="route-destination"
+                        placeholder="Adresse, lieu ou station"
+                        autocomplete="off"
+                    >
+                </label>
+            </div>
+
+            <fieldset class="route-planner-modes">
+                <legend>Type de trajet</legend>
+
+                <label>
+                    <input type="radio" name="route-type" value="walking" checked>
+                    <span>À pied</span>
+                </label>
+
+                <label>
+                    <input type="radio" name="route-type" value="cycling">
+                    <span>Je suis déjà en Vélib</span>
+                </label>
+
+                <label>
+                    <input type="radio" name="route-type" value="velib-complete">
+                    <span>Trajet complet Vélib</span>
+                </label>
+            </fieldset>
+
+            <button type="button" class="route-planner-calculate" disabled>
+                Calculer l’itinéraire
+            </button>
+        </section>
     `;
 }
 
@@ -143,6 +222,8 @@ export function renderStationPanel({ station, mode, navigationState }) {
             ${navigationControls}
 
             ${renderModeSelector(mode)}
+
+            ${renderRoutePlannerTrigger()}
 
         </div>
     `;
