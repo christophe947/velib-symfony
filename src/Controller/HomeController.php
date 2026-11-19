@@ -12,8 +12,10 @@ final class HomeController extends AbstractController
     #[Route('/', name: 'app_home')]
     public function index(VelibApiService $velibApiService): Response
     {
+        $stationSnapshot = $velibApiService->getStationsWithMetadata();
+
         return $this->render('map_libre/index.html.twig', [
-            'stations' => $velibApiService->getStations(),
+            'stationSnapshot' => $stationSnapshot,
         ]);
     }
 }

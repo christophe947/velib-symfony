@@ -95,8 +95,8 @@ function getStationWithLatestAvailability(station) {
     };
 }
 
-function updateStationAvailability(stations, stale = false) {
-    if (!Array.isArray(stations) || stale) {
+function updateStationAvailability(stations) {
+    if (!Array.isArray(stations)) {
         return;
     }
 

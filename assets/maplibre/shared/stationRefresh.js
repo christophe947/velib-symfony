@@ -54,6 +54,7 @@ export function startStationRefresh({
     onSnapshot,
     onError = (error) => console.warn('Vélib station refresh failed:', error),
     initialStations = [],
+    initialSnapshot = null,
     endpoint = '/api/velib/stations',
     fetchImpl = globalThis.fetch,
     documentRef = globalThis.document,
@@ -76,10 +77,17 @@ export function startStationRefresh({
     let nextAttemptAt = Date.now() + DEFAULT_INTERVAL_MS;
     let failureCount = 0;
     let hasReportedFailure = false;
-    let latestFetchedAt = null;
-    let latestFetchedAtMs = null;
-    let latestStationsFingerprint = fingerprintStations(initialStations);
-    let latestStale = null;
+    const seededSnapshot = initialSnapshot
+        ? validateSnapshot(initialSnapshot)
+        : null;
+    let latestFetchedAt = seededSnapshot?.fetchedAt ?? null;
+    let latestFetchedAtMs = latestFetchedAt
+        ? Date.parse(latestFetchedAt)
+        : null;
+    let latestStationsFingerprint = fingerprintStations(
+        seededSnapshot?.stations ?? initialStations,
+    );
+    let latestStale = seededSnapshot?.stale ?? null;
 
     const clearScheduledAttempt = () => {
         if (timerId !== null) {

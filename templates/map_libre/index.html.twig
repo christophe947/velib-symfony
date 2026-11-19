@@ -48,6 +48,8 @@
 
         </div>
 
+        <div id="station-data-status" class="station-data-status" role="status" aria-live="polite" hidden></div>
+
         <div id="map-search-results"></div>
 
         <div id="map-style-fallback" class="map-style-fallback" role="status" hidden>
@@ -75,7 +77,8 @@
 
 
     <script>
-        window.stations = {{ stations|json_encode|raw }};
+        window.stationSnapshot = {{ stationSnapshot|json_encode|raw }};
+        window.stations = window.stationSnapshot.stations;
     </script>
 
 {% endblock %}
