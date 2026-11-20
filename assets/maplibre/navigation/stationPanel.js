@@ -166,6 +166,31 @@ function isFreshReliableGpsPosition(position) {
     );
 }
 
+function rememberUserGpsPosition(map, position) {
+    if (!isFreshGpsPosition(position)) {
+        return;
+    }
+
+    if (
+        !Number.isFinite(lastKnownUserPosition?.timestamp) ||
+        position.timestamp > lastKnownUserPosition.timestamp
+    ) {
+        lastKnownUserPosition = position;
+    }
+
+    if (
+        isFreshReliableGpsPosition(position) &&
+        (!Number.isFinite(lastReliableUserPosition?.timestamp) ||
+            position.timestamp > lastReliableUserPosition.timestamp)
+    ) {
+        lastReliableUserPosition = position;
+    }
+
+    if (isFreshGpsPosition(lastKnownUserPosition)) {
+        showUserMarker(map, lastKnownUserPosition);
+    }
+}
+
 function isValidRouteCoordinates(coordinates) {
     return (
         Array.isArray(coordinates) &&
@@ -252,10 +277,14 @@ function setPlannerPreviewMessage(message, isError = false) {
     status.classList.toggle('is-error', isError);
 }
 
-function handleRoutePlannerStateChange() {
+function handleRoutePlannerStateChange(selections, map) {
     routePreviewRequestId++;
     routePreviewAbortController?.abort();
     routePreviewAbortController = null;
+
+    if (selections?.origin?.type === 'current-location') {
+        rememberUserGpsPosition(map, selections.origin);
+    }
 
     const message = plannerElement?.querySelector(
         '[data-route-calculation-message]',
@@ -644,7 +673,8 @@ export function initStationPanel(map, styleReady) {
     renderEmptyPanel();
     plannerElement.innerHTML = renderRoutePlanner();
     routePlannerController = createRoutePlannerController(plannerElement, {
-        onChange: handleRoutePlannerStateChange,
+        onChange: (selections) =>
+            handleRoutePlannerStateChange(selections, map),
     });
 
     element.addEventListener('click', (event) => {
@@ -978,6 +1008,7 @@ async function calculatePlannerRoute(map, styleReady) {
                 accuracy: refreshedPosition.accuracy,
             };
             routePlannerController?.updateCurrentLocation(refreshedPosition);
+            rememberUserGpsPosition(map, refreshedPosition);
         }
 
         setPlannerCalculationMessage('Calcul de l’itinéraire en cours…');
@@ -1881,14 +1912,8 @@ async function updateStationPanel(
                 return;
             }
 
-            lastKnownUserPosition = userPosition;
-
-            if (isFreshReliableGpsPosition(userPosition)) {
-                lastReliableUserPosition = userPosition;
-            }
-
             routeStep = 'map';
-            showUserMarker(map, userPosition);
+            rememberUserGpsPosition(map, userPosition);
 
             routeStep = 'routing';
             const route = await getRoute(
