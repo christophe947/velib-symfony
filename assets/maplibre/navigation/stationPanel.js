@@ -283,6 +283,10 @@ function handleRoutePlannerStateChange(selections, map) {
         rememberUserGpsPosition(map, selections.origin);
     }
 
+    if (routePreviewData && !navigationStarted) {
+        isPlannerRouteOutdated = true;
+    }
+
     const message = plannerElement?.querySelector(
         '[data-route-calculation-message]',
     );
@@ -811,8 +815,6 @@ function showRoutePlanner(movePane, map) {
         isRoutePreviewOpen = false;
         routePreviewElement.hidden = true;
         plannerElement.hidden = false;
-        clearRoutePreview(map);
-        routePreviewData = null;
 
         if (movePane) {
             paneController?.openPlanner();
@@ -824,7 +826,7 @@ function showRoutePlanner(movePane, map) {
     element.hidden = true;
     isRoutePlannerOpen = true;
 
-    if (routePreviewData) {
+    if (routePreviewData && !isPlannerRouteOutdated) {
         plannerElement.hidden = true;
         routePreviewElement.hidden = false;
         isRoutePreviewOpen = true;
@@ -1088,8 +1090,6 @@ async function calculatePlannerRoute(map, styleReady) {
             return;
         }
 
-        clearRoutePreview(map);
-        routePreviewData = null;
         isRoutePreviewOpen = false;
         routePreviewElement.hidden = true;
         plannerElement.hidden = false;
@@ -1125,6 +1125,7 @@ async function startPlannerNavigation(map, styleReady) {
         navigationStarted ||
         !isRoutePlannerOpen ||
         !isRoutePreviewOpen ||
+        isPlannerRouteOutdated ||
         !isValidPlannerRoute()
     ) {
         return;
@@ -1192,7 +1193,9 @@ async function startPlannerNavigation(map, styleReady) {
             navigationStarted &&
             navigationSessionId === sessionId
         ) {
-            stopNavigation(map, null, styleReady);
+            stopNavigation(map, null, styleReady, {
+                preservePlannerPreview: true,
+            });
         }
 
         if (
@@ -1297,10 +1300,18 @@ function showStopNavigationConfirmation(
 /**
  * Arrête complètement la navigation en cours.
  */
-function stopNavigation(map, station, styleReady) {
+function stopNavigation(
+    map,
+    station,
+    styleReady,
+    { preservePlannerPreview = false } = {},
+) {
     const wasPlannerNavigation = isPlannerNavigationActive();
     const shouldRestorePlannerPreview =
-        wasPlannerNavigation && !station && !isPlannerRouteOutdated;
+        preservePlannerPreview &&
+        wasPlannerNavigation &&
+        !station &&
+        !isPlannerRouteOutdated;
     const plannerRouteNeedsRecalculation =
         wasPlannerNavigation && isPlannerRouteOutdated;
 
@@ -1316,7 +1327,7 @@ function stopNavigation(map, station, styleReady) {
     activeNavigationStation = null;
     activeNavigationRouteSummary = null;
     routeSummaryData = null;
-    if (plannerRouteNeedsRecalculation) {
+    if (wasPlannerNavigation && !shouldRestorePlannerPreview) {
         routePreviewData = null;
     }
     isPlannerRouteOutdated = false;
@@ -1336,6 +1347,10 @@ function stopNavigation(map, station, styleReady) {
 
     // Nettoie le tracé et le marqueur de destination.
     const wasFollowingUser = clearNavigationMap(map);
+
+    if (wasPlannerNavigation && !shouldRestorePlannerPreview) {
+        clearRoutePreview(map);
+    }
 
     // Le marqueur revient à la dernière coordonnée GPS brute connue.
     if (isFreshGpsPosition(lastKnownUserPosition)) {
@@ -1418,6 +1433,12 @@ function stopNavigation(map, station, styleReady) {
             'L’itinéraire a été recalculé pendant la navigation. Calcule un nouvel aperçu avant de redémarrer.',
             true,
         );
+    } else if (wasPlannerNavigation) {
+        isRoutePlannerOpen = true;
+        isRoutePreviewOpen = false;
+        element.hidden = true;
+        routePreviewElement.hidden = true;
+        plannerElement.hidden = false;
     }
 
     console.log('🛑 Navigation arrêtée.');
