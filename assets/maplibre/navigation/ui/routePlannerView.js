@@ -22,12 +22,12 @@ export function renderRoutePreview({
 }) {
     const actions = navigationActive
         ? `
-            <button type="button" class="route-preview-start" disabled>
+            <button type="button" class="route-preview-start station-panel-join" disabled>
                 Navigation en cours
             </button>
             <button
                 type="button"
-                class="route-preview-stop"
+                class="route-preview-stop station-panel-stop"
                 data-route-stop-navigation
                 aria-label="Arrêter la navigation"
                 title="Arrêter la navigation"
@@ -43,6 +43,9 @@ export function renderRoutePreview({
                 Modifier
             </button>
         `;
+    const actionsClass = navigationActive
+        ? 'route-preview-actions station-panel-navigation-controls'
+        : 'route-preview-actions';
     const note = message ||
         'Pour démarrer, ta position doit se trouver près du départ choisi.';
 
@@ -57,7 +60,7 @@ export function renderRoutePreview({
             <p class="route-preview-start-note ${isError ? 'is-error' : ''}" data-route-preview-message role="status" aria-live="polite" ${navigationActive ? 'hidden' : ''}>
                 ${escapeHtml(note)}
             </p>
-            <div class="route-preview-actions">
+            <div class="${actionsClass}">
                 ${actions}
             </div>
         </section>

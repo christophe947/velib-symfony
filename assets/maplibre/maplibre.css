@@ -728,13 +728,13 @@
     color: #b02a37;
 }
 
-.route-preview-actions {
+.route-preview-actions:not(.station-panel-navigation-controls) {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
 }
 
-.route-preview-actions button {
+.route-preview-actions:not(.station-panel-navigation-controls) button {
     min-height: 46px;
     border: 0;
     border-radius: 12px;
