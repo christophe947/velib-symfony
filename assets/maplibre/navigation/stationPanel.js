@@ -5,12 +5,11 @@ import {
     showUserMarker,
     startWatchingPosition,
 } from '../location/geolocation.js';
-import { getWalkingRoute, decodePolyline } from './routing.js';
+import { getRoute } from './routing.js';
 import {
     drawWalkingRoute,
     drawRoutePreview,
     clearRoutePreview,
-    fitWalkingRoute,
     showDestinationMarker,
     updateWalkingRoute,
     setUserFollowing,
@@ -19,6 +18,7 @@ import {
     recenterOnUser,
     clearNavigationMap,
     ensure2DView,
+    presentWalkingRoute,
     startBackgroundUserTracking,
     stopBackgroundUserTracking,
     activateCompass,
@@ -939,10 +939,6 @@ async function calculatePlannerRoute(map, styleReady) {
     activeRouteCalculationRequestId = requestId;
     routePreviewAbortController = new AbortController();
     let routeOrigin = origin;
-    const end = {
-        latitude: destination.latitude,
-        longitude: destination.longitude,
-    };
 
     routePlannerController?.setCalculating(true);
     setPlannerCalculationMessage('Calcul de l’itinéraire en cours…');
@@ -985,13 +981,14 @@ async function calculatePlannerRoute(map, styleReady) {
         }
 
         setPlannerCalculationMessage('Calcul de l’itinéraire en cours…');
-        const start = {
-            latitude: routeOrigin.latitude,
-            longitude: routeOrigin.longitude,
-        };
-        const trip = await getWalkingRoute(start, end, {
-            signal: routePreviewAbortController.signal,
-        });
+        const routeSegment = await getRoute(
+            routeOrigin,
+            destination,
+            'pedestrian',
+            {
+                signal: routePreviewAbortController.signal,
+            },
+        );
 
         if (
             requestId !== routePreviewRequestId ||
@@ -1001,35 +998,19 @@ async function calculatePlannerRoute(map, styleReady) {
             return;
         }
 
-        const shape = trip.legs?.[0]?.shape;
-        const coordinates =
-            typeof shape === 'string' ? decodePolyline(shape) : [];
-        const routeDistance = trip.summary?.length;
-        const routeDuration = trip.summary?.time;
-
-        if (
-            !isValidRouteCoordinates(coordinates) ||
-            !Number.isFinite(routeDistance) ||
-            routeDistance < 0 ||
-            !Number.isFinite(routeDuration) ||
-            routeDuration < 0
-        ) {
-            throw new Error('Valhalla returned an invalid route.');
-        }
-
         const result = {
             segments: [
                 {
                     mode: 'walking',
-                    origin: { ...routeOrigin },
-                    destination: { ...destination },
-                    geometry: coordinates,
-                    distance: routeDistance,
-                    duration: routeDuration,
+                    origin: routeSegment.origin,
+                    destination: routeSegment.destination,
+                    geometry: routeSegment.geometry,
+                    distance: routeSegment.distance,
+                    duration: routeSegment.duration,
                 },
             ],
-            distance: routeDistance,
-            duration: routeDuration,
+            distance: routeSegment.distance,
+            duration: routeSegment.duration,
         };
 
         await styleReady;
@@ -1042,10 +1023,16 @@ async function calculatePlannerRoute(map, styleReady) {
             return;
         }
 
-        drawRoutePreview(map, coordinates);
+        const wasPresented = await presentWalkingRoute(map, routeSegment, {
+            layer: 'preview',
+            isCurrent: () =>
+                requestId === routePreviewRequestId &&
+                isRoutePlannerOpen &&
+                !navigationStarted,
+        });
 
-        if (!navigationStarted) {
-            fitWalkingRoute(map, coordinates);
+        if (!wasPresented) {
+            return;
         }
 
         routePreviewData = result;
@@ -1609,23 +1596,10 @@ async function startDestinationChange(map, station, styleReady) {
 
         request.engineRequestId = engineRequestId;
 
-        const route = await getWalkingRoute(userPosition, {
-            latitude: station.latitude,
-            longitude: station.longitude,
-        });
+        const segment = await getRoute(userPosition, station, 'pedestrian');
 
         if (!isCurrentDestinationChange(request)) {
             return;
-        }
-
-        const coordinates = decodePolyline(route.legs[0].shape);
-
-        if (
-            !isValidRouteCoordinates(coordinates) ||
-            !Number.isFinite(route.summary?.length) ||
-            !Number.isFinite(route.summary?.time)
-        ) {
-            throw new Error('Valhalla returned an invalid route.');
         }
 
         await styleReady;
@@ -1640,7 +1614,7 @@ async function startDestinationChange(map, station, styleReady) {
         if (
             !navigationEngine.commitRouteReplacement(
                 request.engineRequestId,
-                coordinates,
+                segment.geometry,
                 {
                     latitude: station.latitude,
                     longitude: station.longitude,
@@ -1650,8 +1624,8 @@ async function startDestinationChange(map, station, styleReady) {
             throw new Error('The current route could not be replaced on the map.');
         }
 
-        const distance = formatDistance(route.summary.length);
-        const duration = formatDuration(route.summary.time);
+        const distance = formatDistance(segment.distance);
+        const duration = formatDuration(segment.duration);
 
         activeNavigationStation = station;
         if (replacingPlannerRoute) {
@@ -1917,28 +1891,19 @@ async function updateStationPanel(
             showUserMarker(map, userPosition);
 
             routeStep = 'routing';
-            const route = await getWalkingRoute(userPosition, {
-                latitude: station.latitude,
-                longitude: station.longitude,
-            });
+            const route = await getRoute(
+                userPosition,
+                station,
+                'pedestrian',
+            );
 
             if (previewRenderId !== stationPanelRenderId || navigationStarted) {
                 return;
             }
 
-            const coordinates = decodePolyline(route.legs[0].shape);
-
-            if (
-                !isValidRouteCoordinates(coordinates) ||
-                !Number.isFinite(route.summary?.length) ||
-                !Number.isFinite(route.summary?.time)
-            ) {
-                throw new Error('Valhalla returned an invalid route.');
-            }
-
-            const distance = formatDistance(route.summary.length);
-
-            const duration = formatDuration(route.summary.time);
+            const coordinates = route.geometry;
+            const distance = formatDistance(route.distance);
+            const duration = formatDuration(route.duration);
 
             routeStep = 'map';
             await styleReady;
@@ -1947,9 +1912,16 @@ async function updateStationPanel(
                 return;
             }
 
-            drawWalkingRoute(map, coordinates);
+            const wasPresented = await presentWalkingRoute(map, route, {
+                layer: 'walking',
+                isCurrent: () =>
+                    previewRenderId === stationPanelRenderId &&
+                    !navigationStarted,
+            });
 
-            fitWalkingRoute(map, coordinates);
+            if (!wasPresented) {
+                return;
+            }
 
             showDestinationMarker(map, {
                 latitude: station.latitude,

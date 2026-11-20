@@ -1,4 +1,4 @@
-import { getWalkingRoute, decodePolyline } from './routing.js';
+import { getRoute } from './routing.js';
 import { formatDistance, formatDuration } from './routeFormatting.js';
 import {
     calculateDistanceBetweenCoordinates,
@@ -148,38 +148,35 @@ export function createNavigationEngine(effects) {
         console.log('🔄 Recalcul de l’itinéraire en cours…');
 
         try {
-            // Demande un nouvel itinéraire à Valhalla.
-            const route = await getWalkingRoute(position, navigationDestination);
-
-            // Décode la géométrie du nouvel itinéraire.
-            const coordinates = decodePolyline(route.legs[0].shape);
+            // Demande un nouvel itinéraire piéton à Valhalla.
+            const segment = await getRoute(
+                position,
+                navigationDestination,
+                'pedestrian',
+            );
 
             if (sessionId !== navigationSessionId) {
                 return;
             }
 
-            if (coordinates.length < 2) {
-                throw new Error('Le nouvel itinéraire est invalide.');
-            }
-
             // Remplace l'itinéraire actuel.
             // La progression repart du début du nouvel itinéraire.
-            setRouteProgressGeometry(coordinates);
+            setRouteProgressGeometry(segment.geometry);
 
             // Réinitialise la détection de déviation.
             resetOffRouteConfirmations();
 
             // Met à jour la ligne sur la carte.
-            updateWalkingRoute(coordinates);
+            updateWalkingRoute(segment.geometry);
             // Actualise la distance et la durée dans le panneau.
             updateRouteSummary(
-                formatDistance(route.summary.length),
-                formatDuration(route.summary.time),
+                formatDistance(segment.distance),
+                formatDuration(segment.duration),
             );
 
             console.log(
                 '✅ Nouvel itinéraire calculé !',
-                `Distance : ${route.summary.length.toFixed(2)} km`,
+                `Distance : ${segment.distance.toFixed(2)} km`,
             );
         } catch (error) {
             console.error('❌ Échec du recalcul de l’itinéraire :', error);

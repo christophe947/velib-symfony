@@ -15,6 +15,7 @@ export function createCameraController(
     let cameraResumeTimeout = null;
     let lastStableHeading = null;
     let isChangingView = false;
+    let viewTransitionPromise = null;
     let pendingUserPosition = null;
     let lastGpsPosition = null;
     let navigationCompassHeading = null;
@@ -39,6 +40,15 @@ export function createCameraController(
     const MAX_NAVIGATION_POSITION_DURATION_MS = 350;
     const MAX_NAVIGATION_POSITION_AGE_MS = 10_000;
     const THREE_D_PITCH_THRESHOLD = 30;
+
+    function syncViewModeWithCamera() {
+        const pitchIndicates3D = map.getPitch() >= THREE_D_PITCH_THRESHOLD;
+
+        if (pitchIndicates3D !== is3D) {
+            is3D = pitchIndicates3D;
+            onViewModeChange(is3D);
+        }
+    }
 
     function smoothHeading(currentHeading, targetHeading) {
         // Normalise les angles entre 0 et 360 degrés.
@@ -77,22 +87,28 @@ export function createCameraController(
 
         onViewModeChange(is3D);
 
-        try {
-            await new Promise((resolve) => {
-                // On écoute la fin du mouvement avant de lancer l'animation.
-                map.once('moveend', resolve);
+        const transitionPromise = new Promise((resolve) => {
+            map.once('moveend', resolve);
 
-                map.easeTo({
-                    pitch: targetPitch,
-                    bearing: is3D ? map.getBearing() : 0,
-                    duration: 700,
-                    essential: true,
-                });
+            map.easeTo({
+                pitch: targetPitch,
+                bearing: is3D ? map.getBearing() : 0,
+                duration: 700,
+                essential: true,
             });
+        });
+        viewTransitionPromise = transitionPromise;
+
+        try {
+            await transitionPromise;
         } finally {
             // La transition est terminée : on autorise de nouveau
             // les mises à jour de la caméra par la boussole.
             isChangingView = false;
+            if (viewTransitionPromise === transitionPromise) {
+                viewTransitionPromise = null;
+            }
+            syncViewModeWithCamera();
             isCompassCameraPaused = false;
 
             // On récupère la dernière position reçue pendant la transition.
@@ -114,12 +130,48 @@ export function createCameraController(
         }
     }
 
-    async function ensure2DView() {
-        if (!is3D) {
-            return;
-        }
+    async function waitForViewTransition() {
+        while (isChangingView) {
+            const transitionPromise = viewTransitionPromise;
 
-        await toggleView();
+            if (transitionPromise) {
+                await transitionPromise;
+            } else if (map.isMoving()) {
+                await new Promise((resolve) => {
+                    map.once('moveend', resolve);
+                });
+            } else {
+                // Laisse la transition en cours publier sa promesse avant
+                // de réessayer, sans attendre l'activation de la boussole.
+                await Promise.resolve();
+            }
+        }
+    }
+
+    async function ensure2DView() {
+        while (true) {
+            if (isChangingView) {
+                await waitForViewTransition();
+                syncViewModeWithCamera();
+                continue;
+            }
+
+            syncViewModeWithCamera();
+
+            if (!is3D) {
+                return;
+            }
+
+            const transitionTask = toggleView();
+            const transitionPromise = viewTransitionPromise;
+
+            if (transitionPromise) {
+                transitionTask.catch((error) => {
+                    console.error('La transition de vue a échoué :', error);
+                });
+                await transitionPromise;
+            }
+        }
     }
 
     function setFollowing(enabled) {
@@ -738,12 +790,7 @@ export function createCameraController(
             return;
         }
 
-        const pitchIndicates3D = map.getPitch() >= THREE_D_PITCH_THRESHOLD;
-
-        if (pitchIndicates3D !== is3D) {
-            is3D = pitchIndicates3D;
-            onViewModeChange(is3D);
-        }
+        syncViewModeWithCamera();
     });
 
     return {

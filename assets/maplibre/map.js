@@ -106,6 +106,41 @@ export async function ensure2DView() {
     await getCameraController()?.ensure2DView();
 }
 
+export async function presentWalkingRoute(
+    map,
+    segment,
+    { layer, isCurrent },
+) {
+    const drawRoute =
+        layer === 'preview'
+            ? drawRoutePreview
+            : layer === 'walking'
+              ? drawWalkingRoute
+              : null;
+
+    if (
+        !map ||
+        !Array.isArray(segment?.geometry) ||
+        segment.geometry.length < 2 ||
+        !drawRoute ||
+        typeof isCurrent !== 'function' ||
+        !isCurrent()
+    ) {
+        return false;
+    }
+
+    await ensure2DView();
+
+    if (!isCurrent()) {
+        return false;
+    }
+
+    fitWalkingRoute(map, segment.geometry);
+    drawRoute(map, segment.geometry);
+
+    return true;
+}
+
 class RecenterControl {
     onAdd(map) {
         this.map = map;
