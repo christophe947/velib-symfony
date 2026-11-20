@@ -38,9 +38,6 @@ import { createPaneController } from './ui/paneController.js';
 import { initModeSelector } from './ui/modeSelector.js';
 import { createRoutePlannerController } from './routePlanner.js';
 import { renderRoutePreview } from './ui/routePlannerView.js';
-import { calculateDistanceBetweenCoordinates } from '../geography/geometry.js';
-
-const PLANNER_START_DISTANCE_LIMIT_METERS = 50;
 const DESTINATION_CHANGE_GPS_WAIT_MS = 10_000;
 
 let paneController = null;
@@ -1135,7 +1132,6 @@ async function startPlannerNavigation(map, styleReady) {
 
     const route = routePreviewData;
     const requestId = ++routePreviewRequestId;
-    const segment = route.segments[0];
     const startButton = routePreviewElement.querySelector(
         '.route-preview-start',
     );
@@ -1168,71 +1164,8 @@ async function startPlannerNavigation(map, styleReady) {
         !navigationStarted;
 
     try {
-        let userPosition = await requestUserPosition({ maximumAge: 0 });
-
-        if (!isCurrentPlannerStart()) {
-            return;
-        }
-
         // La demande de permission boussole a été déclenchée dans le clic.
-        // Si elle a pris du temps, on renouvelle le fix avant de démarrer.
         await compassActivation;
-
-        if (!isCurrentPlannerStart()) {
-            return;
-        }
-
-        if (!isFreshGpsPosition(userPosition)) {
-            userPosition = await requestUserPosition({ maximumAge: 0 });
-
-            if (!isCurrentPlannerStart()) {
-                return;
-            }
-        }
-
-        if (!isFreshReliableGpsPosition(userPosition)) {
-            if (isFreshGpsPosition(userPosition)) {
-                setPlannerPreviewMessage(
-                    'La position GPS est trop imprécise pour démarrer. Attends un relevé plus précis puis réessaie.',
-                    true,
-                );
-            } else {
-                const error = new Error('The GPS fix is stale or invalid.');
-                error.code = isValidRoutePlace(userPosition)
-                    ? 'POSITION_STALE'
-                    : 'POSITION_INVALID';
-                throw error;
-            }
-
-            return;
-        }
-
-        const distanceToStart = calculateDistanceBetweenCoordinates(
-            [userPosition.longitude, userPosition.latitude],
-            segment.geometry[0],
-        );
-
-        if (distanceToStart > PLANNER_START_DISTANCE_LIMIT_METERS) {
-            setPlannerPreviewMessage(
-                `Tu es à ${Math.round(distanceToStart)} m du départ prévu. Rejoins-le ou modifie le départ avec « Ma position actuelle », puis recalcule l’itinéraire.`,
-                true,
-            );
-            return;
-        }
-
-        if (
-            !Number.isFinite(lastKnownUserPosition?.timestamp) ||
-            userPosition.timestamp > lastKnownUserPosition.timestamp
-        ) {
-            lastKnownUserPosition = userPosition;
-        }
-
-        if (
-            !Number.isFinite(lastReliableUserPosition?.timestamp) ||
-            userPosition.timestamp > lastReliableUserPosition.timestamp
-        ) {
-            lastReliableUserPosition = userPosition;
-        }
 
         if (!isCurrentPlannerStart()) {
             return;
