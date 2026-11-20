@@ -2,43 +2,74 @@ import * as maplibregl from '/maplibre-assets/maplibre-gl.mjs';
 
 const ROUTE_ID = 'walking-route';
 const PREVIEW_ROUTE_ID = 'walking-route-preview';
+const ROUTE_LAYER_IDS = {
+    walking: ROUTE_ID,
+    preview: PREVIEW_ROUTE_ID,
+};
 
 let destinationMarker = null;
 
-export function drawWalkingRoute(map, coordinates) {
-    if (map.getLayer(ROUTE_ID)) {
-        map.removeLayer(ROUTE_ID);
+export function setRouteVisibility(map, visibleRoute) {
+    if (!map || (visibleRoute !== null && !ROUTE_LAYER_IDS[visibleRoute])) {
+        return false;
     }
 
-    if (map.getSource(ROUTE_ID)) {
-        map.removeSource(ROUTE_ID);
-    }
-
-    map.addSource(ROUTE_ID, {
-        type: 'geojson',
-
-        data: {
-            type: 'Feature',
-            geometry: {
-                type: 'LineString',
-                coordinates,
-            },
-            properties: {},
-        },
+    Object.entries(ROUTE_LAYER_IDS).forEach(([route, layerId]) => {
+        if (map.getLayer(layerId)) {
+            map.setLayoutProperty(
+                layerId,
+                'visibility',
+                route === visibleRoute ? 'visible' : 'none',
+            );
+        }
     });
 
-    map.addLayer({
-        id: ROUTE_ID,
-        type: 'line',
+    return true;
+}
 
-        source: ROUTE_ID,
+function setRouteData(map, layerId, coordinates, isPreview) {
+    const data = {
+        type: 'Feature',
+        geometry: {
+            type: 'LineString',
+            coordinates,
+        },
+        properties: {},
+    };
+    const source = map.getSource(layerId);
 
-        paint: {
+    if (source) {
+        source.setData(data);
+    } else {
+        map.addSource(layerId, {
+            type: 'geojson',
+            data,
+        });
+    }
+
+    if (!map.getLayer(layerId)) {
+        const paint = {
             'line-color': '#198754',
             'line-width': 5,
-            'line-opacity': 0.9,
-        },
-    });
+            'line-opacity': isPreview ? 0.8 : 0.9,
+        };
+
+        if (isPreview) {
+            paint['line-dasharray'] = [1.5, 1];
+        }
+
+        map.addLayer({
+            id: layerId,
+            type: 'line',
+            source: layerId,
+            paint,
+        });
+    }
+}
+
+export function drawWalkingRoute(map, coordinates) {
+    setRouteData(map, ROUTE_ID, coordinates, false);
+    setRouteVisibility(map, 'walking');
 }
 
 export function updateWalkingRoute(map, coordinates) {
@@ -84,31 +115,8 @@ export function fitWalkingRoute(map, coordinates) {
 }
 
 export function drawRoutePreview(map, coordinates) {
-    clearRoutePreview(map);
-
-    map.addSource(PREVIEW_ROUTE_ID, {
-        type: 'geojson',
-        data: {
-            type: 'Feature',
-            geometry: {
-                type: 'LineString',
-                coordinates,
-            },
-            properties: {},
-        },
-    });
-
-    map.addLayer({
-        id: PREVIEW_ROUTE_ID,
-        type: 'line',
-        source: PREVIEW_ROUTE_ID,
-        paint: {
-            'line-color': '#198754',
-            'line-width': 5,
-            'line-opacity': 0.8,
-            'line-dasharray': [1.5, 1],
-        },
-    });
+    setRouteData(map, PREVIEW_ROUTE_ID, coordinates, true);
+    setRouteVisibility(map, 'preview');
 }
 
 export function clearRoutePreview(map) {
