@@ -48,21 +48,15 @@ function setRouteData(map, layerId, coordinates, isPreview) {
     }
 
     if (!map.getLayer(layerId)) {
-        const paint = {
-            'line-color': '#198754',
-            'line-width': 5,
-            'line-opacity': isPreview ? 0.8 : 0.9,
-        };
-
-        if (isPreview) {
-            paint['line-dasharray'] = [1.5, 1];
-        }
-
         map.addLayer({
             id: layerId,
             type: 'line',
             source: layerId,
-            paint,
+            paint: {
+                'line-color': '#198754',
+                'line-width': isPreview ? 5 : 6,
+                'line-opacity': isPreview ? 0.8 : 0.9,
+            },
         });
     }
 }

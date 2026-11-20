@@ -604,7 +604,7 @@ export function createCameraController(
         // Une seule animation pour le recentrage et le zoom.
         map.easeTo({
             center: [position.longitude, position.latitude],
-            zoom: 17,
+            zoom: is3D ? 17.5 : 17,
             pitch: is3D ? 55 : 0,
             duration: 500,
             essential: true,
