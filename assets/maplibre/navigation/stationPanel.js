@@ -1902,11 +1902,6 @@ async function updateStationPanel(
                 return;
             }
 
-            showDestinationMarker(map, {
-                latitude: station.latitude,
-                longitude: station.longitude,
-            });
-
             navigationEngine.setNavigationRoute(coordinates, {
                 latitude: station.latitude,
                 longitude: station.longitude,

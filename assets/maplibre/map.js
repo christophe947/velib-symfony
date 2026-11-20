@@ -135,8 +135,12 @@ export async function presentWalkingRoute(
         return false;
     }
 
+    // Suspend le suivi avant le cadrage afin qu'un relevé GPS de fond ne
+    // relance pas une caméra centrée sur l'utilisateur pendant fitBounds().
+    setUserFollowing(false);
     fitWalkingRoute(map, segment.geometry);
     drawRoute(map, segment.geometry);
+    showDestinationMarker(map, segment.destination);
 
     return true;
 }
