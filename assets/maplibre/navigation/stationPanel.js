@@ -438,11 +438,15 @@ function renderActiveNavigationControls(map, station, styleReady) {
         return;
     }
 
-    controls.classList.remove('station-panel-navigation-controls--context');
+    controls.classList.remove(
+        'station-panel-navigation-controls--context',
+        'station-panel-navigation-controls--join',
+    );
     controls.innerHTML = `
         <button
             type="button"
             class="station-panel-join"
+            data-route-mode="${navigationEngine.getNavigationMode() ?? 'pedestrian'}"
             disabled
         >
             Navigation en cours
@@ -1741,6 +1745,7 @@ async function updateStationPanel(
         navigationState: {
             isActiveNavigationPanel,
             isNavigationContextPanel,
+            navigationMode: navigationEngine.getNavigationMode() ?? 'pedestrian',
         },
     });
 
@@ -1879,6 +1884,7 @@ async function updateStationPanel(
         if (joinChangeModeButton) {
             joinChangeModeButton.disabled = true;
         }
+        const originalButtonContent = activeButton.innerHTML;
         activeButton.innerHTML = `
             <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
             Calcul de l'itinéraire…
@@ -2064,12 +2070,9 @@ async function updateStationPanel(
             isJoinCalculationPending = false;
             joinModeButtons.forEach((button) => {
                 button.disabled = false;
-                button.textContent =
-                    button.dataset.routeMode === 'bicycle'
-                        ? '🚲 Rejoindre à vélo'
-                        : '🚶 Rejoindre à pied';
                 button.removeAttribute('aria-busy');
             });
+            activeButton.innerHTML = originalButtonContent;
             if (joinStartButton) {
                 joinStartButton.disabled = false;
             }

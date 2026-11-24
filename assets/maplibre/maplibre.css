@@ -475,15 +475,34 @@
 }
 
 .station-panel-join-options .station-panel-join-option {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
     flex: 1;
     min-width: 0;
+    line-height: 1.2;
 }
 
-.station-panel-join--bicycle {
-    background: #9250DE;
+.station-panel-join-icon {
+    display: block;
+    flex: 0 0 22px;
+    width: 22px;
+    height: 22px;
+    overflow: visible;
 }
 
-.station-panel-join-start[data-route-mode='bicycle'] {
+.station-panel-join-icon--bicycle {
+    flex-basis: 26px;
+    width: 26px;
+    height: 26px;
+}
+
+.station-panel-join[data-route-mode='pedestrian'] {
+    background: #198754;
+}
+
+.station-panel-join[data-route-mode='bicycle'] {
     background: #9250DE;
 }
 
