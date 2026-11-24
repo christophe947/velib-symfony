@@ -27,14 +27,28 @@ export function setRouteVisibility(map, visibleRoute) {
     return true;
 }
 
-function setRouteData(map, layerId, coordinates, isPreview) {
+function getRouteColorExpression() {
+    return [
+        'match',
+        ['get', 'mode'],
+        'bicycle',
+        '#9250DE',
+        '#198754',
+    ];
+}
+
+function setRouteData(map, layerId, coordinates, isPreview, mode = 'pedestrian') {
+    if (mode !== 'pedestrian' && mode !== 'bicycle') {
+        throw new RangeError(`Unsupported route mode: ${mode}`);
+    }
+
     const data = {
         type: 'Feature',
         geometry: {
             type: 'LineString',
             coordinates,
         },
-        properties: {},
+        properties: { mode },
     };
     const source = map.getSource(layerId);
 
@@ -53,7 +67,7 @@ function setRouteData(map, layerId, coordinates, isPreview) {
             type: 'line',
             source: layerId,
             paint: {
-                'line-color': '#198754',
+                'line-color': getRouteColorExpression(),
                 'line-width': isPreview ? 5 : 6,
                 'line-opacity': isPreview ? 0.8 : 0.9,
             },
@@ -61,15 +75,19 @@ function setRouteData(map, layerId, coordinates, isPreview) {
     }
 }
 
-export function drawWalkingRoute(map, coordinates) {
-    setRouteData(map, ROUTE_ID, coordinates, false);
+export function drawWalkingRoute(map, coordinates, mode = 'pedestrian') {
+    setRouteData(map, ROUTE_ID, coordinates, false, mode);
     setRouteVisibility(map, 'walking');
 }
 
-export function updateWalkingRoute(map, coordinates) {
+export function updateWalkingRoute(map, coordinates, mode = 'pedestrian') {
     const source = map.getSource(ROUTE_ID);
 
-    if (!source || !coordinates?.length) {
+    if (
+        !source ||
+        !coordinates?.length ||
+        (mode !== 'pedestrian' && mode !== 'bicycle')
+    ) {
         return false;
     }
 
@@ -79,7 +97,7 @@ export function updateWalkingRoute(map, coordinates) {
             type: 'LineString',
             coordinates,
         },
-        properties: {},
+        properties: { mode },
     });
 
     return true;
@@ -108,8 +126,8 @@ export function fitWalkingRoute(map, coordinates) {
     });
 }
 
-export function drawRoutePreview(map, coordinates) {
-    setRouteData(map, PREVIEW_ROUTE_ID, coordinates, true);
+export function drawRoutePreview(map, coordinates, mode = 'pedestrian') {
+    setRouteData(map, PREVIEW_ROUTE_ID, coordinates, true, mode);
     setRouteVisibility(map, 'preview');
 }
 

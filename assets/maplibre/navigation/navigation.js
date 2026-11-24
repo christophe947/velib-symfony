@@ -131,7 +131,7 @@ export function createNavigationEngine(effects) {
         }
 
         // Garde la géométrie A si sa source cartographique n'est plus disponible.
-        if (updateWalkingRoute(coordinates) === false) {
+        if (updateWalkingRoute(coordinates, mode) === false) {
             return false;
         }
 
@@ -196,7 +196,7 @@ export function createNavigationEngine(effects) {
             resetOffRouteConfirmations();
 
             // Met à jour la ligne sur la carte.
-            updateWalkingRoute(segment.geometry);
+            updateWalkingRoute(segment.geometry, segment.mode);
             // Actualise la distance et la durée dans le panneau.
             updateRouteSummary(
                 formatDistance(segment.distance),
@@ -471,7 +471,7 @@ export function createNavigationEngine(effects) {
             : currentRouteCoordinates.slice(lastRouteProgressIndex);
 
         if (remainingCoordinates.length >= 2) {
-            updateWalkingRoute(remainingCoordinates);
+            updateWalkingRoute(remainingCoordinates, currentRouteMode);
         }
 
         const accuracy = position.accuracy;

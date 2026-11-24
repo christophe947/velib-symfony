@@ -111,6 +111,10 @@ export async function presentWalkingRoute(
     segment,
     { layer, isCurrent },
 ) {
+    return presentRoute(map, segment, { layer, isCurrent });
+}
+
+export async function presentRoute(map, segment, { layer, isCurrent }) {
     const drawRoute =
         layer === 'preview'
             ? drawRoutePreview
@@ -139,7 +143,7 @@ export async function presentWalkingRoute(
     // relance pas une caméra centrée sur l'utilisateur pendant fitBounds().
     setUserFollowing(false);
     fitWalkingRoute(map, segment.geometry);
-    drawRoute(map, segment.geometry);
+    drawRoute(map, segment.geometry, segment.mode ?? 'pedestrian');
     showDestinationMarker(map, segment.destination);
 
     return true;

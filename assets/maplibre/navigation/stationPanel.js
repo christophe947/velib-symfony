@@ -18,7 +18,7 @@ import {
     recenterOnUser,
     clearNavigationMap,
     ensure2DView,
-    presentWalkingRoute,
+    presentRoute,
     startBackgroundUserTracking,
     stopBackgroundUserTracking,
     activateCompass,
@@ -568,7 +568,7 @@ async function startNavigationSession(
     if (route) {
         const segment = route.segments[0];
 
-        drawWalkingRoute(map, segment.geometry);
+        drawWalkingRoute(map, segment.geometry, segment.mode);
         showNavigationDestinationMarker(map, segment.destination);
         navigationEngine.setNavigationRoute(
             segment.geometry,
@@ -668,8 +668,8 @@ export function initStationPanel(map, styleReady) {
     navigationEngine = createNavigationEngine({
         updateNavigationPosition: (gpsPosition, displayedPosition) =>
             updateNavigationPosition(map, gpsPosition, displayedPosition),
-        updateWalkingRoute: (coordinates) =>
-            updateWalkingRoute(map, coordinates),
+        updateWalkingRoute: (coordinates, mode) =>
+            updateWalkingRoute(map, coordinates, mode),
         updateRouteSummary,
     });
 
@@ -837,7 +837,11 @@ function showRoutePlanner(movePane, map) {
         renderPlannerPreview(false);
 
         if (map && !navigationStarted) {
-            drawRoutePreview(map, routePreviewData.segments[0].geometry);
+            drawRoutePreview(
+                map,
+                routePreviewData.segments[0].geometry,
+                routePreviewData.segments[0].mode,
+            );
         }
 
         if (movePane && paneController?.isAvailable()) {
@@ -1057,7 +1061,7 @@ async function calculatePlannerRoute(map, styleReady) {
             return;
         }
 
-        const wasPresented = await presentWalkingRoute(map, routeSegment, {
+        const wasPresented = await presentRoute(map, routeSegment, {
             layer: 'preview',
             isCurrent: () =>
                 requestId === routePreviewRequestId &&
@@ -1409,7 +1413,11 @@ function stopNavigation(
         plannerElement.hidden = true;
         routePreviewElement.hidden = false;
         renderPlannerPreview(false);
-        drawRoutePreview(map, routePreviewData.segments[0].geometry);
+        drawRoutePreview(
+            map,
+            routePreviewData.segments[0].geometry,
+            routePreviewData.segments[0].mode,
+        );
 
         if (paneController?.isAvailable()) {
             const preview = routePreviewElement.querySelector(
@@ -1902,7 +1910,7 @@ async function updateStationPanel(
                 return;
             }
 
-            const wasPresented = await presentWalkingRoute(map, route, {
+            const wasPresented = await presentRoute(map, route, {
                 layer: 'walking',
                 isCurrent: () =>
                     previewRenderId === stationPanelRenderId &&
