@@ -570,10 +570,14 @@ async function startNavigationSession(
 
         drawWalkingRoute(map, segment.geometry);
         showNavigationDestinationMarker(map, segment.destination);
-        navigationEngine.setNavigationRoute(segment.geometry, {
-            latitude: segment.destination.latitude,
-            longitude: segment.destination.longitude,
-        });
+        navigationEngine.setNavigationRoute(
+            segment.geometry,
+            {
+                latitude: segment.destination.latitude,
+                longitude: segment.destination.longitude,
+            },
+            segment.mode,
+        );
         clearRoutePreview(map);
     }
 
@@ -1566,6 +1570,12 @@ async function startDestinationChange(map, station, styleReady) {
             return;
         }
 
+        const routeMode = navigationEngine.getNavigationMode();
+
+        if (!routeMode) {
+            throw new Error('The active navigation route mode is unavailable.');
+        }
+
         const engineRequestId = navigationEngine.beginRouteReplacement();
 
         if (engineRequestId === null) {
@@ -1581,7 +1591,7 @@ async function startDestinationChange(map, station, styleReady) {
 
         request.engineRequestId = engineRequestId;
 
-        const segment = await getRoute(userPosition, station, 'pedestrian');
+        const segment = await getRoute(userPosition, station, routeMode);
 
         if (!isCurrentDestinationChange(request)) {
             return;
@@ -1604,6 +1614,7 @@ async function startDestinationChange(map, station, styleReady) {
                     latitude: station.latitude,
                     longitude: station.longitude,
                 },
+                segment.mode,
             )
         ) {
             throw new Error('The current route could not be replaced on the map.');
@@ -1902,10 +1913,14 @@ async function updateStationPanel(
                 return;
             }
 
-            navigationEngine.setNavigationRoute(coordinates, {
-                latitude: station.latitude,
-                longitude: station.longitude,
-            });
+            navigationEngine.setNavigationRoute(
+                coordinates,
+                {
+                    latitude: station.latitude,
+                    longitude: station.longitude,
+                },
+                route.mode,
+            );
 
             displayedStation = station;
 

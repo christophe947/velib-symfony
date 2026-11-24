@@ -19,6 +19,7 @@ export function createNavigationEngine(effects) {
     let lastAcceptedProgressTimestamp = null;
     let lastCameraGpsTimestamp = null;
     let navigationDestination = null;
+    let currentRouteMode = null;
 
     let isRecalculatingRoute = false;
     let isReplacingRoute = false;
@@ -65,18 +66,31 @@ export function createNavigationEngine(effects) {
     }
 
     /**
-     * Enregistre l'itinéraire et sa destination.
+     * Enregistre l'itinéraire, sa destination et son profil de déplacement.
      */
-    function setNavigationRoute(coordinates, destination) {
+    function setNavigationRoute(
+        coordinates,
+        destination,
+        mode = 'pedestrian',
+    ) {
+        if (mode !== 'pedestrian' && mode !== 'bicycle') {
+            throw new RangeError(`Unsupported navigation mode: ${mode}`);
+        }
+
         setRouteProgressGeometry(coordinates);
         navigationDestination = destination;
+        currentRouteMode = mode;
         resetOffRouteConfirmations();
         lastProcessedGpsTimestamp = null;
         lastCameraGpsTimestamp = null;
     }
 
+    function getNavigationMode() {
+        return currentRouteMode;
+    }
+
     function beginRouteReplacement() {
-        if (isReplacingRoute || !navigationDestination) {
+        if (isReplacingRoute || !navigationDestination || !currentRouteMode) {
             return null;
         }
 
@@ -100,12 +114,18 @@ export function createNavigationEngine(effects) {
         return true;
     }
 
-    function commitRouteReplacement(replacementId, coordinates, destination) {
+    function commitRouteReplacement(
+        replacementId,
+        coordinates,
+        destination,
+        mode = currentRouteMode,
+    ) {
         if (
             !isReplacingRoute ||
             replacementId !== navigationSessionId ||
             !Array.isArray(coordinates) ||
-            coordinates.length < 2
+            coordinates.length < 2 ||
+            (mode !== 'pedestrian' && mode !== 'bicycle')
         ) {
             return false;
         }
@@ -117,6 +137,7 @@ export function createNavigationEngine(effects) {
 
         setRouteProgressGeometry(coordinates);
         navigationDestination = destination;
+        currentRouteMode = mode;
         resetOffRouteConfirmations();
         lastProcessedGpsTimestamp = null;
         lastCameraGpsTimestamp = null;
@@ -144,15 +165,22 @@ export function createNavigationEngine(effects) {
         isRecalculatingRoute = true;
 
         const sessionId = navigationSessionId;
+        const routeMode = currentRouteMode;
+
+        if (routeMode !== 'pedestrian' && routeMode !== 'bicycle') {
+            isRecalculatingRoute = false;
+            console.warn('Impossible de recalculer : mode de route inconnu.');
+            return;
+        }
 
         console.log('🔄 Recalcul de l’itinéraire en cours…');
 
         try {
-            // Demande un nouvel itinéraire piéton à Valhalla.
+            // Recalcule l'itinéraire avec le profil de la route courante.
             const segment = await getRoute(
                 position,
                 navigationDestination,
-                'pedestrian',
+                routeMode,
             );
 
             if (sessionId !== navigationSessionId) {
@@ -162,6 +190,7 @@ export function createNavigationEngine(effects) {
             // Remplace l'itinéraire actuel.
             // La progression repart du début du nouvel itinéraire.
             setRouteProgressGeometry(segment.geometry);
+            currentRouteMode = segment.mode;
 
             // Réinitialise la détection de déviation.
             resetOffRouteConfirmations();
@@ -483,6 +512,7 @@ export function createNavigationEngine(effects) {
         lastAcceptedProgressTimestamp = null;
         lastCameraGpsTimestamp = null;
         navigationDestination = null;
+        currentRouteMode = null;
         isRecalculatingRoute = false;
         isReplacingRoute = false;
         resetOffRouteConfirmations();
@@ -493,6 +523,7 @@ export function createNavigationEngine(effects) {
 
     return {
         setNavigationRoute,
+        getNavigationMode,
         beginRouteReplacement,
         cancelRouteReplacement,
         commitRouteReplacement,
