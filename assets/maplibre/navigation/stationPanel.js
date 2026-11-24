@@ -408,9 +408,12 @@ function updateRouteSummary(distance, duration) {
         return;
     }
 
+    const navigationMode = navigationEngine.getNavigationMode();
+    const travelIcon = navigationMode === 'bicycle' ? '🚲' : '🚶';
+
     routeSummary.innerHTML = `
         <span>📍 ${distance}</span>
-        <span>🚶 ${duration}</span>
+        <span>${travelIcon} ${duration}</span>
     `;
 
     routeSummary.style.display = 'flex';
@@ -1762,10 +1765,14 @@ async function updateStationPanel(
         }
     }
 
-    const joinButton = element.querySelector(
-        '.station-panel-join:not(.station-panel-context-resume):not(.station-panel-context-replace)',
+    const joinModeOptions = element.querySelector('.station-panel-join-options');
+    const joinModeButtons = Array.from(
+        element.querySelectorAll('.station-panel-join-option'),
     );
-
+    const joinStartButton = element.querySelector('.station-panel-join-start');
+    const joinChangeModeButton = element.querySelector(
+        '.station-panel-change-mode',
+    );
     const routeSummary = element.querySelector('.station-panel-route-summary');
 
     const routeMessage = element.querySelector('.station-panel-message');
@@ -1848,88 +1855,101 @@ async function updateStationPanel(
         });
     });
 
-    joinButton?.addEventListener('click', async () => {
-        if (navigationStarted) {
+    let isJoinCalculationPending = false;
+
+    async function calculateJoinRoute(mode, activeButton) {
+        if (
+            navigationStarted ||
+            isJoinCalculationPending ||
+            (mode !== 'pedestrian' && mode !== 'bicycle')
+        ) {
             return;
         }
 
-        // Identifie cette opération asynchrone.
-        const sessionId = ++navigationSessionId;
-
-        if (joinButton.textContent.trim() === 'Démarrer') {
-            joinButton.disabled = true;
-            joinButton.textContent = 'Démarrage…';
-            await startNavigationSession(map, styleReady, sessionId, {
-                station,
-                route: null,
-                summary: routeSummaryData,
-            });
-
-            return;
-        }
-
-        joinButton.disabled = true;
-
-        joinButton.innerHTML = `
-                <span
-                    class="spinner-border spinner-border-sm me-2"
-                    aria-hidden="true"
-                ></span>
-                Calcul de l'itinéraire…
-            `;
-
+        isJoinCalculationPending = true;
         const previewRenderId = renderId;
-        await ensure2DView();
+        const previewSessionId = ++navigationSessionId;
 
-        if (previewRenderId !== stationPanelRenderId || navigationStarted) {
-            return;
+        joinModeButtons.forEach((button) => {
+            button.disabled = true;
+        });
+        if (joinStartButton) {
+            joinStartButton.disabled = true;
         }
-
-        setUserFollowing(false);
+        if (joinChangeModeButton) {
+            joinChangeModeButton.disabled = true;
+        }
+        activeButton.innerHTML = `
+            <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+            Calcul de l'itinéraire…
+        `;
+        activeButton.setAttribute('aria-busy', 'true');
 
         if (routeMessage) {
             routeMessage.hidden = true;
             routeMessage.textContent = '';
         }
 
-        let routeStep = 'gps';
+        let routeStep = 'camera';
 
         try {
-            const userPosition = await requestUserPosition();
+            await ensure2DView();
 
-            if (previewRenderId !== stationPanelRenderId || navigationStarted) {
+            if (
+                previewRenderId !== stationPanelRenderId ||
+                previewSessionId !== navigationSessionId ||
+                navigationStarted
+            ) {
                 return;
             }
 
-            routeStep = 'map';
+            setUserFollowing(false);
+
+            routeStep = 'gps';
+            const userPosition = await requestUserPosition();
+
+            if (
+                previewRenderId !== stationPanelRenderId ||
+                previewSessionId !== navigationSessionId ||
+                navigationStarted
+            ) {
+                return;
+            }
+
+            routeStep = 'gps-marker';
             rememberUserGpsPosition(map, userPosition);
 
             routeStep = 'routing';
-            const route = await getRoute(
-                userPosition,
-                station,
-                'pedestrian',
-            );
+            const route = await getRoute(userPosition, station, mode);
 
-            if (previewRenderId !== stationPanelRenderId || navigationStarted) {
+            if (
+                previewRenderId !== stationPanelRenderId ||
+                previewSessionId !== navigationSessionId ||
+                navigationStarted
+            ) {
                 return;
             }
 
-            const coordinates = route.geometry;
             const distance = formatDistance(route.distance);
             const duration = formatDuration(route.duration);
 
-            routeStep = 'map';
+            routeStep = 'style';
             await styleReady;
 
-            if (previewRenderId !== stationPanelRenderId || navigationStarted) {
+            if (
+                previewRenderId !== stationPanelRenderId ||
+                previewSessionId !== navigationSessionId ||
+                navigationStarted
+            ) {
                 return;
             }
 
+            routeStep = 'presentation';
             const wasPresented = await presentRoute(map, route, {
                 layer: 'walking',
                 isCurrent: () =>
                     previewRenderId === stationPanelRenderId &&
+                    previewSessionId === navigationSessionId &&
                     !navigationStarted,
             });
 
@@ -1938,57 +1958,80 @@ async function updateStationPanel(
             }
 
             navigationEngine.setNavigationRoute(
-                coordinates,
+                route.geometry,
                 {
                     latitude: station.latitude,
                     longitude: station.longitude,
                 },
                 route.mode,
             );
-
             displayedStation = station;
+            updateRouteSummary(distance, duration);
 
-            navigationStarted = false;
+            if (joinStartButton) {
+                joinStartButton.dataset.routeMode = route.mode;
+                joinStartButton.hidden = false;
+                joinStartButton.textContent = 'Démarrer';
+            }
+            if (joinModeOptions) {
+                joinModeOptions.hidden = true;
+            }
+            if (joinChangeModeButton) {
+                joinChangeModeButton.hidden = false;
+                joinChangeModeButton.textContent = 'Changer de mode';
+            }
 
-            joinButton.textContent = 'Démarrer';
+            if (routeSummary && paneController.isAvailable()) {
+                const content = element.querySelector(
+                    '.station-panel-content',
+                );
 
-            if (routeSummary) {
-                updateRouteSummary(distance, duration);
+                paneController.present({ animate: true });
 
-                if (paneController.isAvailable()) {
-                    const content = element.querySelector(
-                        '.station-panel-content',
+                if (content) {
+                    paneController.updateMiddleHeight(
+                        content.getBoundingClientRect().height,
                     );
-
-                    paneController.present({
-                        animate: true,
-                    });
-
-                    if (content) {
-                        const middleHeight =
-                            content.getBoundingClientRect().height;
-
-                        paneController.updateMiddleHeight(middleHeight);
-                    }
                 }
             }
         } catch (error) {
             console.error('Impossible de calculer l’itinéraire :', error);
 
-            if (previewRenderId !== stationPanelRenderId || navigationStarted) {
+            if (
+                previewRenderId !== stationPanelRenderId ||
+                previewSessionId !== navigationSessionId ||
+                navigationStarted
+            ) {
                 return;
             }
 
-            if (routeStep === 'map') {
+            if (routeStep === 'presentation') {
+                map.stop();
                 navigationEngine.stopNavigationProcessing();
                 clearNavigationMap(map);
+                if (joinStartButton) {
+                    joinStartButton.hidden = true;
+                }
+                if (joinChangeModeButton) {
+                    joinChangeModeButton.hidden = true;
+                }
+                if (joinModeOptions) {
+                    joinModeOptions.hidden = false;
+                }
+                if (routeSummary) {
+                    routeSummary.style.display = 'none';
+                }
+                routeSummaryData = null;
             }
 
             if (routeMessage) {
                 routeMessage.hidden = false;
-                if (routeStep === 'map') {
+                if (routeStep === 'presentation' || routeStep === 'style') {
                     routeMessage.textContent =
                         '🗺️ La carte n’a pas pu afficher l’itinéraire. Réessaie.';
+                } else if (routeStep === 'camera') {
+                    routeMessage.textContent =
+                        '🗺️ La vue de la carte n’a pas pu être préparée. Réessaie.';
                 } else if (routeStep === 'routing') {
                     routeMessage.textContent =
                         '🧭 L’itinéraire n’a pas pu être calculé. Réessaie.';
@@ -2002,36 +2045,101 @@ async function updateStationPanel(
                     routeMessage.textContent =
                         '📍 Ta position n’a pas pu être récupérée. Vérifie les autorisations de localisation et réessaie.';
                 }
+
                 if (paneController.isAvailable()) {
                     const content = element.querySelector(
                         '.station-panel-content',
                     );
 
-                    paneController.present({
-                        animate: true,
-                    });
+                    paneController.present({ animate: true });
 
                     if (content) {
-                        const middleHeight =
-                            content.getBoundingClientRect().height;
-
-                        paneController.updateMiddleHeight(middleHeight);
+                        paneController.updateMiddleHeight(
+                            content.getBoundingClientRect().height,
+                        );
                     }
-
-                    return;
                 }
             }
         } finally {
-            joinButton.disabled = false;
-
-            joinButton.textContent = navigationStarted
-                ? 'Navigation en cours'
-                : routeMessage && !routeMessage.hidden
-                  ? 'Rejoindre'
-                  : joinButton.textContent === 'Démarrer'
-                    ? 'Démarrer'
-                    : 'Rejoindre';
+            isJoinCalculationPending = false;
+            joinModeButtons.forEach((button) => {
+                button.disabled = false;
+                button.textContent =
+                    button.dataset.routeMode === 'bicycle'
+                        ? '🚲 Rejoindre à vélo'
+                        : '🚶 Rejoindre à pied';
+                button.removeAttribute('aria-busy');
+            });
+            if (joinStartButton) {
+                joinStartButton.disabled = false;
+            }
+            if (joinChangeModeButton) {
+                joinChangeModeButton.disabled = false;
+            }
         }
+    }
+
+    joinModeButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            calculateJoinRoute(button.dataset.routeMode, button);
+        });
+    });
+
+    joinStartButton?.addEventListener('click', async () => {
+        if (navigationStarted || isJoinCalculationPending) {
+            return;
+        }
+
+        const routeMode = navigationEngine.getNavigationMode();
+        if (
+            joinStartButton.dataset.routeMode !== routeMode ||
+            (routeMode !== 'pedestrian' && routeMode !== 'bicycle')
+        ) {
+            return;
+        }
+
+        const sessionId = ++navigationSessionId;
+        joinStartButton.disabled = true;
+        joinStartButton.textContent = 'Démarrage…';
+
+        try {
+            await startNavigationSession(map, styleReady, sessionId, {
+                station,
+                route: null,
+                summary: routeSummaryData,
+            });
+        } catch (error) {
+            console.error('Impossible de démarrer la navigation :', error);
+
+            if (
+                renderId === stationPanelRenderId &&
+                !navigationStarted &&
+                routeMessage
+            ) {
+                routeMessage.hidden = false;
+                routeMessage.textContent =
+                    'La navigation n’a pas pu démarrer. Réessaie.';
+            }
+        } finally {
+            if (renderId === stationPanelRenderId && !navigationStarted) {
+                joinStartButton.disabled = false;
+                joinStartButton.textContent = 'Démarrer';
+            }
+        }
+    });
+
+    joinChangeModeButton?.addEventListener('click', () => {
+        if (isJoinCalculationPending || !joinModeOptions) {
+            return;
+        }
+
+        joinModeOptions.hidden = !joinModeOptions.hidden;
+        if (joinStartButton) {
+            joinStartButton.hidden = !joinModeOptions.hidden;
+        }
+        joinChangeModeButton.textContent = joinModeOptions.hidden
+            ? 'Changer de mode'
+            : 'Retour à l’aperçu';
     });
 
     initModeSelector(element, {

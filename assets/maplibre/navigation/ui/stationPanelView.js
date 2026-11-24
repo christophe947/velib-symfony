@@ -161,9 +161,38 @@ export function renderStationPanel({ station, mode, navigationState }) {
         navigationState;
 
     let navigationControls = `
-        <div class="station-panel-navigation-controls">
-            <button type="button" class="station-panel-join">
-                Rejoindre
+        <div class="station-panel-navigation-controls station-panel-navigation-controls--join">
+            <div class="station-panel-join-options">
+                <button
+                    type="button"
+                    class="station-panel-join station-panel-join-option"
+                    data-route-mode="pedestrian"
+                >
+                    🚶 Rejoindre à pied
+                </button>
+                <button
+                    type="button"
+                    class="station-panel-join station-panel-join-option station-panel-join--bicycle"
+                    data-route-mode="bicycle"
+                >
+                    🚲 Rejoindre à vélo
+                </button>
+            </div>
+            <button
+                type="button"
+                class="station-panel-join station-panel-join-start"
+                data-route-action="start"
+                hidden
+            >
+                Démarrer
+            </button>
+            <button
+                type="button"
+                class="station-panel-change-mode"
+                data-route-action="change-mode"
+                hidden
+            >
+                Changer de mode
             </button>
         </div>
     `;

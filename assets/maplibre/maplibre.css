@@ -468,6 +468,41 @@
     opacity: 0.65;
 }
 
+.station-panel-join-options {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+}
+
+.station-panel-join-options .station-panel-join-option {
+    flex: 1;
+    min-width: 0;
+}
+
+.station-panel-join--bicycle {
+    background: #9250DE;
+}
+
+.station-panel-join-start[data-route-mode='bicycle'] {
+    background: #9250DE;
+}
+
+.station-panel-change-mode {
+    width: 100%;
+    min-height: 40px;
+    border: 0;
+    background: transparent;
+    color: #495057;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.station-panel-join-options[hidden],
+.station-panel-change-mode[hidden],
+.station-panel-join-start[hidden] {
+    display: none;
+}
+
 .station-panel-route-summary {
     display: none;
     justify-content: center;
@@ -984,6 +1019,10 @@
 }
 
 .station-panel-navigation-controls--context {
+    flex-direction: column;
+}
+
+.station-panel-navigation-controls--join {
     flex-direction: column;
 }
 
