@@ -18,7 +18,8 @@ export function createCameraController(
     let viewTransitionPromise = null;
     let pendingUserPosition = null;
     let lastGpsPosition = null;
-    let navigationCompassHeading = null;
+    let navigationOrientationHeading = null;
+    let navigationMode = null;
     let navigationCameraFrameId = null;
     let navigationCameraFrameGeneration = 0;
     let lastNavigationCameraFrameTime = null;
@@ -62,6 +63,39 @@ export function createCameraController(
 
         // Applique un lissage progressif.
         return normalize(current + difference * HEADING_SMOOTHING_FACTOR);
+    }
+
+    function updateGpsNavigationHeading(position) {
+        if (navigationMode !== 'bicycle') {
+            return false;
+        }
+
+        const age = Date.now() - position.timestamp;
+        const hasReliableGpsHeading =
+            Number.isFinite(position.timestamp) &&
+            age >= 0 &&
+            age <= MAX_NAVIGATION_POSITION_AGE_MS &&
+            Number.isFinite(position.heading) &&
+            position.heading >= 0 &&
+            position.heading <= 360 &&
+            Number.isFinite(position.speed) &&
+            position.speed >= MIN_HEADING_SPEED &&
+            Number.isFinite(position.accuracy) &&
+            position.accuracy >= 0 &&
+            position.accuracy <= 25;
+
+        if (!hasReliableGpsHeading) {
+            return false;
+        }
+
+        const currentHeading =
+            navigationOrientationHeading ?? map.getBearing();
+        navigationOrientationHeading = smoothHeading(
+            currentHeading,
+            position.heading,
+        );
+
+        return true;
     }
 
     async function toggleView() {
@@ -189,7 +223,7 @@ export function createCameraController(
     }
 
     function canUseCompass() {
-        return is3D && isFollowingUser;
+        return is3D && isFollowingUser && navigationMode !== 'bicycle';
     }
 
     function canFollowNavigationPosition() {
@@ -224,8 +258,8 @@ export function createCameraController(
             ? [position.longitude, position.latitude]
             : map.getCenter();
         const targetBearing =
-            is3D && navigationCompassHeading !== null
-                ? navigationCompassHeading
+            is3D && navigationOrientationHeading !== null
+                ? navigationOrientationHeading
                 : map.getBearing();
 
         return { targetCenter, targetBearing };
@@ -287,6 +321,7 @@ export function createCameraController(
         const previousTimestamp = lastNavigationVisualGpsTimestamp;
         lastNavigationVisualGpsTimestamp = timestamp;
         lastGpsPosition = gpsPosition;
+        updateGpsNavigationHeading(gpsPosition);
 
         const nextTarget = { ...displayedPosition };
 
@@ -455,7 +490,10 @@ export function createCameraController(
         });
     }
 
-    function beginNavigationPositionTracking(initialPosition = null) {
+    function beginNavigationPositionTracking(
+        initialPosition = null,
+        mode = 'pedestrian',
+    ) {
         cancelNavigationCameraFrames();
         navigationVisualStartPosition = null;
         navigationVisualTargetPosition = null;
@@ -463,7 +501,8 @@ export function createCameraController(
         navigationVisualDuration = 0;
         navigationVisualPosition = null;
         lastNavigationVisualGpsTimestamp = null;
-        navigationCompassHeading = null;
+        navigationOrientationHeading = null;
+        navigationMode = mode === 'bicycle' ? 'bicycle' : 'pedestrian';
 
         lastGpsPosition = null;
 
@@ -484,16 +523,23 @@ export function createCameraController(
             navigationVisualPosition = { ...initialPosition };
             lastGpsPosition = initialPosition;
             lastNavigationVisualGpsTimestamp = initialPosition.timestamp;
+            updateGpsNavigationHeading(initialPosition);
         }
     }
 
     function clearNavigationVisualPosition() {
+        if (navigationMode === 'bicycle') {
+            lastStableHeading = null;
+        }
+
         navigationVisualStartPosition = null;
         navigationVisualTargetPosition = null;
         navigationVisualStartTime = null;
         navigationVisualDuration = 0;
         navigationVisualPosition = null;
         lastNavigationVisualGpsTimestamp = null;
+        navigationOrientationHeading = null;
+        navigationMode = null;
         cancelNavigationCameraFrames();
     }
 
@@ -506,6 +552,7 @@ export function createCameraController(
         // lorsque le suivi est actif et qu'aucune transition n'est en cours.
         if (
             !is3D ||
+            navigationMode === 'bicycle' ||
             !isFollowingUser ||
             isChangingView ||
             isCameraInteractionActive ||
@@ -538,7 +585,7 @@ export function createCameraController(
         lastStableHeading = smoothHeading(currentBearing, compassHeading);
 
         if (!shouldUseGpsHeading()) {
-            navigationCompassHeading = lastStableHeading;
+            navigationOrientationHeading = lastStableHeading;
             requestNavigationCameraFrame();
             return true;
         }
@@ -773,9 +820,14 @@ export function createCameraController(
     }
 
     function clearPendingPosition() {
+        if (navigationMode === 'bicycle') {
+            lastStableHeading = null;
+        }
+
         pendingUserPosition = null;
         lastGpsPosition = null;
-        navigationCompassHeading = null;
+        navigationOrientationHeading = null;
+        navigationMode = null;
         navigationVisualPosition = null;
         navigationVisualStartPosition = null;
         navigationVisualTargetPosition = null;

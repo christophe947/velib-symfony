@@ -360,13 +360,17 @@ export function setUserFollowing(enabled) {
     getCameraController()?.setFollowing(enabled);
 }
 
-export function setNavigationActive(enabled, initialPosition = null) {
+export function setNavigationActive(
+    enabled,
+    initialPosition = null,
+    mode = 'pedestrian',
+) {
     isNavigationActive = enabled;
 
     const cameraController = getCameraController();
 
     if (enabled) {
-        cameraController?.beginNavigationPositionTracking(initialPosition);
+        cameraController?.beginNavigationPositionTracking(initialPosition, mode);
     } else {
         cameraController?.clearNavigationVisualPosition();
     }

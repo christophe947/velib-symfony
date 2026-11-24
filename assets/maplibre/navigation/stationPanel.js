@@ -491,6 +491,10 @@ async function startNavigationSession(
     },
 ) {
     stopBackgroundUserTracking();
+    const navigationMode =
+        route?.segments?.[0]?.mode ??
+        navigationEngine.getNavigationMode() ??
+        'pedestrian';
     activeNavigationStation = station;
     activeNavigationRouteSummary = summary;
     routeSummaryData = summary;
@@ -500,23 +504,30 @@ async function startNavigationSession(
         isFreshGpsPosition(lastKnownUserPosition)
             ? lastKnownUserPosition
             : null,
+        navigationMode,
     );
     setUserFollowing(true);
     screenWakeLock.start();
+
+    if (navigationMode === 'bicycle') {
+        stopCompass();
+    }
 
     let isInitialCameraSetup = true;
     const isSessionActive = () =>
         navigationStarted && sessionId === navigationSessionId;
     const compassPromise =
-        compassActivation ??
-        activateCompass(
-            map,
-            undefined,
-            (error) => {
-                console.error('Boussole indisponible :', error);
-            },
-            () => !isInitialCameraSetup,
-        );
+        navigationMode === 'bicycle'
+            ? (compassActivation ?? Promise.resolve())
+            : (compassActivation ??
+              activateCompass(
+                  map,
+                  undefined,
+                  (error) => {
+                      console.error('Boussole indisponible :', error);
+                  },
+                  () => !isInitialCameraSetup,
+              ));
 
     if (
         !station &&
@@ -1140,6 +1151,7 @@ async function startPlannerNavigation(map, styleReady) {
     }
 
     const route = routePreviewData;
+    const routeMode = route.segments[0].mode ?? 'pedestrian';
     const requestId = ++routePreviewRequestId;
     const startButton = routePreviewElement.querySelector(
         '.route-preview-start',
@@ -1156,14 +1168,17 @@ async function startPlannerNavigation(map, styleReady) {
 
     // Lance la demande de permission dans le geste du clic. Les lectures ne
     // pilotent la caméra qu'après la restauration de la vue de navigation.
-    const compassActivation = activateCompass(
-        map,
-        undefined,
-        (error) => {
-            console.error('Boussole indisponible :', error);
-        },
-        () => canControlCamera,
-    );
+    const compassActivation =
+        routeMode === 'bicycle'
+            ? Promise.resolve()
+            : activateCompass(
+                  map,
+                  undefined,
+                  (error) => {
+                      console.error('Boussole indisponible :', error);
+                  },
+                  () => canControlCamera,
+              );
 
     const isCurrentPlannerStart = () =>
         requestId === routePreviewRequestId &&
