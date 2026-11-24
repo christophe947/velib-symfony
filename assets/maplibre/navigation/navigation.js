@@ -36,7 +36,10 @@ export function createNavigationEngine(effects) {
     let lastProcessedGpsTimestamp = null;
     let lastOffRouteConfirmationTimestamp = null;
 
-    const MAX_PLAUSIBLE_WALKING_SPEED = 3;
+    const MAX_PLAUSIBLE_SPEED_METERS_PER_SECOND = {
+        pedestrian: 3,
+        bicycle: 10,
+    };
     const ROUTE_PROGRESS_MARGIN_METERS = 15;
     // Un écart inférieur au bruit GPS courant ne suffit pas à préférer une branche future.
     const ROUTE_BRANCH_DISTANCE_ADVANTAGE_METERS = 8;
@@ -285,7 +288,9 @@ export function createNavigationEngine(effects) {
             lastAcceptedRouteProgress +
             (lastAcceptedProgressTimestamp === null
                 ? initialGpsDisplacement
-                : MAX_PLAUSIBLE_WALKING_SPEED * elapsedSeconds) +
+                : (MAX_PLAUSIBLE_SPEED_METERS_PER_SECOND[currentRouteMode] ??
+                      MAX_PLAUSIBLE_SPEED_METERS_PER_SECOND.pedestrian) *
+                  elapsedSeconds) +
             ROUTE_PROGRESS_MARGIN_METERS;
         const minForwardProgress = lastAcceptedRouteProgress;
 
