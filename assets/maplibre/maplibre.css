@@ -105,6 +105,25 @@
     visibility: visible;
 }
 
+.user-location-marker.is-bicycle-navigation {
+    width: 24px;
+    height: 24px;
+}
+
+.user-location-marker.is-bicycle-navigation .user-location-beam {
+    opacity: 0;
+    visibility: hidden;
+}
+
+.user-location-marker.is-bicycle-navigation .user-location-dot {
+    inset: 0;
+    border: 0;
+    border-radius: 0;
+    background: #2563eb;
+    clip-path: polygon(50% 0, 94% 100%, 50% 78%, 6% 100%);
+    filter: drop-shadow(0 0 1px #ffffff) drop-shadow(0 1px 2px rgb(0 0 0 / 45%));
+}
+
 
 /* =========================
    Recherche carte

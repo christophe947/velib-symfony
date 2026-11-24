@@ -6,9 +6,11 @@ import { loadGeographicData } from './geography/zones.js';
 import { addZoneLayer } from './map/layers/zoneLayer.js';
 import { addCommuneLayer } from './map/layers/communeLayer.js';
 import {
-    showUserMarker,
+    showUserMarker as updateUserMarker,
     showUserMarkerCompass,
     hideUserMarkerCompass,
+    setUserMarkerNavigationMode,
+    showUserMarkerDirection,
     requestUserPosition,
 } from './location/geolocation.js';
 import * as userTracking from './location/userTracking.js';
@@ -96,6 +98,14 @@ class ViewModeControl {
 
 function getCameraController() {
     return viewModeControl?.cameraController ?? null;
+}
+
+export function showUserMarker(map, position) {
+    updateUserMarker(map, position);
+    showUserMarkerDirection(
+        map,
+        getCameraController()?.getNavigationOrientationHeading(),
+    );
 }
 
 /**
@@ -364,14 +374,24 @@ export function setNavigationActive(
     enabled,
     initialPosition = null,
     mode = 'pedestrian',
+    map,
 ) {
     isNavigationActive = enabled;
 
     const cameraController = getCameraController();
 
     if (enabled) {
+        setUserMarkerNavigationMode(map, mode);
         cameraController?.beginNavigationPositionTracking(initialPosition, mode);
+
+        if (mode === 'bicycle') {
+            showUserMarkerDirection(
+                map,
+                cameraController?.getNavigationOrientationHeading(),
+            );
+        }
     } else {
+        setUserMarkerNavigationMode(map, null);
         cameraController?.clearNavigationVisualPosition();
     }
 }
@@ -441,6 +461,7 @@ export function clearNavigationMap(map) {
     cameraController?.setFollowing(false);
     isNavigationActive = false;
     cameraController?.clearPendingPosition();
+    setUserMarkerNavigationMode(map, null);
 
     // Supprime le tracé et le marqueur de destination.
     clearRouteLayer(map);

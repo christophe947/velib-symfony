@@ -10,6 +10,16 @@ export function showUserMarker(map, position) {
     let userMarkerState = userMarkers.get(map);
 
     if (!userMarkerState) {
+        userMarkerState = {
+            marker: null,
+            element: null,
+            compassExpiryTimeout: null,
+            navigationMode: null,
+        };
+        userMarkers.set(map, userMarkerState);
+    }
+
+    if (!userMarkerState.marker) {
         const element = document.createElement('div');
         element.className = 'user-location-marker';
         element.setAttribute('aria-label', 'Votre position');
@@ -23,8 +33,13 @@ export function showUserMarker(map, position) {
         dot.setAttribute('aria-hidden', 'true');
 
         element.append(beam, dot);
+        element.classList.toggle(
+            'is-bicycle-navigation',
+            userMarkerState.navigationMode === 'bicycle',
+        );
 
-        const marker = new maplibregl.Marker({
+        userMarkerState.element = element;
+        userMarkerState.marker = new maplibregl.Marker({
             element,
             anchor: 'center',
             rotationAlignment: 'map',
@@ -35,23 +50,78 @@ export function showUserMarker(map, position) {
                 new maplibregl.Popup({ offset: 25 }).setText('Votre position'),
             )
             .addTo(map);
-
-        userMarkerState = {
-            marker,
-            element,
-            compassExpiryTimeout: null,
-        };
-        userMarkers.set(map, userMarkerState);
         return;
     }
 
     userMarkerState.marker.setLngLat([position.longitude, position.latitude]);
 }
 
+export function setUserMarkerNavigationMode(map, mode) {
+    if (!map) {
+        return;
+    }
+
+    let userMarkerState = userMarkers.get(map);
+
+    if (!userMarkerState) {
+        userMarkerState = {
+            marker: null,
+            element: null,
+            compassExpiryTimeout: null,
+            navigationMode: null,
+        };
+        userMarkers.set(map, userMarkerState);
+    }
+
+    const previousMode = userMarkerState.navigationMode;
+    const nextMode = mode === 'bicycle' ? 'bicycle' : null;
+    userMarkerState.navigationMode = nextMode;
+
+    if (userMarkerState.element) {
+        userMarkerState.element.classList.toggle(
+            'is-bicycle-navigation',
+            nextMode === 'bicycle',
+        );
+    }
+
+    if (nextMode === 'bicycle' || previousMode === 'bicycle') {
+        clearTimeout(userMarkerState.compassExpiryTimeout);
+        userMarkerState.compassExpiryTimeout = null;
+
+        if (userMarkerState.element) {
+            userMarkerState.element.classList.remove('has-compass-heading');
+        }
+
+        userMarkerState.marker?.setRotation(0);
+    }
+}
+
+export function showUserMarkerDirection(map, heading) {
+    const userMarkerState = userMarkers.get(map);
+
+    if (
+        !userMarkerState?.marker ||
+        userMarkerState.navigationMode !== 'bicycle' ||
+        !Number.isFinite(heading) ||
+        heading < 0 ||
+        heading > 360
+    ) {
+        return;
+    }
+
+    // rotationAlignment: 'map' already accounts for map bearing.
+    userMarkerState.marker.setRotation(((heading % 360) + 360) % 360);
+}
+
 export function showUserMarkerCompass(map, heading, timestamp) {
     const userMarkerState = userMarkers.get(map);
 
-    if (!userMarkerState) {
+    if (!userMarkerState?.marker) {
+        return;
+    }
+
+    if (userMarkerState.navigationMode === 'bicycle') {
+        hideUserMarkerCompass(map);
         return;
     }
 
@@ -79,7 +149,7 @@ export function showUserMarkerCompass(map, heading, timestamp) {
 export function hideUserMarkerCompass(map) {
     const userMarkerState = userMarkers.get(map);
 
-    if (!userMarkerState) {
+    if (!userMarkerState?.element) {
         return;
     }
 

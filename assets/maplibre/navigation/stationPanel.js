@@ -2,7 +2,6 @@ import { subscribeToSelectedStation, setDisplayMode } from '../shared/state.js';
 import {
     getUserPositionErrorMessage,
     requestUserPosition,
-    showUserMarker,
     startWatchingPosition,
 } from '../location/geolocation.js';
 import { getRoute } from './routing.js';
@@ -14,6 +13,7 @@ import {
     updateWalkingRoute,
     setUserFollowing,
     setNavigationActive,
+    showUserMarker,
     updateNavigationPosition,
     recenterOnUser,
     clearNavigationMap,
@@ -505,6 +505,7 @@ async function startNavigationSession(
             ? lastKnownUserPosition
             : null,
         navigationMode,
+        map,
     );
     setUserFollowing(true);
     screenWakeLock.start();

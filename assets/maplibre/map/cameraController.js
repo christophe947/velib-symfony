@@ -226,6 +226,10 @@ export function createCameraController(
         return is3D && isFollowingUser && navigationMode !== 'bicycle';
     }
 
+    function getNavigationOrientationHeading() {
+        return navigationOrientationHeading;
+    }
+
     function canFollowNavigationPosition() {
         return (
             !shouldUseGpsHeading() &&
@@ -851,6 +855,7 @@ export function createCameraController(
         setFollowing,
         isFollowing,
         canUseCompass,
+        getNavigationOrientationHeading,
         updateFromCompass,
         beginNavigationPositionTracking,
         updateNavigationVisualPosition,
