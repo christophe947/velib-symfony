@@ -123,24 +123,30 @@ export function renderRoutePlanner() {
                 </div>
             </div>
 
-            <fieldset class="route-planner-modes">
-                <legend>Type de trajet</legend>
-
-                <label>
-                    <input type="radio" name="route-type" value="walking" checked>
-                    <span>À pied</span>
+            <div
+                class="route-planner-velib-option"
+                data-route-already-on-velib-option
+                hidden
+            >
+                <label class="route-planner-velib-toggle">
+                    <input
+                        type="checkbox"
+                        data-route-already-on-velib
+                        aria-describedby="route-planner-velib-unavailable"
+                    >
+                    <span>Je suis déjà sur un Vélib</span>
                 </label>
-
-                <label>
-                    <input type="radio" name="route-type" value="cycling">
-                    <span>Je suis déjà en Vélib</span>
-                </label>
-
-                <label>
-                    <input type="radio" name="route-type" value="velib-complete">
-                    <span>Trajet complet Vélib</span>
-                </label>
-            </fieldset>
+                <p
+                    id="route-planner-velib-unavailable"
+                    class="route-planner-velib-message"
+                    data-route-multimodal-unavailable
+                    role="status"
+                    aria-live="polite"
+                    hidden
+                >
+                    Le calcul des itinéraires Vélib est en préparation. Décoche cette option pour calculer un trajet à pied.
+                </p>
+            </div>
 
             <button type="button" class="route-planner-calculate" disabled>
                 Calculer l’itinéraire

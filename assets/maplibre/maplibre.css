@@ -698,39 +698,33 @@
     padding: 12px;
 }
 
-.route-planner-modes {
-    display: grid;
-    gap: 8px;
-    margin: 18px 0;
-    padding: 0;
-    border: 0;
+.route-planner-velib-option {
+    margin: 14px 0;
 }
 
-.route-planner-modes legend {
-    margin-bottom: 8px;
-    color: #495057;
-    font-size: 13px;
-    font-weight: 600;
-}
-
-.route-planner-modes label {
+.route-planner-velib-toggle {
     display: flex;
     align-items: center;
     gap: 10px;
-    min-height: 42px;
-    padding: 6px 10px;
-    border: 1px solid #dee2e6;
-    border-radius: 10px;
+    min-height: 44px;
+    padding: 6px 2px;
     color: #212529;
     font-size: 14px;
     cursor: pointer;
+    touch-action: manipulation;
 }
 
-.route-planner-modes input {
+.route-planner-velib-toggle input {
     width: 18px;
     height: 18px;
     margin: 0;
     accent-color: #198754;
+}
+
+.route-planner-velib-message {
+    margin: 0 0 8px 28px;
+    color: #6c757d;
+    font-size: 12px;
 }
 
 .route-planner-calculate {

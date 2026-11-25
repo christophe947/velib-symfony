@@ -996,10 +996,10 @@ async function calculatePlannerRoute(map, styleReady) {
         return;
     }
 
-    const { origin, destination, mode } =
+    const { origin, destination, alreadyOnVelib } =
         routePlannerController?.getSelections() ?? {};
 
-    if (mode !== 'walking') {
+    if (alreadyOnVelib) {
         return;
     }
 

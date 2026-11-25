@@ -73,6 +73,15 @@ export function createRoutePlannerController(element, { onChange } = {}) {
     let destroyed = false;
     let isCalculating = false;
     const eventController = new AbortController();
+    const alreadyOnVelibOption = element.querySelector(
+        '[data-route-already-on-velib-option]',
+    );
+    const alreadyOnVelibInput = element.querySelector(
+        '[data-route-already-on-velib]',
+    );
+    const multimodalUnavailableMessage = element.querySelector(
+        '[data-route-multimodal-unavailable]',
+    );
 
     function getSelections() {
         const getLatestSelection = (field) => {
@@ -89,7 +98,7 @@ export function createRoutePlannerController(element, { onChange } = {}) {
         return {
             origin: getLatestSelection(fields.get('origin')),
             destination: getLatestSelection(fields.get('destination')),
-            mode: element.querySelector('[name="route-type"]:checked')?.value ?? 'walking',
+            alreadyOnVelib: alreadyOnVelibInput?.checked === true,
         };
     }
 
@@ -110,12 +119,24 @@ export function createRoutePlannerController(element, { onChange } = {}) {
 
     function updateCalculateButton() {
         const button = element.querySelector('.route-planner-calculate');
-        const { origin, destination, mode } = getSelections();
+        let { origin } = getSelections();
+        const canStartOnVelib =
+            isResolvedPlace(origin) && origin.type !== 'station';
+
+        if (alreadyOnVelibOption) {
+            alreadyOnVelibOption.hidden = !canStartOnVelib;
+        }
+
+        if (!canStartOnVelib && alreadyOnVelibInput?.checked) {
+            alreadyOnVelibInput.checked = false;
+        }
+
+        const { destination, alreadyOnVelib } = getSelections();
 
         if (button) {
             button.disabled =
                 isCalculating ||
-                mode !== 'walking' ||
+                alreadyOnVelib ||
                 !isResolvedPlace(origin) ||
                 !isResolvedPlace(destination);
 
@@ -124,6 +145,10 @@ export function createRoutePlannerController(element, { onChange } = {}) {
             } else {
                 button.removeAttribute('aria-busy');
             }
+        }
+
+        if (multimodalUnavailableMessage) {
+            multimodalUnavailableMessage.hidden = !alreadyOnVelib;
         }
     }
 
@@ -337,10 +362,8 @@ export function createRoutePlannerController(element, { onChange } = {}) {
         });
     });
 
-    element.querySelectorAll('[name="route-type"]').forEach((input) => {
-        input.addEventListener('change', stateChanged, {
-            signal: eventController.signal,
-        });
+    alreadyOnVelibInput?.addEventListener('change', stateChanged, {
+        signal: eventController.signal,
     });
 
     element.addEventListener('click', (event) => {
