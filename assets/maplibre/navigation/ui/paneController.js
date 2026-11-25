@@ -194,6 +194,7 @@ export function createPaneController(
 
     return {
         isAvailable: () => Boolean(pane && mobileQuery.matches),
+        isManuallyAtBottom: () => panelManuallyAtBottom,
         present: (options) => pane?.present(options),
         openPlanner,
         closePlanner,

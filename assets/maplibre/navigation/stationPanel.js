@@ -429,6 +429,25 @@ function stationsMatch(first, second) {
     );
 }
 
+function recalculateStationPanelMiddleHeight() {
+    if (!paneController?.isAvailable()) {
+        return;
+    }
+
+    const content = element?.querySelector('.station-panel-content');
+
+    if (content) {
+        void paneController
+            .updateMiddleHeight(content.getBoundingClientRect().height, false)
+            .catch((error) => {
+                console.error(
+                    'Impossible de recalculer la hauteur du panneau :',
+                    error,
+                );
+            });
+    }
+}
+
 function renderActiveNavigationControls(map, station, styleReady) {
     const controls = element?.querySelector(
         '.station-panel-navigation-controls',
@@ -465,6 +484,8 @@ function renderActiveNavigationControls(map, station, styleReady) {
     controls.querySelector('.station-panel-stop').addEventListener('click', () => {
         showStopNavigationConfirmation(map, station, styleReady);
     });
+
+    recalculateStationPanelMiddleHeight();
 }
 
 function showNavigationDestinationMarker(map, destination) {
@@ -1428,7 +1449,12 @@ function stopNavigation(
 
     // Réafficher le panneau de la station avec ses gestionnaires de clic.
     if (station) {
-        updateStationPanel(station, map, styleReady);
+        updateStationPanel(
+            station,
+            map,
+            styleReady,
+            !paneController?.isManuallyAtBottom(),
+        );
     } else if (shouldRestorePlannerPreview) {
         isRoutePlannerOpen = true;
         isRoutePreviewOpen = true;
@@ -2143,6 +2169,7 @@ async function updateStationPanel(
         joinChangeModeButton.textContent = joinModeOptions.hidden
             ? 'Changer de mode'
             : 'Retour à l’aperçu';
+        recalculateStationPanelMiddleHeight();
     });
 
     initModeSelector(element, {
