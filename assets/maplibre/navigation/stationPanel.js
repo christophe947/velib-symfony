@@ -2071,13 +2071,22 @@ async function updateStationPanel(
         return;
     }
 
+    const pendingChange = pendingDestinationChange;
+
     if (
-        pendingDestinationChange?.resolveGpsPosition &&
-        !stationsMatch(station, pendingDestinationChange.station)
+        pendingChange &&
+        !stationsMatch(station, pendingChange.station)
     ) {
         destinationChangeRequestId++;
-        finishDestinationChangeGpsWait(pendingDestinationChange);
         pendingDestinationChange = null;
+        finishDestinationChangeGpsWait(pendingChange);
+
+        if (pendingChange.engineRequestId !== null) {
+            navigationEngine.cancelRouteReplacement(
+                pendingChange.engineRequestId,
+            );
+        }
+
         destinationChangeError = null;
     }
 
