@@ -20,6 +20,26 @@ function getAvailabilityRate(station, mode) {
     return Math.min(available / station.capacity, 1);
 }
 
+function hasPositiveFiniteCount(station, property) {
+    return Number.isFinite(station?.[property]) && station[property] > 0;
+}
+
+export function isStationEligibleForPickup(station) {
+    return (
+        station?.isInstalled === true &&
+        station.isRenting === true &&
+        hasPositiveFiniteCount(station, 'bikes')
+    );
+}
+
+export function isStationEligibleForDropoff(station) {
+    return (
+        station?.isInstalled === true &&
+        station.isReturning === true &&
+        hasPositiveFiniteCount(station, 'docks')
+    );
+}
+
 export function getAvailabilityColor(station, mode) {
     const available = getAvailableValue(station, mode);
 
