@@ -65,6 +65,35 @@ class VelibApiService
         return 'Places disponibles';
     }
 
+    private function normalizeGbfsBoolean(array $station, string $field): ?bool
+    {
+        if (!array_key_exists($field, $station)) {
+            return null;
+        }
+
+        $value = $station[$field];
+
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_int($value) || is_float($value)) {
+            if ($value == 0 || $value == 1) {
+                return (float) $value === 1.0;
+            }
+        }
+
+        if (is_string($value)) {
+            return match (strtolower(trim($value))) {
+                '1', 'true' => true,
+                '0', 'false' => false,
+                default => null,
+            };
+        }
+
+        return null;
+    }
+
     public function getStations(): array
     {
         return $this->getStationsWithMetadata()['stations'];
@@ -361,6 +390,18 @@ class VelibApiService
                 'mechanicalBikes' => $mechanicalBikes,
                 'electricBikes' => $electricBikes,
                 'docks' => $station['num_docks_available'],
+                'isInstalled' => $this->normalizeGbfsBoolean(
+                    $station,
+                    'is_installed',
+                ),
+                'isRenting' => $this->normalizeGbfsBoolean(
+                    $station,
+                    'is_renting',
+                ),
+                'isReturning' => $this->normalizeGbfsBoolean(
+                    $station,
+                    'is_returning',
+                ),
                 'rentalStatus' => $this->getRentalStatus(
                     $station['num_bikes_available']
                 ),
