@@ -10,29 +10,138 @@ const { NavigationSession } = await import(
     `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`
 );
 
-function createSessionHarness() {
+function createDeferred() {
+    let resolve;
+    let reject;
+    const promise = new Promise((resolvePromise, rejectPromise) => {
+        resolve = resolvePromise;
+        reject = rejectPromise;
+    });
+
+    return { promise, resolve, reject };
+}
+
+function createSessionHarness({
+    requestPosition = async () => position(),
+    followingAfterClear = true,
+    compassActivationPromise = Promise.resolve(),
+    failures = {},
+} = {}) {
+    const events = [];
     const watches = [];
     const clearedWatchIds = [];
     const progressedPositions = [];
+    const compassControlPredicates = [];
     let nextWatchId = 1;
+    const fail = (name) => {
+        if (failures[name]) {
+            throw failures[name];
+        }
+    };
 
+    const navigationEngine = {
+        getNavigationMode: () => null,
+        setNavigationRoute() {
+            events.push('engine:route:set');
+            fail('setNavigationRoute');
+        },
+        updateNavigationProgress(positionValue) {
+            events.push('engine:progress');
+            progressedPositions.push(positionValue);
+        },
+        stopNavigationProcessing() {
+            events.push('engine:stop');
+            fail('stopNavigationProcessing');
+        },
+    };
     const session = new NavigationSession({
-        navigationEngine: {
-            updateNavigationProgress(position) {
-                progressedPositions.push(position);
+        navigationEngine,
+        gps: {
+            requestPosition(options) {
+                events.push('gps:request');
+                return requestPosition(options);
+            },
+            startWatchingPosition(onPosition, onError) {
+                events.push('gps:watch:start');
+                fail('startWatchingPosition');
+                const watch = { id: nextWatchId++, onPosition, onError };
+                watches.push(watch);
+                return watch.id;
+            },
+            clearWatch(watchId) {
+                clearedWatchIds.push(watchId);
+                events.push('gps:watch:clear');
             },
         },
-        startWatchingPosition(onPosition, onError) {
-            const watch = { id: nextWatchId++, onPosition, onError };
-            watches.push(watch);
-            return watch.id;
+        mapEffects: {
+            stopBackgroundTracking() {
+                events.push('map:background:stop');
+                fail('stopBackgroundTracking');
+            },
+            setNavigationActive(initialPosition, mode) {
+                events.push(`map:navigation:${mode}:${Boolean(initialPosition)}`);
+                fail('setNavigationActive');
+            },
+            setUserFollowing(enabled) {
+                events.push(`map:following:${enabled}`);
+            },
+            showUserPosition() {
+                events.push('map:user-position');
+                fail('showUserPosition');
+            },
+            drawNavigationRoute() {
+                events.push('map:route:draw');
+                fail('drawNavigationRoute');
+            },
+            clearPlannerRoutePreview() {
+                events.push('map:preview:clear');
+            },
+            clearNavigation() {
+                events.push('map:navigation:clear');
+                fail('clearNavigation');
+                return followingAfterClear;
+            },
+            startBackgroundTracking() {
+                events.push('map:background:start');
+                fail('startBackgroundTracking');
+            },
         },
-        clearWatch(watchId) {
-            clearedWatchIds.push(watchId);
+        compass: {
+            activate(canControlCamera) {
+                events.push('compass:activate');
+                compassControlPredicates.push(canControlCamera);
+                return compassActivationPromise;
+            },
+            stop() {
+                events.push('compass:stop');
+                fail('compassStop');
+            },
+            reactivateIfEligible() {
+                events.push('compass:reactivate');
+                return Promise.resolve();
+            },
+        },
+        wakeLock: {
+            start() {
+                events.push('wake:start');
+                fail('wakeStart');
+            },
+            stop() {
+                events.push('wake:stop');
+                fail('wakeStop');
+            },
         },
     });
 
-    return { session, watches, clearedWatchIds, progressedPositions };
+    return {
+        session,
+        events,
+        watches,
+        clearedWatchIds,
+        progressedPositions,
+        compassControlPredicates,
+        failures,
+    };
 }
 
 function position({ timestamp = Date.now(), accuracy = 8, latitude = 48.86 } = {}) {
@@ -44,45 +153,483 @@ function position({ timestamp = Date.now(), accuracy = 8, latitude = 48.86 } = {
     };
 }
 
-function withFixedNow(now, callback) {
+async function withFixedNow(now, callback) {
     const originalNow = Date.now;
     Date.now = () => now;
 
     try {
-        return callback();
+        return await callback();
     } finally {
         Date.now = originalNow;
     }
 }
 
-test('stores the first fresh GPS fix as raw and reliable position', () => {
-    const { session } = createSessionHarness();
-    const fix = position();
+async function allowPendingStartToContinue() {
+    await Promise.resolve();
+    await Promise.resolve();
+}
 
-    assert.equal(session.rememberPosition(fix), true);
-    assert.equal(session.getLastKnownPosition(), fix);
-    assert.equal(session.getLastReliablePosition(), fix);
-    assert.equal(session.isFreshPosition(fix), true);
-    assert.equal(session.isReliablePosition(fix), true);
+async function withQuietConsole(action) {
+    const originalError = console.error;
+    const originalWarn = console.warn;
+    console.error = () => {};
+    console.warn = () => {};
+
+    try {
+        return await action();
+    } finally {
+        console.error = originalError;
+        console.warn = originalWarn;
+    }
+}
+
+async function assertFailedStartIsCleanAndRetryable({
+    failureName,
+    failure,
+    mode = 'bicycle',
+    route = null,
+    compassActivation = Promise.resolve(),
+    prepareCamera,
+    requestPosition,
+}) {
+    const failures = failureName ? { [failureName]: failure } : {};
+    const harness = createSessionHarness({ failures, requestPosition });
+    const { session, events, watches, clearedWatchIds } = harness;
+    if (!requestPosition) {
+        session.rememberPosition(position());
+    }
+
+    await withQuietConsole(async () => {
+        await assert.rejects(
+            session.start({
+                mode,
+                route,
+                compassActivation,
+                prepareCamera,
+            }),
+            (error) => error === failure,
+        );
+    });
+
+    assert.equal(session.isActive(), false);
+    assert.equal(session.isWatching(), false);
+    assert.equal(watches.length, 0);
+    assert.equal(events.filter((event) => event === 'wake:stop').length, 1);
+    assert.equal(events.filter((event) => event === 'engine:stop').length, 1);
+    assert.equal(
+        events.filter((event) => event === 'map:navigation:clear').length,
+        1,
+    );
+    assert.equal(
+        events.filter((event) => event === 'map:background:start').length,
+        1,
+    );
+    assert.deepEqual(clearedWatchIds, []);
+
+    failures[failureName] = null;
+    assert.equal(
+        await session.start({
+            mode,
+            route,
+            compassActivation: Promise.resolve(),
+        }),
+        true,
+    );
+    assert.equal(session.isActive(), true);
+    assert.equal(watches.length, 1);
+    session.stop();
+}
+
+function plannerRoute(mode = 'bicycle') {
+    return {
+        segments: [
+            {
+                mode,
+                geometry: [
+                    [2.35, 48.86],
+                    [2.36, 48.87],
+                ],
+                destination: { latitude: 48.87, longitude: 2.36 },
+            },
+        ],
+    };
+}
+
+test('preserves walking startup order and stops all session resources', async () => {
+    const { session, events, watches, clearedWatchIds } = createSessionHarness();
+    session.rememberPosition(position());
+
+    assert.equal(
+        await session.start({
+            mode: 'pedestrian',
+            onPreparing: () => events.push('ui:preparing'),
+            prepareCamera: () => events.push('camera:prepare'),
+            onCameraReady: () => events.push('camera:ready'),
+            onStarted: () => events.push('ui:started'),
+        }),
+        true,
+    );
+
+    assert.equal(session.isActive(), true);
+    assert.deepEqual(events.slice(0, 6), [
+        'map:background:stop',
+        'map:navigation:pedestrian:true',
+        'map:following:true',
+        'wake:start',
+        'compass:activate',
+        'ui:preparing',
+    ]);
+    assert.ok(events.indexOf('camera:prepare') < events.indexOf('gps:watch:start'));
+    assert.ok(events.indexOf('camera:ready') < events.indexOf('gps:watch:start'));
+    assert.equal(watches.length, 1);
+
+    session.stop({
+        afterNavigationClear: () => events.push('map:planner-preview:clear'),
+    });
+
+    assert.equal(session.isActive(), false);
+    assert.deepEqual(clearedWatchIds, [watches[0].id]);
+    assert.deepEqual(events.slice(-10), [
+        'wake:stop',
+        'gps:watch:clear',
+        'compass:stop',
+        'engine:stop',
+        'map:navigation:clear',
+        'map:planner-preview:clear',
+        'map:user-position',
+        'map:following:true',
+        'map:background:start',
+        'compass:reactivate',
+    ]);
+    assert.equal(session.getLastKnownPosition(), null);
+    assert.equal(session.getLastReliablePosition(), null);
+
+    session.stop();
+    assert.equal(events.filter((event) => event === 'wake:stop').length, 1);
+    assert.equal(events.filter((event) => event === 'engine:stop').length, 1);
+    assert.equal(
+        events.filter((event) => event === 'map:navigation:clear').length,
+        1,
+    );
+    assert.equal(
+        events.filter((event) => event === 'map:background:start').length,
+        1,
+    );
+    assert.equal(clearedWatchIds.length, 1);
 });
 
-test('does not let older fixes replace the latest cached positions', () => {
-    const { session } = createSessionHarness();
-    const newest = position();
-    const older = position({ timestamp: newest.timestamp - 1000 });
+test('starts bicycle guidance without activating the compass and installs its route', async () => {
+    const { session, events } = createSessionHarness();
+    const route = {
+        segments: [{
+            mode: 'bicycle',
+            geometry: [[2.35, 48.86], [2.36, 48.87]],
+            destination: { latitude: 48.87, longitude: 2.36 },
+        }],
+    };
 
-    session.rememberPosition(newest);
-    session.rememberPosition(older);
+    assert.equal(
+        await session.start({
+            route,
+            compassActivation: Promise.resolve(),
+            prepareCamera: () => events.push('camera:prepare'),
+        }),
+        true,
+    );
 
-    assert.equal(session.getLastKnownPosition(), newest);
-    assert.equal(session.getLastReliablePosition(), newest);
+    assert.ok(events.includes('map:navigation:bicycle:false'));
+    assert.ok(events.includes('compass:stop'));
+    assert.equal(events.includes('compass:activate'), false);
+    assert.ok(events.indexOf('map:route:draw') < events.indexOf('engine:route:set'));
+    assert.ok(events.indexOf('engine:route:set') < events.indexOf('map:preview:clear'));
+    assert.ok(events.indexOf('map:preview:clear') < events.indexOf('camera:prepare'));
+    assert.ok(events.indexOf('camera:prepare') < events.indexOf('gps:watch:start'));
+    session.stop();
 });
 
-test('keeps an imprecise fix as raw only and rejects a stale fix', () => {
-    withFixedNow(100_000, () => {
+test('rejects a concurrent start while the first session awaits compass activation', async () => {
+    const { session, events, watches } = createSessionHarness();
+    session.rememberPosition(position());
+    const compassActivation = createDeferred();
+
+    const firstStart = session.start({
+        mode: 'pedestrian',
+        compassActivation: compassActivation.promise,
+    });
+    assert.equal(session.isActive(), true);
+    assert.equal(await session.start({ mode: 'bicycle' }), false);
+
+    compassActivation.resolve();
+    assert.equal(await firstStart, true);
+    assert.equal(watches.length, 1);
+    assert.equal(events.filter((event) => event === 'map:background:stop').length, 1);
+    session.stop();
+});
+
+test('an abort during compass activation prevents GPS, camera, and watch startup', async () => {
+    const compassActivation = createDeferred();
+    const { session, events, watches } = createSessionHarness({
+        compassActivationPromise: compassActivation.promise,
+    });
+    const start = session.start({
+        mode: 'pedestrian',
+        prepareCamera: () => events.push('camera:prepare'),
+    });
+
+    session.stop();
+    compassActivation.resolve();
+
+    assert.equal(await start, false);
+    assert.equal(events.includes('gps:request'), false);
+    assert.equal(events.includes('camera:prepare'), false);
+    assert.equal(watches.length, 0);
+    assert.equal(events.filter((event) => event === 'compass:stop').length, 1);
+});
+
+test('a navigation activation failure is cleaned and can be retried', async () => {
+    await assertFailedStartIsCleanAndRetryable({
+        failureName: 'setNavigationActive',
+        failure: new Error('Map navigation activation failed'),
+    });
+});
+
+test('a rejected asynchronous compass activation is cleaned and retryable', async () => {
+    const failure = new Error('Compass activation rejected');
+
+    await assertFailedStartIsCleanAndRetryable({
+        mode: 'pedestrian',
+        failure,
+        compassActivation: Promise.reject(failure),
+    });
+});
+
+test('a wake lock startup failure is cleaned and can be retried', async () => {
+    await assertFailedStartIsCleanAndRetryable({
+        failureName: 'wakeStart',
+        failure: new Error('Wake lock failed'),
+    });
+});
+
+test('a camera preparation failure is cleaned and can be retried', async () => {
+    const failure = new Error('Camera preparation failed');
+    let shouldFail = true;
+
+    await assertFailedStartIsCleanAndRetryable({
+        failure,
+        prepareCamera: async () => {
+            if (shouldFail) {
+                shouldFail = false;
+                throw failure;
+            }
+        },
+    });
+});
+
+test('a planner route installation failure is cleaned and can be retried', async () => {
+    await assertFailedStartIsCleanAndRetryable({
+        failureName: 'setNavigationRoute',
+        failure: new Error('Route installation failed'),
+        route: plannerRoute(),
+    });
+});
+
+test('a watch creation failure is cleaned and can be retried', async () => {
+    await assertFailedStartIsCleanAndRetryable({
+        failureName: 'startWatchingPosition',
+        failure: new Error('GPS watch failed'),
+    });
+});
+
+test('a failure after a successful one-shot GPS fix clears the cached fix', async () => {
+    const freshFix = position();
+    const failure = new Error('User marker update failed');
+    const harness = createSessionHarness({
+        failures: { showUserPosition: failure },
+        requestPosition: async () => freshFix,
+    });
+
+    await withQuietConsole(() =>
+        assert.rejects(
+            harness.session.start({
+                mode: 'bicycle',
+                compassActivation: Promise.resolve(),
+            }),
+            (error) => error === failure,
+        ),
+    );
+
+    assert.equal(harness.session.isActive(), false);
+    assert.equal(harness.session.getLastKnownPosition(), null);
+    assert.equal(harness.session.getLastReliablePosition(), null);
+    assert.ok(harness.events.includes('gps:request'));
+    assert.ok(harness.events.includes('map:background:start'));
+});
+
+test('cleanup failures do not replace the original start error or block later cleanup', async () => {
+    const startFailure = new Error('Navigation activation failed');
+    const cleanupFailure = new Error('Wake lock release failed');
+    const harness = createSessionHarness({
+        failures: {
+            setNavigationActive: startFailure,
+            wakeStop: cleanupFailure,
+        },
+    });
+
+    await withQuietConsole(() =>
+        assert.rejects(
+            harness.session.start({ mode: 'bicycle' }),
+            (error) => error === startFailure,
+        ),
+    );
+
+    assert.equal(harness.session.isActive(), false);
+    assert.ok(harness.events.includes('compass:stop'));
+    assert.ok(harness.events.includes('engine:stop'));
+    assert.ok(harness.events.includes('map:navigation:clear'));
+    assert.ok(harness.events.includes('map:background:start'));
+});
+
+test('a rejected old start cannot clean up a newer session', async () => {
+    const oldCameraWait = createDeferred();
+    const failure = new Error('Old camera operation failed');
+    const { session, events, watches } = createSessionHarness();
+    session.rememberPosition(position());
+
+    const oldStart = session.start({
+        mode: 'bicycle',
+        compassActivation: Promise.resolve(),
+        prepareCamera: () => oldCameraWait.promise,
+    });
+    await allowPendingStartToContinue();
+
+    session.stop();
+    session.rememberPosition(position());
+    assert.equal(
+        await session.start({
+            mode: 'bicycle',
+            compassActivation: Promise.resolve(),
+        }),
+        true,
+    );
+    const eventsBeforeOldRejection = events.slice();
+
+    oldCameraWait.reject(failure);
+    await assert.rejects(oldStart, (error) => error === failure);
+
+    assert.equal(session.isActive(), true);
+    assert.equal(watches.length, 1);
+    assert.equal(
+        events.filter((event) => event === 'engine:stop').length,
+        eventsBeforeOldRejection.filter((event) => event === 'engine:stop')
+            .length,
+    );
+    session.stop();
+});
+
+test('stopping without active resources is safe and idempotent', () => {
+    const { session, events } = createSessionHarness();
+
+    assert.doesNotThrow(() => session.stop());
+    assert.doesNotThrow(() => session.stop());
+    assert.equal(events.length, 0);
+});
+
+test('a late compass reading cannot control the camera after the session stops', async () => {
+    const compassActivation = createDeferred();
+    const { session, compassControlPredicates, watches } = createSessionHarness({
+        compassActivationPromise: compassActivation.promise,
+    });
+    session.rememberPosition(position());
+    const start = session.start({
+        mode: 'pedestrian',
+        prepareCamera: () => Promise.resolve(),
+    });
+
+    await allowPendingStartToContinue();
+    assert.equal(compassControlPredicates.length, 1);
+    compassActivation.resolve();
+    assert.equal(await start, true);
+    assert.equal(compassControlPredicates[0](), true);
+
+    session.stop();
+
+    assert.equal(compassControlPredicates[0](), false);
+    assert.equal(watches.length, 1);
+});
+
+test('an abort during one-shot GPS acquisition ignores its late result', async () => {
+    const gpsRequest = createDeferred();
+    const { session, events, watches } = createSessionHarness({
+        requestPosition: () => gpsRequest.promise,
+    });
+    const start = session.start({
+        mode: 'pedestrian',
+        compassActivation: Promise.resolve(),
+        prepareCamera: () => events.push('camera:prepare'),
+    });
+
+    await allowPendingStartToContinue();
+    assert.ok(events.includes('gps:request'));
+    session.stop();
+    gpsRequest.resolve(position());
+
+    assert.equal(await start, false);
+    assert.equal(session.getLastKnownPosition(), null);
+    assert.equal(events.includes('camera:prepare'), false);
+    assert.equal(watches.length, 0);
+});
+
+test('an abort during camera preparation prevents a navigation watch', async () => {
+    const cameraReady = createDeferred();
+    const { session, watches } = createSessionHarness();
+    session.rememberPosition(position());
+    const start = session.start({
+        mode: 'bicycle',
+        compassActivation: Promise.resolve(),
+        prepareCamera: () => cameraReady.promise,
+    });
+
+    await allowPendingStartToContinue();
+    session.stop();
+    cameraReady.resolve();
+
+    assert.equal(await start, false);
+    assert.equal(watches.length, 0);
+});
+
+test('a failed one-shot GPS request is non-blocking and background tracking resumes on stop', async () => {
+    const originalWarn = console.warn;
+    console.warn = () => {};
+
+    try {
+        const { session, events, watches } = createSessionHarness({
+            requestPosition: async () => {
+                throw new Error('GPS unavailable');
+            },
+        });
+
+        assert.equal(
+            await session.start({
+                mode: 'pedestrian',
+                compassActivation: Promise.resolve(),
+            }),
+            true,
+        );
+        assert.equal(watches.length, 1);
+
+        session.stop();
+        assert.ok(events.includes('map:background:start'));
+        assert.equal(session.getLastKnownPosition(), null);
+    } finally {
+        console.warn = originalWarn;
+    }
+});
+
+test('retains only the newest fresh raw fix and newest reliable fix', async () => {
+    await withFixedNow(100_000, () => {
         const { session } = createSessionHarness();
-        const reliable = position({ timestamp: 99_998 });
-        const imprecise = position({ timestamp: 99_999, accuracy: 40 });
+        const reliable = position({ timestamp: 99_997 });
+        const imprecise = position({ timestamp: 99_998, accuracy: 35 });
         const stale = position({ timestamp: 88_999 });
 
         session.rememberPosition(reliable);
@@ -95,32 +642,23 @@ test('keeps an imprecise fix as raw only and rejects a stale fix', () => {
     });
 });
 
-test('creates one watch, clears it once, and ignores its late callback', () => {
+test('clearing an old watch prevents it from progressing a later session', async () => {
     const { session, watches, clearedWatchIds, progressedPositions } =
         createSessionHarness();
+    session.rememberPosition(position());
 
-    assert.equal(session.startPositionWatch(), true);
-    assert.equal(session.startPositionWatch(), false);
-    assert.equal(watches.length, 1);
-    assert.equal(session.isWatching(), true);
-
-    const watch = watches[0];
-    assert.equal(session.stopPositionWatch(), true);
-    assert.equal(session.stopPositionWatch(), false);
-    assert.deepEqual(clearedWatchIds, [watch.id]);
-
-    watch.onPosition(position());
-    assert.equal(progressedPositions.length, 0);
-    assert.equal(session.getLastKnownPosition(), null);
-});
-
-test('an old watch cannot update a newer session', () => {
-    const { session, watches, progressedPositions } = createSessionHarness();
-
-    session.startPositionWatch();
+    await session.start({
+        mode: 'pedestrian',
+        compassActivation: Promise.resolve(),
+    });
     const oldWatch = watches[0];
-    session.stopPositionWatch();
-    session.startPositionWatch();
+    session.stop();
+    session.rememberPosition(position());
+
+    await session.start({
+        mode: 'bicycle',
+        compassActivation: Promise.resolve(),
+    });
     const currentWatch = watches[1];
 
     oldWatch.onPosition(position());
@@ -129,18 +667,22 @@ test('an old watch cannot update a newer session', () => {
     const currentFix = position();
     currentWatch.onPosition(currentFix);
     assert.deepEqual(progressedPositions, [currentFix]);
+    assert.deepEqual(clearedWatchIds, [oldWatch.id]);
+    session.stop();
 });
 
-test('retains a reliable fix for destination changes when a newer fix is imprecise', () => {
-    withFixedNow(100_000, () => {
+test('delivers a new reliable fix to destination-change waiting without replacing it with an imprecise fix', async () => {
+    await withFixedNow(100_000, async () => {
         const { session, watches } = createSessionHarness();
-        const reliableFix = position({ timestamp: 99_997 });
+        const initialReliableFix = position({ timestamp: 99_997 });
         const impreciseFix = position({ timestamp: 99_998, accuracy: 35 });
         const nextReliableFix = position({ timestamp: 99_999, accuracy: 10 });
         let deliveredReliablePosition = null;
 
-        session.rememberPosition(reliableFix);
-        session.startPositionWatch({
+        session.rememberPosition(initialReliableFix);
+        await session.start({
+            mode: 'pedestrian',
+            compassActivation: Promise.resolve(),
             onPosition: (_position, state) => {
                 if (state.reliablePositionUpdated) {
                     deliveredReliablePosition = state.reliablePosition;
@@ -150,10 +692,11 @@ test('retains a reliable fix for destination changes when a newer fix is impreci
 
         watches[0].onPosition(impreciseFix);
         assert.equal(deliveredReliablePosition, null);
+        assert.equal(session.getLastReliablePosition(), initialReliableFix);
 
         watches[0].onPosition(nextReliableFix);
-
-        assert.equal(session.getLastReliablePosition(), nextReliableFix);
         assert.equal(deliveredReliablePosition, nextReliableFix);
+        assert.equal(session.getLastReliablePosition(), nextReliableFix);
+        session.stop();
     });
 });

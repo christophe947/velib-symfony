@@ -57,7 +57,6 @@ let routePreviewAbortController = null;
 let isPlannerNavigationStarting = false;
 let isPlannerRouteOutdated = false;
 
-let navigationStarted = false;
 let navigationSessionId = 0;
 let stationPanelRenderId = 0;
 let displayedStation = null;
@@ -74,6 +73,10 @@ const screenWakeLock = createScreenWakeLock();
 
 let currentMode = 'bikes';
 let latestStationsById = new Map();
+
+function isNavigationStarted() {
+    return navigationSession?.isActive() ?? false;
+}
 
 function getStationWithLatestAvailability(station) {
     const latestStation = latestStationsById.get(String(station.id));
@@ -190,7 +193,11 @@ function isValidPlannerRoute(route = routePreviewData) {
 }
 
 function isPlannerNavigationActive() {
-    return navigationStarted && !activeNavigationStation && isValidPlannerRoute();
+    return (
+        isNavigationStarted() &&
+        !activeNavigationStation &&
+        isValidPlannerRoute()
+    );
 }
 
 function renderPlannerPreview(navigationActive = false, message = '') {
@@ -238,7 +245,7 @@ function handleRoutePlannerStateChange(selections, map) {
         rememberUserGpsPosition(map, selections.origin);
     }
 
-    if (routePreviewData && !navigationStarted) {
+    if (routePreviewData && !isNavigationStarted()) {
         isPlannerRouteOutdated = true;
     }
 
@@ -281,7 +288,7 @@ async function restoreNavigationCamera(map, station, sessionId) {
         : isPlannerNavigationActive();
 
     if (
-        !navigationStarted ||
+        !isNavigationStarted() ||
         navigationSessionId !== sessionId ||
         !hasCurrentTarget
     ) {
@@ -311,7 +318,7 @@ function scheduleNavigationPaneCollapse(station, sessionId) {
     paneController?.scheduleCollapse(
         () =>
             stationPanelRenderId === renderId &&
-            navigationStarted &&
+            isNavigationStarted() &&
             navigationSessionId === sessionId &&
             stationsMatch(displayedStation, station),
     );
@@ -324,7 +331,7 @@ function scheduleNavigationPaneCollapse(station, sessionId) {
 function updateRouteSummary(distance, duration) {
     routeSummaryData = { distance, duration };
 
-    if (navigationStarted) {
+    if (isNavigationStarted()) {
         activeNavigationRouteSummary = routeSummaryData;
     }
 
@@ -353,7 +360,7 @@ function updateRouteSummary(distance, duration) {
     }
 
     if (
-        navigationStarted &&
+        isNavigationStarted() &&
         !stationsMatch(displayedStation, activeNavigationStation)
     ) {
         return;
@@ -456,7 +463,7 @@ async function calculateJoinRoute(map, styleReady, station, activeButton) {
     const routeMessage = element.querySelector('.station-panel-message');
 
     if (
-        navigationStarted ||
+        isNavigationStarted() ||
         activeButton.disabled ||
         element.querySelector('.station-panel-join-option[aria-busy="true"]') ||
         (activeButton.dataset.routeMode !== 'pedestrian' &&
@@ -499,7 +506,7 @@ async function calculateJoinRoute(map, styleReady, station, activeButton) {
         if (
             previewRenderId !== stationPanelRenderId ||
             previewSessionId !== navigationSessionId ||
-            navigationStarted
+            isNavigationStarted()
         ) {
             return;
         }
@@ -512,7 +519,7 @@ async function calculateJoinRoute(map, styleReady, station, activeButton) {
         if (
             previewRenderId !== stationPanelRenderId ||
             previewSessionId !== navigationSessionId ||
-            navigationStarted
+            isNavigationStarted()
         ) {
             return;
         }
@@ -526,7 +533,7 @@ async function calculateJoinRoute(map, styleReady, station, activeButton) {
         if (
             previewRenderId !== stationPanelRenderId ||
             previewSessionId !== navigationSessionId ||
-            navigationStarted
+            isNavigationStarted()
         ) {
             return;
         }
@@ -540,7 +547,7 @@ async function calculateJoinRoute(map, styleReady, station, activeButton) {
         if (
             previewRenderId !== stationPanelRenderId ||
             previewSessionId !== navigationSessionId ||
-            navigationStarted
+            isNavigationStarted()
         ) {
             return;
         }
@@ -551,7 +558,7 @@ async function calculateJoinRoute(map, styleReady, station, activeButton) {
             isCurrent: () =>
                 previewRenderId === stationPanelRenderId &&
                 previewSessionId === navigationSessionId &&
-                !navigationStarted,
+                !isNavigationStarted(),
         });
 
         if (!wasPresented) {
@@ -599,7 +606,7 @@ async function calculateJoinRoute(map, styleReady, station, activeButton) {
         if (
             previewRenderId !== stationPanelRenderId ||
             previewSessionId !== navigationSessionId ||
-            navigationStarted
+            isNavigationStarted()
         ) {
             return;
         }
@@ -674,7 +681,7 @@ async function calculateJoinRoute(map, styleReady, station, activeButton) {
 
 function startJoinNavigation(map, styleReady, startButton) {
     if (
-        navigationStarted ||
+        isNavigationStarted() ||
         element.querySelector('.station-panel-join-option[aria-busy="true"]')
     ) {
         return;
@@ -691,32 +698,55 @@ function startJoinNavigation(map, styleReady, startButton) {
 
     const station = displayedStation;
     const renderId = stationPanelRenderId;
-    const routeMessage = element.querySelector('.station-panel-message');
     const sessionId = ++navigationSessionId;
 
     startButton.disabled = true;
     startButton.textContent = 'Démarrage…';
 
-    void startNavigationSession(map, styleReady, sessionId, {
+    void startNavigationSession(map, sessionId, {
         station,
         route: null,
         summary: routeSummaryData,
     })
-        .catch((error) => {
+        .catch(async (error) => {
             console.error('Impossible de démarrer la navigation :', error);
 
             if (
                 renderId === stationPanelRenderId &&
-                !navigationStarted &&
-                routeMessage
+                sessionId === navigationSessionId &&
+                !isNavigationStarted()
             ) {
-                routeMessage.hidden = false;
-                routeMessage.textContent =
-                    'La navigation n’a pas pu démarrer. Réessaie.';
+                activeNavigationStation = null;
+                activeNavigationRouteSummary = null;
+                routeSummaryData = null;
+
+                try {
+                    await updateStationPanel(station, map, styleReady, false);
+                } catch (renderError) {
+                    console.error(
+                        'Impossible de restaurer le panneau station :',
+                        renderError,
+                    );
+                }
+
+                if (
+                    sessionId === navigationSessionId &&
+                    !isNavigationStarted()
+                ) {
+                    const currentMessage = element.querySelector(
+                        '.station-panel-message',
+                    );
+
+                    if (currentMessage) {
+                        currentMessage.hidden = false;
+                        currentMessage.textContent =
+                            'La navigation n’a pas pu démarrer. Réessaie.';
+                    }
+                }
             }
         })
         .finally(() => {
-            if (renderId === stationPanelRenderId && !navigationStarted) {
+            if (renderId === stationPanelRenderId && !isNavigationStarted()) {
                 startButton.disabled = false;
                 startButton.textContent = 'Démarrer';
             }
@@ -750,7 +780,7 @@ function toggleJoinMode(button) {
 }
 
 function resumeNavigation(map, styleReady) {
-    if (!navigationStarted) {
+    if (!isNavigationStarted()) {
         return;
     }
 
@@ -816,7 +846,6 @@ function showNavigationDestinationMarker(map, destination) {
 
 async function startNavigationSession(
     map,
-    styleReady,
     sessionId,
     {
         station,
@@ -826,124 +855,34 @@ async function startNavigationSession(
         onCameraReady,
     },
 ) {
-    stopBackgroundUserTracking();
-    const navigationMode =
-        route?.segments?.[0]?.mode ??
-        navigationEngine.getNavigationMode() ??
-        'pedestrian';
-    const initialGpsPosition = navigationSession.getLastKnownPosition();
-    activeNavigationStation = station;
-    activeNavigationRouteSummary = summary;
-    routeSummaryData = summary;
-    navigationStarted = true;
-    setNavigationActive(
-        true,
-        navigationSession.isFreshPosition(initialGpsPosition)
-            ? initialGpsPosition
-            : null,
-        navigationMode,
-        map,
-    );
-    setUserFollowing(true);
-    screenWakeLock.start();
-
-    if (navigationMode === 'bicycle') {
-        stopCompass();
-    }
-
-    let isInitialCameraSetup = true;
-    const isSessionActive = () =>
-        navigationStarted && sessionId === navigationSessionId;
-    const compassPromise =
-        navigationMode === 'bicycle'
-            ? (compassActivation ?? Promise.resolve())
-            : (compassActivation ??
-              activateCompass(
-                  map,
-                  undefined,
-                  (error) => {
-                      console.error('Boussole indisponible :', error);
-                  },
-                  () => !isInitialCameraSetup,
-              ));
-
-    if (
-        !station &&
-        isRoutePlannerOpen &&
-        isRoutePreviewOpen &&
-        isValidPlannerRoute()
-    ) {
-        renderPlannerPreview(true);
-        routePreviewElement.hidden = false;
-        plannerElement.hidden = true;
-        element.hidden = true;
-    }
-
-    await compassPromise;
-
-    if (!isSessionActive()) {
+    if (navigationSession.isActive()) {
         return false;
     }
 
-    if (
-        !navigationSession.isFreshPosition(
-            navigationSession.getLastKnownPosition(),
-        )
-    ) {
-        try {
-            const userPosition = await requestUserPosition({
-                maximumAge: 0,
-            });
-
-            if (!isSessionActive()) {
-                return false;
+    const started = await navigationSession.start({
+        route,
+        compassActivation,
+        isCurrent: () => sessionId === navigationSessionId,
+        onActivating: () => {
+            activeNavigationStation = station;
+            activeNavigationRouteSummary = summary;
+            routeSummaryData = summary;
+        },
+        onPreparing: () => {
+            if (
+                !station &&
+                isRoutePlannerOpen &&
+                isRoutePreviewOpen &&
+                isValidPlannerRoute()
+            ) {
+                renderPlannerPreview(true);
+                routePreviewElement.hidden = false;
+                plannerElement.hidden = true;
+                element.hidden = true;
             }
-
-            navigationSession.rememberPosition(userPosition);
-        } catch (error) {
-            if (!isSessionActive()) {
-                return false;
-            }
-
-            console.warn(
-                'Impossible d’obtenir une position GPS récente au démarrage :',
-                error,
-            );
-        }
-    }
-
-    if (route) {
-        const segment = route.segments[0];
-
-        drawWalkingRoute(map, segment.geometry, segment.mode);
-        showNavigationDestinationMarker(map, segment.destination);
-        navigationEngine.setNavigationRoute(
-            segment.geometry,
-            {
-                latitude: segment.destination.latitude,
-                longitude: segment.destination.longitude,
-            },
-            segment.mode,
-        );
-        clearRoutePreview(map);
-    }
-
-    const currentPosition = navigationSession.getLastKnownPosition();
-
-    if (currentPosition) {
-        showUserMarker(map, currentPosition);
-    }
-
-    await restoreNavigationCamera(map, station, sessionId);
-
-    if (!isSessionActive()) {
-        return false;
-    }
-
-    isInitialCameraSetup = false;
-    onCameraReady?.();
-
-    navigationSession.startPositionWatch({
+        },
+        prepareCamera: () => restoreNavigationCamera(map, station, sessionId),
+        onCameraReady,
         onPosition: (position, { reliablePosition, reliablePositionUpdated }) => {
             const destinationChange = pendingDestinationChange;
 
@@ -960,15 +899,13 @@ async function startNavigationSession(
                 );
             }
         },
-        onError: (error) => {
-            console.error('Erreur GPS :', error);
-        },
     });
 
-    if (station && stationsMatch(displayedStation, station)) {
+    if (started && station && stationsMatch(displayedStation, station)) {
         renderActiveNavigationControls();
         scheduleNavigationPaneCollapse(station, sessionId);
     } else if (
+        started &&
         !station &&
         isPlannerNavigationActive() &&
         isRoutePlannerOpen &&
@@ -980,7 +917,7 @@ async function startNavigationSession(
         element.hidden = true;
     }
 
-    return true;
+    return started;
 }
 
 export function initStationPanel(map, styleReady) {
@@ -1007,8 +944,34 @@ export function initStationPanel(map, styleReady) {
     });
     navigationSession = new NavigationSession({
         navigationEngine,
-        startWatchingPosition,
-        clearWatch: (watchId) => navigator.geolocation.clearWatch(watchId),
+        gps: {
+            requestPosition: requestUserPosition,
+            startWatchingPosition,
+            clearWatch: (watchId) => navigator.geolocation.clearWatch(watchId),
+        },
+        mapEffects: {
+            stopBackgroundTracking: stopBackgroundUserTracking,
+            setNavigationActive: (initialPosition, mode) =>
+                setNavigationActive(true, initialPosition, mode, map),
+            setUserFollowing,
+            showUserPosition: (position) => showUserMarker(map, position),
+            drawNavigationRoute: (route) => {
+                const segment = route.segments[0];
+
+                drawWalkingRoute(map, segment.geometry, segment.mode);
+                showNavigationDestinationMarker(map, segment.destination);
+            },
+            clearPlannerRoutePreview: () => clearRoutePreview(map),
+            clearNavigation: () => clearNavigationMap(map),
+            startBackgroundTracking: () => startBackgroundUserTracking(map),
+        },
+        compass: {
+            stop: stopCompass,
+            activate: (canControlCamera, onError) =>
+                activateCompass(map, undefined, onError, canControlCamera),
+            reactivateIfEligible: () => reactivateCompassIfEligible(map),
+        },
+        wakeLock: screenWakeLock,
     });
 
     // Le panneau vide est présent dès le lancement
@@ -1196,7 +1159,7 @@ function showRoutePlanner(movePane, map) {
         isRoutePreviewOpen = true;
         renderPlannerPreview(false);
 
-        if (map && !navigationStarted) {
+        if (map && !isNavigationStarted()) {
             drawRoutePreview(
                 map,
                 routePreviewData.segments[0].geometry,
@@ -1293,8 +1256,8 @@ function setPlannerCalculationMessage(message, isError = false) {
 }
 
 async function calculatePlannerRoute(map, styleReady) {
-    if (!isRoutePlannerOpen || isRoutePreviewOpen || navigationStarted) {
-        if (navigationStarted) {
+    if (!isRoutePlannerOpen || isRoutePreviewOpen || isNavigationStarted()) {
+        if (isNavigationStarted()) {
             setPlannerCalculationMessage(
                 'Termine ou arrête la navigation en cours avant de calculer un autre itinéraire.',
                 true,
@@ -1356,7 +1319,7 @@ async function calculatePlannerRoute(map, styleReady) {
             if (
                 requestId !== routePreviewRequestId ||
                 !isRoutePlannerOpen ||
-                navigationStarted
+                isNavigationStarted()
             ) {
                 return;
             }
@@ -1391,7 +1354,7 @@ async function calculatePlannerRoute(map, styleReady) {
         if (
             requestId !== routePreviewRequestId ||
             !isRoutePlannerOpen ||
-            navigationStarted
+            isNavigationStarted()
         ) {
             return;
         }
@@ -1416,7 +1379,7 @@ async function calculatePlannerRoute(map, styleReady) {
         if (
             requestId !== routePreviewRequestId ||
             !isRoutePlannerOpen ||
-            navigationStarted
+            isNavigationStarted()
         ) {
             return;
         }
@@ -1426,7 +1389,7 @@ async function calculatePlannerRoute(map, styleReady) {
             isCurrent: () =>
                 requestId === routePreviewRequestId &&
                 isRoutePlannerOpen &&
-                !navigationStarted,
+                !isNavigationStarted(),
         });
 
         if (!wasPresented) {
@@ -1490,7 +1453,7 @@ async function calculatePlannerRoute(map, styleReady) {
 async function startPlannerNavigation(map, styleReady) {
     if (
         isPlannerNavigationStarting ||
-        navigationStarted ||
+        isNavigationStarted() ||
         !isRoutePlannerOpen ||
         !isRoutePreviewOpen ||
         isPlannerRouteOutdated ||
@@ -1534,7 +1497,7 @@ async function startPlannerNavigation(map, styleReady) {
         routePreviewData === route &&
         isRoutePlannerOpen &&
         isRoutePreviewOpen &&
-        !navigationStarted;
+        !isNavigationStarted();
 
     try {
         // La demande de permission boussole a été déclenchée dans le clic.
@@ -1547,7 +1510,7 @@ async function startPlannerNavigation(map, styleReady) {
         sessionId = ++navigationSessionId;
         isPlannerRouteOutdated = false;
 
-        await startNavigationSession(map, styleReady, sessionId, {
+        await startNavigationSession(map, sessionId, {
             station: null,
             route,
             summary: {
@@ -1562,11 +1525,14 @@ async function startPlannerNavigation(map, styleReady) {
     } catch (error) {
         if (
             sessionId !== null &&
-            navigationStarted &&
-            navigationSessionId === sessionId
+            navigationSessionId === sessionId &&
+            routePreviewData === route &&
+            isRoutePlannerOpen &&
+            isRoutePreviewOpen
         ) {
             stopNavigation(map, null, styleReady, {
                 preservePlannerPreview: true,
+                failedPlannerStart: !isNavigationStarted(),
             });
         }
 
@@ -1591,10 +1557,13 @@ async function startPlannerNavigation(map, styleReady) {
     } finally {
         isPlannerNavigationStarting = false;
 
-        if (!navigationStarted && sessionId === null) {
+        if (!isNavigationStarted() && sessionId === null) {
             void compassActivation
                 .then(() => {
-                    if (!isPlannerNavigationStarting && !navigationStarted) {
+                    if (
+                        !isPlannerNavigationStarting &&
+                        !isNavigationStarted()
+                    ) {
                         return reactivateCompassIfEligible(map);
                     }
                 })
@@ -1606,7 +1575,7 @@ async function startPlannerNavigation(map, styleReady) {
                 });
         }
 
-        if (!navigationStarted) {
+        if (!isNavigationStarted()) {
             const button = routePreviewElement?.querySelector(
                 '.route-preview-start',
             );
@@ -1676,9 +1645,13 @@ function stopNavigation(
     map,
     station,
     styleReady,
-    { preservePlannerPreview = false } = {},
+    {
+        preservePlannerPreview = false,
+        failedPlannerStart = false,
+    } = {},
 ) {
-    const wasPlannerNavigation = isPlannerNavigationActive();
+    const wasPlannerNavigation =
+        isPlannerNavigationActive() || failedPlannerStart;
     const shouldRestorePlannerPreview =
         preservePlannerPreview &&
         wasPlannerNavigation &&
@@ -1695,7 +1668,6 @@ function stopNavigation(
     finishDestinationChangeGpsWait(pendingDestinationChange);
     pendingDestinationChange = null;
     destinationChangeError = null;
-    navigationStarted = false;
     activeNavigationStation = null;
     activeNavigationRouteSummary = null;
     routeSummaryData = null;
@@ -1703,42 +1675,14 @@ function stopNavigation(
         routePreviewData = null;
     }
     isPlannerRouteOutdated = false;
-    screenWakeLock.stop();
 
-    // Arrête le suivi GPS.
-    navigationSession.stopPositionWatch();
-
-    // Arrête la boussole.
-    stopCompass();
-
-    // Arrête les traitements de navigation et invalide les recalculs.
-    navigationEngine.stopNavigationProcessing();
-
-    // Nettoie le tracé et le marqueur de destination.
-    const wasFollowingUser = clearNavigationMap(map);
-
-    if (wasPlannerNavigation && !shouldRestorePlannerPreview) {
-        clearRoutePreview(map);
-    }
-
-    // Le marqueur revient à la dernière coordonnée GPS brute connue.
-    const lastKnownPosition = navigationSession.getLastKnownPosition();
-
-    if (navigationSession.isFreshPosition(lastKnownPosition)) {
-        showUserMarker(map, lastKnownPosition);
-    }
-
-    setUserFollowing(wasFollowingUser);
-    startBackgroundUserTracking(map);
-
-    // Redémarre uniquement un capteur déjà autorisé, sans redemander
-    // la permission iOS pendant l'arrêt de navigation.
-    if (wasFollowingUser) {
-        reactivateCompassIfEligible(map);
-    }
-
-    // Réinitialise l'état local.
-    navigationSession.clearPositions();
+    // La session libère le watch, les capteurs et nettoie la carte.
+    navigationSession.stop({
+        afterNavigationClear:
+            wasPlannerNavigation && !shouldRestorePlannerPreview
+                ? () => clearRoutePreview(map)
+                : undefined,
+    });
     stationPanelRenderId++;
 
     // Restaure le bouton permettant de recalculer l'itinéraire.
@@ -1828,7 +1772,7 @@ function isCurrentDestinationChange(request) {
         pendingDestinationChange === request &&
         request.id === destinationChangeRequestId &&
         request.sessionId === navigationSessionId &&
-        navigationStarted
+        isNavigationStarted()
     );
 }
 
@@ -1862,7 +1806,7 @@ function waitForDestinationChangeGps(request) {
 }
 
 async function startDestinationChange(map, station, styleReady) {
-    if (!navigationStarted || pendingDestinationChange) {
+    if (!isNavigationStarted() || pendingDestinationChange) {
         return;
     }
 
@@ -2040,12 +1984,13 @@ async function startDestinationChange(map, station, styleReady) {
 
 function getStationPanelNavigationState(station) {
     const isActiveNavigationPanel =
-        navigationStarted && stationsMatch(station, activeNavigationStation);
+        isNavigationStarted() &&
+        stationsMatch(station, activeNavigationStation);
 
     return {
         isActiveNavigationPanel,
         isNavigationContextPanel:
-            navigationStarted && !isActiveNavigationPanel,
+            isNavigationStarted() && !isActiveNavigationPanel,
         navigationMode: navigationEngine.getNavigationMode() ?? 'pedestrian',
     };
 }
