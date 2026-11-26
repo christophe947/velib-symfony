@@ -5,10 +5,23 @@ import { setSelectedStation } from './shared/state.js';
 import { startStationRefresh } from './shared/stationRefresh.js';
 
 
-const initialSnapshot = window.stationSnapshot ?? {
-    stations: window.stations ?? [],
-};
-const initialStations = initialSnapshot.stations;
+const providedSnapshot = window.stationSnapshot;
+const initialStations =
+    providedSnapshot?.stations ?? window.stations ?? [];
+const hasCompleteInitialSnapshot =
+    Array.isArray(providedSnapshot?.stations) &&
+    typeof providedSnapshot.fetchedAt === 'string' &&
+    Number.isFinite(Date.parse(providedSnapshot.fetchedAt)) &&
+    typeof providedSnapshot.stale === 'boolean';
+const initialSnapshot = hasCompleteInitialSnapshot
+    ? providedSnapshot
+    : {
+          stations: initialStations,
+          fetchedAt: null,
+          stale: null,
+      };
+let currentStationSnapshot = initialSnapshot;
+const getStationSnapshot = () => currentStationSnapshot;
 const { map, styleReady, updateStationData } = createMap();
 
 function updateStationDataStatus(snapshot) {
@@ -24,13 +37,17 @@ function updateStationDataStatus(snapshot) {
         return;
     }
 
-    const fetchedAt = new Date(snapshot.fetchedAt);
-    const formattedDate = Number.isNaN(fetchedAt.getTime())
-        ? null
-        : new Intl.DateTimeFormat('fr-FR', {
-              dateStyle: 'short',
-              timeStyle: 'short',
-          }).format(fetchedAt);
+    const fetchedAt =
+        typeof snapshot.fetchedAt === 'string'
+            ? new Date(snapshot.fetchedAt)
+            : null;
+    const formattedDate =
+        !fetchedAt || Number.isNaN(fetchedAt.getTime())
+            ? null
+            : new Intl.DateTimeFormat('fr-FR', {
+                  dateStyle: 'short',
+                  timeStyle: 'short',
+              }).format(fetchedAt);
 
     status.textContent = formattedDate
         ? `Données de secours — dernier relevé : ${formattedDate}`
@@ -50,7 +67,9 @@ styleReady.catch((error) => {
     }
 });
 
-const stationPanel = initStationPanel(map, styleReady);
+const stationPanel = initStationPanel(map, styleReady, {
+    getStationSnapshot,
+});
 
 const searchReady = initSearch(map).catch((error) => {
     console.error('Impossible d’initialiser la recherche des stations :', error);
@@ -63,8 +82,10 @@ void searchReady.then((searchApi) => {
 
 startStationRefresh({
     initialStations,
-    initialSnapshot,
+    initialSnapshot: hasCompleteInitialSnapshot ? initialSnapshot : null,
     onSnapshot: (snapshot, { dataChanged, metadataChanged }) => {
+        currentStationSnapshot = snapshot;
+
         if (dataChanged) {
             updateStationData(snapshot.stations);
             stationPanel?.updateAvailability(snapshot.stations);

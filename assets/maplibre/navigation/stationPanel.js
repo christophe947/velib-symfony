@@ -904,7 +904,11 @@ async function startNavigationSession(
     return started;
 }
 
-export function initStationPanel(map, styleReady) {
+export function initStationPanel(
+    map,
+    styleReady,
+    { getStationSnapshot } = {},
+) {
     element = document.querySelector('#station-content');
     paneElement = document.querySelector('#maplibre-station-panel');
     plannerElement = document.querySelector('#route-planner');
@@ -919,6 +923,10 @@ export function initStationPanel(map, styleReady) {
     ) {
         return;
     }
+
+    const readStationSnapshot =
+        typeof getStationSnapshot === 'function' ? getStationSnapshot : () => null;
+
     navigationEngine = createNavigationEngine({
         updateNavigationPosition: (gpsPosition, displayedPosition) =>
             updateNavigationPosition(map, gpsPosition, displayedPosition),
@@ -1077,6 +1085,7 @@ export function initStationPanel(map, styleReady) {
     paneController.bindSearchEvents();
 
     return {
+        getStationSnapshot: readStationSnapshot,
         updateAvailability: updateStationAvailability,
         setRouteSearchApi: (searchApi) =>
             routePlannerController?.setSearchApi(searchApi),
