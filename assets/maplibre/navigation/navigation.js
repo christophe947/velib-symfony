@@ -10,6 +10,8 @@ export function createNavigationEngine(effects) {
         updateNavigationPosition,
         updateWalkingRoute,
         updateRouteSummary,
+        // Observateur synchrone appelé après l'acceptation d'une progression.
+        onProgress,
     } = effects;
 
     let currentRouteCoordinates = [];
@@ -25,6 +27,8 @@ export function createNavigationEngine(effects) {
     let isReplacingRoute = false;
 
     let navigationSessionId = 0;
+    // Identifie la géométrie active indépendamment des requêtes de remplacement.
+    let routeGeneration = 0;
     // Paramètres de détection des sorties d'itinéraire.
     const OFF_ROUTE_THRESHOLD = 30;
     const OFF_ROUTE_CONFIRMATIONS = 3;
@@ -83,6 +87,7 @@ export function createNavigationEngine(effects) {
         setRouteProgressGeometry(coordinates);
         navigationDestination = destination;
         currentRouteMode = mode;
+        routeGeneration++;
         resetOffRouteConfirmations();
         lastProcessedGpsTimestamp = null;
         lastCameraGpsTimestamp = null;
@@ -141,6 +146,7 @@ export function createNavigationEngine(effects) {
         setRouteProgressGeometry(coordinates);
         navigationDestination = destination;
         currentRouteMode = mode;
+        routeGeneration++;
         resetOffRouteConfirmations();
         lastProcessedGpsTimestamp = null;
         lastCameraGpsTimestamp = null;
@@ -168,6 +174,7 @@ export function createNavigationEngine(effects) {
         isRecalculatingRoute = true;
 
         const sessionId = navigationSessionId;
+        const expectedRouteGeneration = routeGeneration;
         const routeMode = currentRouteMode;
 
         if (routeMode !== 'pedestrian' && routeMode !== 'bicycle') {
@@ -186,7 +193,10 @@ export function createNavigationEngine(effects) {
                 routeMode,
             );
 
-            if (sessionId !== navigationSessionId) {
+            if (
+                sessionId !== navigationSessionId ||
+                expectedRouteGeneration !== routeGeneration
+            ) {
                 return;
             }
 
@@ -194,6 +204,7 @@ export function createNavigationEngine(effects) {
             // La progression repart du début du nouvel itinéraire.
             setRouteProgressGeometry(segment.geometry);
             currentRouteMode = segment.mode;
+            routeGeneration++;
 
             // Réinitialise la détection de déviation.
             resetOffRouteConfirmations();
@@ -500,6 +511,30 @@ export function createNavigationEngine(effects) {
         if (isNewCameraFix) {
             updateNavigationPosition(position, displayedPosition);
         }
+
+        if (typeof onProgress === 'function') {
+            const finalRouteDistance =
+                cumulativeRouteDistances[cumulativeRouteDistances.length - 1];
+            const progressEvent = {
+                position: { ...position },
+                destination: navigationDestination
+                    ? { ...navigationDestination }
+                    : null,
+                // Mètres le long de la géométrie routée, pas une distance GPS.
+                distanceRemaining: Math.max(
+                    0,
+                    finalRouteDistance - lastAcceptedRouteProgress,
+                ),
+                mode: currentRouteMode,
+                routeGeneration,
+            };
+
+            try {
+                onProgress(progressEvent);
+            } catch (error) {
+                console.error('Erreur du callback de progression GPS :', error);
+            }
+        }
     }
 
     /**
@@ -518,6 +553,7 @@ export function createNavigationEngine(effects) {
         lastCameraGpsTimestamp = null;
         navigationDestination = null;
         currentRouteMode = null;
+        routeGeneration++;
         isRecalculatingRoute = false;
         isReplacingRoute = false;
         resetOffRouteConfirmations();
