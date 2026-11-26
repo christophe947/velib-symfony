@@ -448,7 +448,7 @@ function recalculateStationPanelMiddleHeight() {
     }
 }
 
-function renderActiveNavigationControls(map, station, styleReady) {
+function renderActiveNavigationControls() {
     const controls = element?.querySelector(
         '.station-panel-navigation-controls',
     );
@@ -481,11 +481,362 @@ function renderActiveNavigationControls(map, station, styleReady) {
         </button>
     `;
 
-    controls.querySelector('.station-panel-stop').addEventListener('click', () => {
-        showStopNavigationConfirmation(map, station, styleReady);
-    });
-
     recalculateStationPanelMiddleHeight();
+}
+
+async function calculateJoinRoute(map, styleReady, station, activeButton) {
+    const joinModeOptions = element.querySelector(
+        '.station-panel-join-options',
+    );
+    const joinModeButtons = Array.from(
+        element.querySelectorAll('.station-panel-join-option'),
+    );
+    const joinStartButton = element.querySelector('.station-panel-join-start');
+    const joinChangeModeButton = element.querySelector(
+        '.station-panel-change-mode',
+    );
+    const routeSummary = element.querySelector('.station-panel-route-summary');
+    const routeMessage = element.querySelector('.station-panel-message');
+
+    if (
+        navigationStarted ||
+        activeButton.disabled ||
+        element.querySelector('.station-panel-join-option[aria-busy="true"]') ||
+        (activeButton.dataset.routeMode !== 'pedestrian' &&
+            activeButton.dataset.routeMode !== 'bicycle')
+    ) {
+        return;
+    }
+
+    const mode = activeButton.dataset.routeMode;
+    const renderId = stationPanelRenderId;
+    const previewRenderId = renderId;
+    const previewSessionId = ++navigationSessionId;
+
+    joinModeButtons.forEach((button) => {
+        button.disabled = true;
+    });
+    if (joinStartButton) {
+        joinStartButton.disabled = true;
+    }
+    if (joinChangeModeButton) {
+        joinChangeModeButton.disabled = true;
+    }
+    const originalButtonContent = activeButton.innerHTML;
+    activeButton.innerHTML = `
+        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+        Calcul de l'itinéraire…
+    `;
+    activeButton.setAttribute('aria-busy', 'true');
+
+    if (routeMessage) {
+        routeMessage.hidden = true;
+        routeMessage.textContent = '';
+    }
+
+    let routeStep = 'camera';
+
+    try {
+        await ensure2DView();
+
+        if (
+            previewRenderId !== stationPanelRenderId ||
+            previewSessionId !== navigationSessionId ||
+            navigationStarted
+        ) {
+            return;
+        }
+
+        setUserFollowing(false);
+
+        routeStep = 'gps';
+        const userPosition = await requestUserPosition();
+
+        if (
+            previewRenderId !== stationPanelRenderId ||
+            previewSessionId !== navigationSessionId ||
+            navigationStarted
+        ) {
+            return;
+        }
+
+        routeStep = 'gps-marker';
+        rememberUserGpsPosition(map, userPosition);
+
+        routeStep = 'routing';
+        const route = await getRoute(userPosition, station, mode);
+
+        if (
+            previewRenderId !== stationPanelRenderId ||
+            previewSessionId !== navigationSessionId ||
+            navigationStarted
+        ) {
+            return;
+        }
+
+        const distance = formatDistance(route.distance);
+        const duration = formatDuration(route.duration);
+
+        routeStep = 'style';
+        await styleReady;
+
+        if (
+            previewRenderId !== stationPanelRenderId ||
+            previewSessionId !== navigationSessionId ||
+            navigationStarted
+        ) {
+            return;
+        }
+
+        routeStep = 'presentation';
+        const wasPresented = await presentRoute(map, route, {
+            layer: 'walking',
+            isCurrent: () =>
+                previewRenderId === stationPanelRenderId &&
+                previewSessionId === navigationSessionId &&
+                !navigationStarted,
+        });
+
+        if (!wasPresented) {
+            return;
+        }
+
+        navigationEngine.setNavigationRoute(
+            route.geometry,
+            {
+                latitude: station.latitude,
+                longitude: station.longitude,
+            },
+            route.mode,
+        );
+        displayedStation = station;
+        updateRouteSummary(distance, duration);
+
+        if (joinStartButton) {
+            joinStartButton.dataset.routeMode = route.mode;
+            joinStartButton.hidden = false;
+            joinStartButton.textContent = 'Démarrer';
+        }
+        if (joinModeOptions) {
+            joinModeOptions.hidden = true;
+        }
+        if (joinChangeModeButton) {
+            joinChangeModeButton.hidden = false;
+            joinChangeModeButton.textContent = 'Changer de mode';
+        }
+
+        if (routeSummary && paneController.isAvailable()) {
+            const content = element.querySelector('.station-panel-content');
+
+            paneController.present({ animate: true });
+
+            if (content) {
+                paneController.updateMiddleHeight(
+                    content.getBoundingClientRect().height,
+                );
+            }
+        }
+    } catch (error) {
+        console.error('Impossible de calculer l’itinéraire :', error);
+
+        if (
+            previewRenderId !== stationPanelRenderId ||
+            previewSessionId !== navigationSessionId ||
+            navigationStarted
+        ) {
+            return;
+        }
+
+        if (routeStep === 'presentation') {
+            map.stop();
+            navigationEngine.stopNavigationProcessing();
+            clearNavigationMap(map);
+            if (joinStartButton) {
+                joinStartButton.hidden = true;
+            }
+            if (joinChangeModeButton) {
+                joinChangeModeButton.hidden = true;
+            }
+            if (joinModeOptions) {
+                joinModeOptions.hidden = false;
+            }
+            if (routeSummary) {
+                routeSummary.style.display = 'none';
+            }
+            routeSummaryData = null;
+        }
+
+        if (routeMessage) {
+            routeMessage.hidden = false;
+            if (routeStep === 'presentation' || routeStep === 'style') {
+                routeMessage.textContent =
+                    '🗺️ La carte n’a pas pu afficher l’itinéraire. Réessaie.';
+            } else if (routeStep === 'camera') {
+                routeMessage.textContent =
+                    '🗺️ La vue de la carte n’a pas pu être préparée. Réessaie.';
+            } else if (routeStep === 'routing') {
+                routeMessage.textContent =
+                    '🧭 L’itinéraire n’a pas pu être calculé. Réessaie.';
+            } else if (
+                error instanceof Error &&
+                error.message === 'Geolocation unavailable'
+            ) {
+                routeMessage.textContent =
+                    '📍 La géolocalisation n’est pas disponible sur cet appareil.';
+            } else {
+                routeMessage.textContent =
+                    '📍 Ta position n’a pas pu être récupérée. Vérifie les autorisations de localisation et réessaie.';
+            }
+
+            if (paneController.isAvailable()) {
+                const content = element.querySelector('.station-panel-content');
+
+                paneController.present({ animate: true });
+
+                if (content) {
+                    paneController.updateMiddleHeight(
+                        content.getBoundingClientRect().height,
+                    );
+                }
+            }
+        }
+    } finally {
+        joinModeButtons.forEach((button) => {
+            button.disabled = false;
+            button.removeAttribute('aria-busy');
+        });
+        activeButton.innerHTML = originalButtonContent;
+        if (joinStartButton) {
+            joinStartButton.disabled = false;
+        }
+        if (joinChangeModeButton) {
+            joinChangeModeButton.disabled = false;
+        }
+    }
+}
+
+function startJoinNavigation(map, styleReady, startButton) {
+    if (
+        navigationStarted ||
+        element.querySelector('.station-panel-join-option[aria-busy="true"]')
+    ) {
+        return;
+    }
+
+    const routeMode = navigationEngine.getNavigationMode();
+
+    if (
+        startButton.dataset.routeMode !== routeMode ||
+        (routeMode !== 'pedestrian' && routeMode !== 'bicycle')
+    ) {
+        return;
+    }
+
+    const station = displayedStation;
+    const renderId = stationPanelRenderId;
+    const routeMessage = element.querySelector('.station-panel-message');
+    const sessionId = ++navigationSessionId;
+
+    startButton.disabled = true;
+    startButton.textContent = 'Démarrage…';
+
+    void startNavigationSession(map, styleReady, sessionId, {
+        station,
+        route: null,
+        summary: routeSummaryData,
+    })
+        .catch((error) => {
+            console.error('Impossible de démarrer la navigation :', error);
+
+            if (
+                renderId === stationPanelRenderId &&
+                !navigationStarted &&
+                routeMessage
+            ) {
+                routeMessage.hidden = false;
+                routeMessage.textContent =
+                    'La navigation n’a pas pu démarrer. Réessaie.';
+            }
+        })
+        .finally(() => {
+            if (renderId === stationPanelRenderId && !navigationStarted) {
+                startButton.disabled = false;
+                startButton.textContent = 'Démarrer';
+            }
+        });
+}
+
+function toggleJoinMode(button) {
+    if (
+        element.querySelector('.station-panel-join-option[aria-busy="true"]')
+    ) {
+        return;
+    }
+
+    const joinModeOptions = element.querySelector(
+        '.station-panel-join-options',
+    );
+    const joinStartButton = element.querySelector('.station-panel-join-start');
+
+    if (!joinModeOptions) {
+        return;
+    }
+
+    joinModeOptions.hidden = !joinModeOptions.hidden;
+    if (joinStartButton) {
+        joinStartButton.hidden = !joinModeOptions.hidden;
+    }
+    button.textContent = joinModeOptions.hidden
+        ? 'Changer de mode'
+        : 'Retour à l’aperçu';
+    recalculateStationPanelMiddleHeight();
+}
+
+function resumeNavigation(map, styleReady) {
+    if (!navigationStarted) {
+        return;
+    }
+
+    if (!activeNavigationStation && isValidPlannerRoute()) {
+        const sessionId = navigationSessionId;
+        showRoutePlanner(true, map);
+        restoreNavigationCamera(map, null, sessionId).catch((error) => {
+            console.error(
+                'Impossible de reprendre le suivi de navigation :',
+                error,
+            );
+        });
+        return;
+    }
+
+    if (!activeNavigationStation) {
+        return;
+    }
+
+    const destination = activeNavigationStation;
+    const sessionId = navigationSessionId;
+    updateStationPanel(destination, map, styleReady, false);
+    scheduleNavigationPaneCollapse(destination, sessionId);
+
+    restoreNavigationCamera(map, destination, sessionId).catch((error) => {
+        console.error('Impossible de reprendre le suivi de navigation :', error);
+    });
+}
+
+function confirmDestinationChange(map, styleReady, button) {
+    if (button.disabled || pendingDestinationChange) {
+        return;
+    }
+
+    const station = displayedStation;
+    showStopNavigationConfirmation(map, station, styleReady, {
+        title: 'Changer de destination ?',
+        message:
+            'Remplacer l’itinéraire actuel par un itinéraire vers cette station ?',
+        cancelLabel: 'Annuler',
+        confirmLabel: 'Confirmer',
+        onConfirm: () => startDestinationChange(map, station, styleReady),
+    });
 }
 
 function showNavigationDestinationMarker(map, destination) {
@@ -673,7 +1024,7 @@ async function startNavigationSession(
     );
 
     if (station && stationsMatch(displayedStation, station)) {
-        renderActiveNavigationControls(map, station, styleReady);
+        renderActiveNavigationControls();
         scheduleNavigationPaneCollapse(station, sessionId);
     } else if (
         !station &&
@@ -724,14 +1075,36 @@ export function initStationPanel(map, styleReady) {
 
     element.addEventListener('click', (event) => {
         const trigger = event.target.closest('[data-open-route-planner]');
+        const joinOption = event.target.closest('.station-panel-join-option');
+        const startButton = event.target.closest('.station-panel-join-start');
+        const changeModeButton = event.target.closest(
+            '.station-panel-change-mode',
+        );
+        const stopButton = event.target.closest('.station-panel-stop');
+        const resumeButton = event.target.closest(
+            '.station-panel-context-resume',
+        );
+        const replaceButton = event.target.closest(
+            '.station-panel-context-replace',
+        );
 
-        if (!trigger) {
-            return;
+        if (trigger) {
+            event.preventDefault();
+            event.stopPropagation();
+            showRoutePlanner(true, map);
+        } else if (joinOption) {
+            void calculateJoinRoute(map, styleReady, displayedStation, joinOption);
+        } else if (startButton) {
+            startJoinNavigation(map, styleReady, startButton);
+        } else if (changeModeButton) {
+            toggleJoinMode(changeModeButton);
+        } else if (stopButton) {
+            showStopNavigationConfirmation(map, displayedStation, styleReady);
+        } else if (resumeButton) {
+            resumeNavigation(map, styleReady);
+        } else if (replaceButton) {
+            confirmDestinationChange(map, styleReady, replaceButton);
         }
-
-        event.preventDefault();
-        event.stopPropagation();
-        showRoutePlanner(true, map);
     });
 
     plannerElement.addEventListener('click', (event) => {
@@ -1796,16 +2169,6 @@ async function updateStationPanel(
         }
     }
 
-    const joinModeOptions = element.querySelector('.station-panel-join-options');
-    const joinModeButtons = Array.from(
-        element.querySelectorAll('.station-panel-join-option'),
-    );
-    const joinStartButton = element.querySelector('.station-panel-join-start');
-    const joinChangeModeButton = element.querySelector(
-        '.station-panel-change-mode',
-    );
-    const routeSummary = element.querySelector('.station-panel-route-summary');
-
     const routeMessage = element.querySelector('.station-panel-message');
 
     const replaceButton = element.querySelector(
@@ -1831,346 +2194,6 @@ async function updateStationPanel(
             routeMessage.textContent = destinationChangeError.message;
         }
     }
-
-    const stopButton = element.querySelector('.station-panel-stop');
-    stopButton?.addEventListener('click', () => {
-        showStopNavigationConfirmation(map, station, styleReady);
-    });
-
-    const resumeButton = element.querySelector(
-        '.station-panel-context-resume',
-    );
-    resumeButton?.addEventListener('click', () => {
-        if (!navigationStarted) {
-            return;
-        }
-
-        if (!activeNavigationStation && isValidPlannerRoute()) {
-            const sessionId = navigationSessionId;
-            showRoutePlanner(true, map);
-            restoreNavigationCamera(map, null, sessionId).catch((error) => {
-                console.error(
-                    'Impossible de reprendre le suivi de navigation :',
-                    error,
-                );
-            });
-            return;
-        }
-
-        if (!activeNavigationStation) {
-            return;
-        }
-
-        const destination = activeNavigationStation;
-        const sessionId = navigationSessionId;
-        updateStationPanel(destination, map, styleReady, false);
-        scheduleNavigationPaneCollapse(destination, sessionId);
-
-        restoreNavigationCamera(map, destination, sessionId).catch((error) => {
-            console.error('Impossible de reprendre le suivi de navigation :', error);
-        });
-    });
-
-    replaceButton?.addEventListener('click', () => {
-        if (replaceButton.disabled || pendingDestinationChange) {
-            return;
-        }
-
-        showStopNavigationConfirmation(map, station, styleReady, {
-            title: 'Changer de destination ?',
-            message:
-                'Remplacer l’itinéraire actuel par un itinéraire vers cette station ?',
-            cancelLabel: 'Annuler',
-            confirmLabel: 'Confirmer',
-            onConfirm: () => startDestinationChange(map, station, styleReady),
-        });
-    });
-
-    let isJoinCalculationPending = false;
-
-    async function calculateJoinRoute(mode, activeButton) {
-        if (
-            navigationStarted ||
-            isJoinCalculationPending ||
-            (mode !== 'pedestrian' && mode !== 'bicycle')
-        ) {
-            return;
-        }
-
-        isJoinCalculationPending = true;
-        const previewRenderId = renderId;
-        const previewSessionId = ++navigationSessionId;
-
-        joinModeButtons.forEach((button) => {
-            button.disabled = true;
-        });
-        if (joinStartButton) {
-            joinStartButton.disabled = true;
-        }
-        if (joinChangeModeButton) {
-            joinChangeModeButton.disabled = true;
-        }
-        const originalButtonContent = activeButton.innerHTML;
-        activeButton.innerHTML = `
-            <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
-            Calcul de l'itinéraire…
-        `;
-        activeButton.setAttribute('aria-busy', 'true');
-
-        if (routeMessage) {
-            routeMessage.hidden = true;
-            routeMessage.textContent = '';
-        }
-
-        let routeStep = 'camera';
-
-        try {
-            await ensure2DView();
-
-            if (
-                previewRenderId !== stationPanelRenderId ||
-                previewSessionId !== navigationSessionId ||
-                navigationStarted
-            ) {
-                return;
-            }
-
-            setUserFollowing(false);
-
-            routeStep = 'gps';
-            const userPosition = await requestUserPosition();
-
-            if (
-                previewRenderId !== stationPanelRenderId ||
-                previewSessionId !== navigationSessionId ||
-                navigationStarted
-            ) {
-                return;
-            }
-
-            routeStep = 'gps-marker';
-            rememberUserGpsPosition(map, userPosition);
-
-            routeStep = 'routing';
-            const route = await getRoute(userPosition, station, mode);
-
-            if (
-                previewRenderId !== stationPanelRenderId ||
-                previewSessionId !== navigationSessionId ||
-                navigationStarted
-            ) {
-                return;
-            }
-
-            const distance = formatDistance(route.distance);
-            const duration = formatDuration(route.duration);
-
-            routeStep = 'style';
-            await styleReady;
-
-            if (
-                previewRenderId !== stationPanelRenderId ||
-                previewSessionId !== navigationSessionId ||
-                navigationStarted
-            ) {
-                return;
-            }
-
-            routeStep = 'presentation';
-            const wasPresented = await presentRoute(map, route, {
-                layer: 'walking',
-                isCurrent: () =>
-                    previewRenderId === stationPanelRenderId &&
-                    previewSessionId === navigationSessionId &&
-                    !navigationStarted,
-            });
-
-            if (!wasPresented) {
-                return;
-            }
-
-            navigationEngine.setNavigationRoute(
-                route.geometry,
-                {
-                    latitude: station.latitude,
-                    longitude: station.longitude,
-                },
-                route.mode,
-            );
-            displayedStation = station;
-            updateRouteSummary(distance, duration);
-
-            if (joinStartButton) {
-                joinStartButton.dataset.routeMode = route.mode;
-                joinStartButton.hidden = false;
-                joinStartButton.textContent = 'Démarrer';
-            }
-            if (joinModeOptions) {
-                joinModeOptions.hidden = true;
-            }
-            if (joinChangeModeButton) {
-                joinChangeModeButton.hidden = false;
-                joinChangeModeButton.textContent = 'Changer de mode';
-            }
-
-            if (routeSummary && paneController.isAvailable()) {
-                const content = element.querySelector(
-                    '.station-panel-content',
-                );
-
-                paneController.present({ animate: true });
-
-                if (content) {
-                    paneController.updateMiddleHeight(
-                        content.getBoundingClientRect().height,
-                    );
-                }
-            }
-        } catch (error) {
-            console.error('Impossible de calculer l’itinéraire :', error);
-
-            if (
-                previewRenderId !== stationPanelRenderId ||
-                previewSessionId !== navigationSessionId ||
-                navigationStarted
-            ) {
-                return;
-            }
-
-            if (routeStep === 'presentation') {
-                map.stop();
-                navigationEngine.stopNavigationProcessing();
-                clearNavigationMap(map);
-                if (joinStartButton) {
-                    joinStartButton.hidden = true;
-                }
-                if (joinChangeModeButton) {
-                    joinChangeModeButton.hidden = true;
-                }
-                if (joinModeOptions) {
-                    joinModeOptions.hidden = false;
-                }
-                if (routeSummary) {
-                    routeSummary.style.display = 'none';
-                }
-                routeSummaryData = null;
-            }
-
-            if (routeMessage) {
-                routeMessage.hidden = false;
-                if (routeStep === 'presentation' || routeStep === 'style') {
-                    routeMessage.textContent =
-                        '🗺️ La carte n’a pas pu afficher l’itinéraire. Réessaie.';
-                } else if (routeStep === 'camera') {
-                    routeMessage.textContent =
-                        '🗺️ La vue de la carte n’a pas pu être préparée. Réessaie.';
-                } else if (routeStep === 'routing') {
-                    routeMessage.textContent =
-                        '🧭 L’itinéraire n’a pas pu être calculé. Réessaie.';
-                } else if (
-                    error instanceof Error &&
-                    error.message === 'Geolocation unavailable'
-                ) {
-                    routeMessage.textContent =
-                        '📍 La géolocalisation n’est pas disponible sur cet appareil.';
-                } else {
-                    routeMessage.textContent =
-                        '📍 Ta position n’a pas pu être récupérée. Vérifie les autorisations de localisation et réessaie.';
-                }
-
-                if (paneController.isAvailable()) {
-                    const content = element.querySelector(
-                        '.station-panel-content',
-                    );
-
-                    paneController.present({ animate: true });
-
-                    if (content) {
-                        paneController.updateMiddleHeight(
-                            content.getBoundingClientRect().height,
-                        );
-                    }
-                }
-            }
-        } finally {
-            isJoinCalculationPending = false;
-            joinModeButtons.forEach((button) => {
-                button.disabled = false;
-                button.removeAttribute('aria-busy');
-            });
-            activeButton.innerHTML = originalButtonContent;
-            if (joinStartButton) {
-                joinStartButton.disabled = false;
-            }
-            if (joinChangeModeButton) {
-                joinChangeModeButton.disabled = false;
-            }
-        }
-    }
-
-    joinModeButtons.forEach((button) => {
-        button.addEventListener('click', () => {
-            calculateJoinRoute(button.dataset.routeMode, button);
-        });
-    });
-
-    joinStartButton?.addEventListener('click', async () => {
-        if (navigationStarted || isJoinCalculationPending) {
-            return;
-        }
-
-        const routeMode = navigationEngine.getNavigationMode();
-        if (
-            joinStartButton.dataset.routeMode !== routeMode ||
-            (routeMode !== 'pedestrian' && routeMode !== 'bicycle')
-        ) {
-            return;
-        }
-
-        const sessionId = ++navigationSessionId;
-        joinStartButton.disabled = true;
-        joinStartButton.textContent = 'Démarrage…';
-
-        try {
-            await startNavigationSession(map, styleReady, sessionId, {
-                station,
-                route: null,
-                summary: routeSummaryData,
-            });
-        } catch (error) {
-            console.error('Impossible de démarrer la navigation :', error);
-
-            if (
-                renderId === stationPanelRenderId &&
-                !navigationStarted &&
-                routeMessage
-            ) {
-                routeMessage.hidden = false;
-                routeMessage.textContent =
-                    'La navigation n’a pas pu démarrer. Réessaie.';
-            }
-        } finally {
-            if (renderId === stationPanelRenderId && !navigationStarted) {
-                joinStartButton.disabled = false;
-                joinStartButton.textContent = 'Démarrer';
-            }
-        }
-    });
-
-    joinChangeModeButton?.addEventListener('click', () => {
-        if (isJoinCalculationPending || !joinModeOptions) {
-            return;
-        }
-
-        joinModeOptions.hidden = !joinModeOptions.hidden;
-        if (joinStartButton) {
-            joinStartButton.hidden = !joinModeOptions.hidden;
-        }
-        joinChangeModeButton.textContent = joinModeOptions.hidden
-            ? 'Changer de mode'
-            : 'Retour à l’aperçu';
-        recalculateStationPanelMiddleHeight();
-    });
 
     initModeSelector(element, {
         onModeChange: (mode) => {
