@@ -25,6 +25,7 @@ import {
     reactivateCompassIfEligible,
 } from '../map.js';
 import { createNavigationEngine } from './navigation.js';
+import { NavigationSession } from './navigationSession.js';
 import { createScreenWakeLock } from './screenWakeLock.js';
 import { formatDistance, formatDuration } from './routeFormatting.js';
 import { stopCompass } from './compass.js';
@@ -67,12 +68,8 @@ let destinationChangeRequestId = 0;
 let pendingDestinationChange = null;
 let destinationChangeError = null;
 
-let positionWatchId = null;
-
-// Dernière position GPS connue.
-let lastKnownUserPosition = null;
-let lastReliableUserPosition = null;
 let navigationEngine = null;
+let navigationSession = null;
 const screenWakeLock = createScreenWakeLock();
 
 let currentMode = 'bikes';
@@ -134,57 +131,15 @@ function updateStationAvailability(stations) {
     });
 }
 
-function isFreshGpsPosition(position) {
-    if (
-        !position ||
-        !Number.isFinite(position.longitude) ||
-        position.longitude < -180 ||
-        position.longitude > 180 ||
-        !Number.isFinite(position.latitude) ||
-        position.latitude < -90 ||
-        position.latitude > 90 ||
-        !Number.isFinite(position.timestamp) ||
-        position.timestamp <= 0
-    ) {
-        return false;
-    }
-
-    const age = Date.now() - position.timestamp;
-
-    return age >= 0 && age <= 10_000;
-}
-
-function isFreshReliableGpsPosition(position) {
-    return (
-        isFreshGpsPosition(position) &&
-        Number.isFinite(position.accuracy) &&
-        position.accuracy >= 0 &&
-        position.accuracy <= 25
-    );
-}
-
 function rememberUserGpsPosition(map, position) {
-    if (!isFreshGpsPosition(position)) {
+    if (!navigationSession?.rememberPosition(position)) {
         return;
     }
 
-    if (
-        !Number.isFinite(lastKnownUserPosition?.timestamp) ||
-        position.timestamp > lastKnownUserPosition.timestamp
-    ) {
-        lastKnownUserPosition = position;
-    }
+    const lastKnownPosition = navigationSession.getLastKnownPosition();
 
-    if (
-        isFreshReliableGpsPosition(position) &&
-        (!Number.isFinite(lastReliableUserPosition?.timestamp) ||
-            position.timestamp > lastReliableUserPosition.timestamp)
-    ) {
-        lastReliableUserPosition = position;
-    }
-
-    if (isFreshGpsPosition(lastKnownUserPosition)) {
-        showUserMarker(map, lastKnownUserPosition);
+    if (navigationSession.isFreshPosition(lastKnownPosition)) {
+        showUserMarker(map, lastKnownPosition);
     }
 }
 
@@ -333,8 +288,10 @@ async function restoreNavigationCamera(map, station, sessionId) {
         return false;
     }
 
-    if (isFreshGpsPosition(lastKnownUserPosition)) {
-        recenterOnUser(map, lastKnownUserPosition);
+    const lastKnownPosition = navigationSession.getLastKnownPosition();
+
+    if (navigationSession.isFreshPosition(lastKnownPosition)) {
+        recenterOnUser(map, lastKnownPosition);
         await waitForMapMovement(map);
     } else {
         // Le prochain relevé GPS reprendra le suivi sans recentrer sur une position périmée.
@@ -874,14 +831,15 @@ async function startNavigationSession(
         route?.segments?.[0]?.mode ??
         navigationEngine.getNavigationMode() ??
         'pedestrian';
+    const initialGpsPosition = navigationSession.getLastKnownPosition();
     activeNavigationStation = station;
     activeNavigationRouteSummary = summary;
     routeSummaryData = summary;
     navigationStarted = true;
     setNavigationActive(
         true,
-        isFreshGpsPosition(lastKnownUserPosition)
-            ? lastKnownUserPosition
+        navigationSession.isFreshPosition(initialGpsPosition)
+            ? initialGpsPosition
             : null,
         navigationMode,
         map,
@@ -927,7 +885,11 @@ async function startNavigationSession(
         return false;
     }
 
-    if (!isFreshGpsPosition(lastKnownUserPosition)) {
+    if (
+        !navigationSession.isFreshPosition(
+            navigationSession.getLastKnownPosition(),
+        )
+    ) {
         try {
             const userPosition = await requestUserPosition({
                 maximumAge: 0,
@@ -937,13 +899,7 @@ async function startNavigationSession(
                 return false;
             }
 
-            if (
-                isFreshGpsPosition(userPosition) &&
-                (!Number.isFinite(lastKnownUserPosition?.timestamp) ||
-                    userPosition.timestamp > lastKnownUserPosition.timestamp)
-            ) {
-                lastKnownUserPosition = userPosition;
-            }
+            navigationSession.rememberPosition(userPosition);
         } catch (error) {
             if (!isSessionActive()) {
                 return false;
@@ -972,8 +928,10 @@ async function startNavigationSession(
         clearRoutePreview(map);
     }
 
-    if (lastKnownUserPosition) {
-        showUserMarker(map, lastKnownUserPosition);
+    const currentPosition = navigationSession.getLastKnownPosition();
+
+    if (currentPosition) {
+        showUserMarker(map, currentPosition);
     }
 
     await restoreNavigationCamera(map, station, sessionId);
@@ -985,43 +943,27 @@ async function startNavigationSession(
     isInitialCameraSetup = false;
     onCameraReady?.();
 
-    positionWatchId = startWatchingPosition(
-        (position) => {
-            const lastKnownTimestamp = lastKnownUserPosition?.timestamp;
+    navigationSession.startPositionWatch({
+        onPosition: (position, { reliablePosition, reliablePositionUpdated }) => {
+            const destinationChange = pendingDestinationChange;
 
             if (
-                isFreshGpsPosition(position) &&
-                (!Number.isFinite(lastKnownTimestamp) ||
-                    position.timestamp > lastKnownTimestamp)
+                reliablePositionUpdated &&
+                destinationChange?.resolveGpsPosition &&
+                isCurrentDestinationChange(destinationChange) &&
+                (!Number.isFinite(destinationChange.gpsWaitAfterTimestamp) ||
+                    position.timestamp > destinationChange.gpsWaitAfterTimestamp)
             ) {
-                lastKnownUserPosition = position;
+                finishDestinationChangeGpsWait(
+                    destinationChange,
+                    reliablePosition,
+                );
             }
-
-            if (
-                isFreshReliableGpsPosition(position) &&
-                (!Number.isFinite(lastReliableUserPosition?.timestamp) ||
-                    position.timestamp > lastReliableUserPosition.timestamp)
-            ) {
-                lastReliableUserPosition = position;
-
-                const destinationChange = pendingDestinationChange;
-
-                if (
-                    destinationChange?.resolveGpsPosition &&
-                    isCurrentDestinationChange(destinationChange) &&
-                    (!Number.isFinite(destinationChange.gpsWaitAfterTimestamp) ||
-                        position.timestamp > destinationChange.gpsWaitAfterTimestamp)
-                ) {
-                    finishDestinationChangeGpsWait(destinationChange, position);
-                }
-            }
-
-            navigationEngine.updateNavigationProgress(position);
         },
-        (error) => {
+        onError: (error) => {
             console.error('Erreur GPS :', error);
         },
-    );
+    });
 
     if (station && stationsMatch(displayedStation, station)) {
         renderActiveNavigationControls();
@@ -1062,6 +1004,11 @@ export function initStationPanel(map, styleReady) {
         updateWalkingRoute: (coordinates, mode) =>
             updateWalkingRoute(map, coordinates, mode),
         updateRouteSummary,
+    });
+    navigationSession = new NavigationSession({
+        navigationEngine,
+        startWatchingPosition,
+        clearWatch: (watchId) => navigator.geolocation.clearWatch(watchId),
     });
 
     // Le panneau vide est présent dès le lancement
@@ -1396,7 +1343,7 @@ async function calculatePlannerRoute(map, styleReady) {
     try {
         if (
             origin.type === 'current-location' &&
-            !isFreshGpsPosition(origin)
+            !navigationSession.isFreshPosition(origin)
         ) {
             setPlannerCalculationMessage(
                 'Actualisation de la position GPS en cours…',
@@ -1414,7 +1361,7 @@ async function calculatePlannerRoute(map, styleReady) {
                 return;
             }
 
-            if (!isFreshGpsPosition(refreshedPosition)) {
+            if (!navigationSession.isFreshPosition(refreshedPosition)) {
                 const error = new Error('The GPS fix is stale.');
                 error.code = 'POSITION_STALE';
                 throw error;
@@ -1759,10 +1706,7 @@ function stopNavigation(
     screenWakeLock.stop();
 
     // Arrête le suivi GPS.
-    if (positionWatchId !== null) {
-        navigator.geolocation.clearWatch(positionWatchId);
-        positionWatchId = null;
-    }
+    navigationSession.stopPositionWatch();
 
     // Arrête la boussole.
     stopCompass();
@@ -1778,8 +1722,10 @@ function stopNavigation(
     }
 
     // Le marqueur revient à la dernière coordonnée GPS brute connue.
-    if (isFreshGpsPosition(lastKnownUserPosition)) {
-        showUserMarker(map, lastKnownUserPosition);
+    const lastKnownPosition = navigationSession.getLastKnownPosition();
+
+    if (navigationSession.isFreshPosition(lastKnownPosition)) {
+        showUserMarker(map, lastKnownPosition);
     }
 
     setUserFollowing(wasFollowingUser);
@@ -1792,8 +1738,7 @@ function stopNavigation(
     }
 
     // Réinitialise l'état local.
-    lastKnownUserPosition = null;
-    lastReliableUserPosition = null;
+    navigationSession.clearPositions();
     stationPanelRenderId++;
 
     // Restaure le bouton permettant de recalculer l'itinéraire.
@@ -1902,10 +1847,11 @@ function finishDestinationChangeGpsWait(request, position = null) {
 
 function waitForDestinationChangeGps(request) {
     return new Promise((resolve) => {
+        const lastReliablePosition = navigationSession.getLastReliablePosition();
         request.gpsWaitAfterTimestamp = Number.isFinite(
-            lastReliableUserPosition?.timestamp,
+            lastReliablePosition?.timestamp,
         )
-            ? lastReliableUserPosition.timestamp
+            ? lastReliablePosition.timestamp
             : null;
         request.resolveGpsPosition = resolve;
         request.gpsWaitTimeoutId = setTimeout(
@@ -1942,10 +1888,10 @@ async function startDestinationChange(map, station, styleReady) {
     let destinationMarkerTouched = false;
 
     try {
-        let userPosition = lastReliableUserPosition;
+        let userPosition = navigationSession.getLastReliablePosition();
 
-        if (!isFreshReliableGpsPosition(userPosition)) {
-            if (positionWatchId !== null) {
+        if (!navigationSession.isReliablePosition(userPosition)) {
+            if (navigationSession.isWatching()) {
                 userPosition = await waitForDestinationChangeGps(request);
             } else {
                 try {
@@ -1959,20 +1905,23 @@ async function startDestinationChange(map, station, styleReady) {
                 return;
             }
 
+            const latestReliablePosition =
+                navigationSession.getLastReliablePosition();
+
             if (
-                isFreshReliableGpsPosition(lastReliableUserPosition) &&
-                (!isFreshReliableGpsPosition(userPosition) ||
-                    lastReliableUserPosition.timestamp > userPosition.timestamp)
+                navigationSession.isReliablePosition(latestReliablePosition) &&
+                (!navigationSession.isReliablePosition(userPosition) ||
+                    latestReliablePosition.timestamp > userPosition.timestamp)
             ) {
-                userPosition = lastReliableUserPosition;
+                userPosition = latestReliablePosition;
             }
 
-            if (!isFreshReliableGpsPosition(userPosition)) {
+            if (!navigationSession.isReliablePosition(userPosition)) {
                 pendingDestinationChange = null;
                 destinationChangeError = {
                     station,
                     message:
-                        positionWatchId !== null
+                        navigationSession.isWatching()
                             ? 'Aucun nouveau relevé GPS assez précis reçu après 10 secondes. L’itinéraire actuel est conservé. Réessaie lorsque le signal sera meilleur.'
                             : 'La position GPS est absente, trop imprécise ou trop ancienne. Attends un nouveau relevé puis réessaie.',
                 };
@@ -1980,20 +1929,7 @@ async function startDestinationChange(map, station, styleReady) {
                 return;
             }
 
-            if (
-                (!Number.isFinite(lastKnownUserPosition?.timestamp) ||
-                    userPosition.timestamp > lastKnownUserPosition.timestamp) &&
-                isFreshGpsPosition(userPosition)
-            ) {
-                lastKnownUserPosition = userPosition;
-            }
-
-            if (
-                !Number.isFinite(lastReliableUserPosition?.timestamp) ||
-                userPosition.timestamp > lastReliableUserPosition.timestamp
-            ) {
-                lastReliableUserPosition = userPosition;
-            }
+            navigationSession.rememberPosition(userPosition);
         }
 
         if (!isCurrentDestinationChange(request)) {
