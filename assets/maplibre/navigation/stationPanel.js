@@ -2102,6 +2102,84 @@ async function startDestinationChange(map, station, styleReady) {
     }
 }
 
+function getStationPanelNavigationState(station) {
+    const isActiveNavigationPanel =
+        navigationStarted && stationsMatch(station, activeNavigationStation);
+
+    return {
+        isActiveNavigationPanel,
+        isNavigationContextPanel:
+            navigationStarted && !isActiveNavigationPanel,
+        navigationMode: navigationEngine.getNavigationMode() ?? 'pedestrian',
+    };
+}
+
+async function updateStationPanelBottomHeight(renderId) {
+    const title = element.querySelector('.station-panel-title');
+
+    if (title) {
+        const bottomHeight = title.getBoundingClientRect().height + 30;
+
+        await paneController.updateBottomHeight(bottomHeight);
+    }
+
+    return renderId === stationPanelRenderId;
+}
+
+function updateStationPanelDestinationStatus(station) {
+    const routeMessage = element.querySelector('.station-panel-message');
+    const replaceButton = element.querySelector(
+        '.station-panel-context-replace',
+    );
+
+    if (pendingDestinationChange) {
+        if (routeMessage) {
+            routeMessage.hidden = false;
+            routeMessage.textContent = 'Calcul du nouvel itinéraire…';
+        }
+
+        if (replaceButton) {
+            replaceButton.disabled = true;
+            replaceButton.setAttribute('aria-busy', 'true');
+        }
+    } else if (
+        destinationChangeError &&
+        stationsMatch(destinationChangeError.station, station)
+    ) {
+        if (routeMessage) {
+            routeMessage.hidden = false;
+            routeMessage.textContent = destinationChangeError.message;
+        }
+    }
+}
+
+async function presentStationPanel(shouldPresentPane) {
+    if (!paneController.isAvailable()) {
+        paneElement.classList.add('is-open');
+        return;
+    }
+
+    const content = element.querySelector('.station-panel-content');
+
+    if (!shouldPresentPane) {
+        if (content) {
+            const middleHeight = content.getBoundingClientRect().height;
+
+            await paneController.updateMiddleHeight(middleHeight, false);
+        }
+
+        return;
+    }
+
+    paneController.present({ animate: true });
+
+    if (content) {
+        const middleHeight = content.getBoundingClientRect().height;
+
+        paneController.updateMiddleHeight(middleHeight);
+    }
+}
+
 async function updateStationPanel(
     station,
     map,
@@ -2133,67 +2211,32 @@ async function updateStationPanel(
     const renderId = ++stationPanelRenderId;
     displayedStation = station;
 
-    const isActiveNavigationPanel =
-        navigationStarted && stationsMatch(station, activeNavigationStation);
-    const isNavigationContextPanel =
-        navigationStarted && !isActiveNavigationPanel;
+    const navigationState = getStationPanelNavigationState(station);
 
     element.innerHTML = renderStationPanel({
         station: getStationWithLatestAvailability(station),
         mode: currentMode,
-        navigationState: {
-            isActiveNavigationPanel,
-            isNavigationContextPanel,
-            navigationMode: navigationEngine.getNavigationMode() ?? 'pedestrian',
-        },
+        navigationState,
     });
 
-    if (isActiveNavigationPanel && activeNavigationRouteSummary) {
+    if (
+        navigationState.isActiveNavigationPanel &&
+        activeNavigationRouteSummary
+    ) {
         updateRouteSummary(
             activeNavigationRouteSummary.distance,
             activeNavigationRouteSummary.duration,
         );
     }
 
-    if (paneController.isAvailable()) {
-        const title = element.querySelector('.station-panel-title');
-
-        if (title) {
-            const bottomHeight = title.getBoundingClientRect().height + 30;
-
-            await paneController.updateBottomHeight(bottomHeight);
-        }
-
-        if (renderId !== stationPanelRenderId) {
-            return;
-        }
-    }
-
-    const routeMessage = element.querySelector('.station-panel-message');
-
-    const replaceButton = element.querySelector(
-        '.station-panel-context-replace',
-    );
-
-    if (pendingDestinationChange) {
-        if (routeMessage) {
-            routeMessage.hidden = false;
-            routeMessage.textContent = 'Calcul du nouvel itinéraire…';
-        }
-
-        if (replaceButton) {
-            replaceButton.disabled = true;
-            replaceButton.setAttribute('aria-busy', 'true');
-        }
-    } else if (
-        destinationChangeError &&
-        stationsMatch(destinationChangeError.station, station)
+    if (
+        paneController.isAvailable() &&
+        !(await updateStationPanelBottomHeight(renderId))
     ) {
-        if (routeMessage) {
-            routeMessage.hidden = false;
-            routeMessage.textContent = destinationChangeError.message;
-        }
+        return;
     }
+
+    updateStationPanelDestinationStatus(station);
 
     initModeSelector(element, {
         onModeChange: (mode) => {
@@ -2202,32 +2245,5 @@ async function updateStationPanel(
         },
     });
 
-    if (paneController.isAvailable()) {
-        const content = element.querySelector('.station-panel-content');
-
-        if (!shouldPresentPane) {
-            if (content) {
-                const middleHeight = content.getBoundingClientRect().height;
-
-                await paneController.updateMiddleHeight(middleHeight, false);
-            }
-
-            return;
-        }
-
-        paneController.present({
-            animate: true,
-        });
-
-        if (content) {
-            const middleHeight = content.getBoundingClientRect().height;
-
-            paneController.updateMiddleHeight(middleHeight);
-        }
-
-        return;
-    }
-
-    // Desktop
-    paneElement.classList.add('is-open');
+    return presentStationPanel(shouldPresentPane);
 }
