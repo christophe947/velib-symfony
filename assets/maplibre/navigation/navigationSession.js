@@ -12,6 +12,8 @@ export class NavigationSession {
     #isWatchingPosition = false;
     #lastKnownPosition = null;
     #lastReliablePosition = null;
+    #reliablePositionWaiters = new Set();
+    #positionRequestCancellers = new Set();
     #sessionGeneration = 0;
     #isActive = false;
     #compassExpected = false;
@@ -76,7 +78,7 @@ export class NavigationSession {
         return age >= 0 && age <= 10_000;
     }
 
-    isReliablePosition(position) {
+    #isReliablePosition(position) {
         return (
             this.isFreshPosition(position) &&
             Number.isFinite(position.accuracy) &&
@@ -98,7 +100,7 @@ export class NavigationSession {
         }
 
         if (
-            this.isReliablePosition(position) &&
+            this.#isReliablePosition(position) &&
             (!Number.isFinite(this.#lastReliablePosition?.timestamp) ||
                 position.timestamp > this.#lastReliablePosition.timestamp)
         ) {
@@ -112,12 +114,75 @@ export class NavigationSession {
         return this.#lastKnownPosition;
     }
 
-    getLastReliablePosition() {
-        return this.#lastReliablePosition;
-    }
+    async getReliablePosition({
+        timeoutMs = 10_000,
+        signal,
+        afterTimestamp,
+    } = {}) {
+        if (signal?.aborted) {
+            throw createAbortError();
+        }
 
-    isWatching() {
-        return this.#isWatchingPosition;
+        const generation = this.#sessionGeneration;
+        const hasTimestampFloor = Number.isFinite(afterTimestamp);
+        const cachedPosition = this.#lastReliablePosition;
+
+        if (
+            this.#isReliablePosition(cachedPosition) &&
+            (!hasTimestampFloor || cachedPosition.timestamp > afterTimestamp)
+        ) {
+            return cachedPosition;
+        }
+
+        // Keep the former panel semantics: while waiting on the active watch,
+        // accept only a reliable fix strictly newer than the cached one.
+        const waitAfterTimestamp = hasTimestampFloor
+            ? afterTimestamp
+            : Number.isFinite(cachedPosition?.timestamp)
+              ? cachedPosition.timestamp
+              : null;
+
+        if (this.#isActive && this.#isWatchingPosition) {
+            return this.#waitForReliableWatchPosition({
+                timeoutMs,
+                signal,
+                afterTimestamp: waitAfterTimestamp,
+                sessionGeneration: generation,
+            });
+        }
+
+        const position = await this.#requestPosition({
+            timeoutMs,
+            signal,
+            sessionGeneration: generation,
+        });
+
+        if (!position) {
+            return null;
+        }
+
+        this.rememberPosition(position);
+
+        const latestReliablePosition = this.#lastReliablePosition;
+        const reliablePosition = this.#isReliablePosition(position)
+            ? position
+            : null;
+        const newestPosition =
+            this.#isReliablePosition(latestReliablePosition) &&
+            (!reliablePosition ||
+                latestReliablePosition.timestamp > reliablePosition.timestamp)
+                ? latestReliablePosition
+                : reliablePosition;
+
+        if (
+            !newestPosition ||
+            (hasTimestampFloor &&
+                newestPosition.timestamp <= afterTimestamp)
+        ) {
+            return null;
+        }
+
+        return newestPosition;
     }
 
     async start({
@@ -129,7 +194,6 @@ export class NavigationSession {
         onPreparing,
         prepareCamera,
         onCameraReady,
-        onPosition,
     } = {}) {
         if (this.#isActive) {
             return false;
@@ -243,7 +307,6 @@ export class NavigationSession {
             onCameraReady?.();
             this.#startPositionWatch({
                 sessionGeneration: generation,
-                onPosition,
                 onError: (error) => console.error('Erreur GPS :', error),
             });
 
@@ -261,13 +324,20 @@ export class NavigationSession {
     }
 
     stop({ afterNavigationClear } = {}) {
-        if (!this.#isActive && !this.#isWatchingPosition) {
+        if (
+            !this.#isActive &&
+            !this.#isWatchingPosition &&
+            this.#reliablePositionWaiters.size === 0 &&
+            this.#positionRequestCancellers.size === 0
+        ) {
             return false;
         }
 
         this.#sessionGeneration++;
         this.#isActive = false;
         this.#compassExpected = false;
+        this.#finishReliablePositionWaiters(null);
+        this.#finishPositionRequests();
         let firstError = null;
         let wasFollowingUser = false;
         const attemptCleanup = (cleanup) => {
@@ -337,7 +407,7 @@ export class NavigationSession {
         return true;
     }
 
-    #startPositionWatch({ sessionGeneration, onPosition, onError } = {}) {
+    #startPositionWatch({ sessionGeneration, onError } = {}) {
         if (this.#isWatchingPosition) {
             return false;
         }
@@ -362,18 +432,17 @@ export class NavigationSession {
                     this.rememberPosition(position);
                     const latestReliablePosition = this.#lastReliablePosition;
                     const reliablePositionUpdated =
-                        this.isReliablePosition(position) &&
+                        this.#isReliablePosition(position) &&
                         latestReliablePosition?.timestamp ===
                             position.timestamp &&
                         (!Number.isFinite(previousReliableTimestamp) ||
                             position.timestamp > previousReliableTimestamp);
 
-                    // Preserve the current callback order: destination-change waiters
-                    // see a reliable fix before it is passed to route progression.
-                    onPosition?.(position, {
-                        reliablePosition: latestReliablePosition,
+                    this.#resolveReliablePositionWaiters(
+                        latestReliablePosition,
                         reliablePositionUpdated,
-                    });
+                        sessionGeneration,
+                    );
 
                     if (
                         !this.#isWatchingPosition ||
@@ -444,4 +513,156 @@ export class NavigationSession {
         this.#lastKnownPosition = null;
         this.#lastReliablePosition = null;
     }
+
+    #waitForReliableWatchPosition({
+        timeoutMs,
+        signal,
+        afterTimestamp,
+        sessionGeneration,
+    }) {
+        return new Promise((resolve, reject) => {
+            const waiter = {
+                afterTimestamp,
+                sessionGeneration,
+                resolve: (position) => finish(resolve, position),
+                reject: (error) => finish(reject, error),
+                timeoutId: null,
+                signal,
+                abortHandler: null,
+            };
+            let isSettled = false;
+
+            const finish = (settle, value) => {
+                if (isSettled) {
+                    return;
+                }
+
+                isSettled = true;
+                clearTimeout(waiter.timeoutId);
+                signal?.removeEventListener('abort', waiter.abortHandler);
+                this.#reliablePositionWaiters.delete(waiter);
+                settle(value);
+            };
+
+            if (signal?.aborted) {
+                waiter.reject(createAbortError());
+                return;
+            }
+
+            waiter.abortHandler = () => waiter.reject(createAbortError());
+            signal?.addEventListener('abort', waiter.abortHandler, {
+                once: true,
+            });
+            waiter.timeoutId = setTimeout(
+                () => waiter.reject(createPositionTimeoutError()),
+                Math.max(0, timeoutMs),
+            );
+            this.#reliablePositionWaiters.add(waiter);
+        });
+    }
+
+    #resolveReliablePositionWaiters(
+        position,
+        reliablePositionUpdated,
+        sessionGeneration,
+    ) {
+        if (!reliablePositionUpdated || !position) {
+            return;
+        }
+
+        for (const waiter of this.#reliablePositionWaiters) {
+            if (
+                waiter.sessionGeneration === sessionGeneration &&
+                (!Number.isFinite(waiter.afterTimestamp) ||
+                    position.timestamp > waiter.afterTimestamp)
+            ) {
+                waiter.resolve(position);
+            }
+        }
+    }
+
+    #finishReliablePositionWaiters(position) {
+        for (const waiter of this.#reliablePositionWaiters) {
+            waiter.resolve(position);
+        }
+    }
+
+    #finishPositionRequests() {
+        for (const cancelRequest of this.#positionRequestCancellers) {
+            cancelRequest();
+        }
+    }
+
+    #requestPosition({ timeoutMs, signal, sessionGeneration }) {
+        return new Promise((resolve, reject) => {
+            let timeoutId = null;
+            let isSettled = false;
+            const finish = (settle, value) => {
+                if (isSettled) {
+                    return;
+                }
+
+                isSettled = true;
+                clearTimeout(timeoutId);
+                signal?.removeEventListener('abort', abortHandler);
+                this.#positionRequestCancellers.delete(cancelOnStop);
+                settle(value);
+            };
+            const abortHandler = () => finish(reject, createAbortError());
+            const cancelOnStop = () => finish(resolve, null);
+
+            if (signal?.aborted) {
+                abortHandler();
+                return;
+            }
+
+            signal?.addEventListener('abort', abortHandler, { once: true });
+            this.#positionRequestCancellers.add(cancelOnStop);
+            timeoutId = setTimeout(
+                () =>
+                    finish(
+                        reject,
+                        createPositionTimeoutError('POSITION_REQUEST_TIMEOUT'),
+                    ),
+                Math.max(0, timeoutMs),
+            );
+
+            let positionRequest;
+
+            try {
+                positionRequest = this.#gps.requestPosition({ maximumAge: 0 });
+            } catch (error) {
+                finish(reject, error);
+                return;
+            }
+
+            Promise.resolve(positionRequest).then(
+                (position) => {
+                    if (sessionGeneration !== this.#sessionGeneration) {
+                        finish(resolve, null);
+                        return;
+                    }
+
+                    finish(resolve, position);
+                },
+                (error) => finish(reject, error),
+            );
+        });
+    }
+}
+
+function createAbortError() {
+    if (typeof DOMException === 'function') {
+        return new DOMException('The operation was aborted.', 'AbortError');
+    }
+
+    const error = new Error('The operation was aborted.');
+    error.name = 'AbortError';
+    return error;
+}
+
+function createPositionTimeoutError(code = 'POSITION_WAIT_TIMEOUT') {
+    const error = new Error('Timed out while waiting for a reliable position.');
+    error.code = code;
+    return error;
 }

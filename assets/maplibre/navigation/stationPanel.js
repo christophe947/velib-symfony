@@ -39,7 +39,7 @@ import { createPaneController } from './ui/paneController.js';
 import { initModeSelector } from './ui/modeSelector.js';
 import { createRoutePlannerController } from './routePlanner.js';
 import { renderRoutePreview } from './ui/routePlannerView.js';
-const DESTINATION_CHANGE_GPS_WAIT_MS = 10_000;
+const DESTINATION_CHANGE_GPS_TIMEOUT_MS = 10_000;
 
 let paneController = null;
 let element = null;
@@ -883,22 +883,6 @@ async function startNavigationSession(
         },
         prepareCamera: () => restoreNavigationCamera(map, station, sessionId),
         onCameraReady,
-        onPosition: (position, { reliablePosition, reliablePositionUpdated }) => {
-            const destinationChange = pendingDestinationChange;
-
-            if (
-                reliablePositionUpdated &&
-                destinationChange?.resolveGpsPosition &&
-                isCurrentDestinationChange(destinationChange) &&
-                (!Number.isFinite(destinationChange.gpsWaitAfterTimestamp) ||
-                    position.timestamp > destinationChange.gpsWaitAfterTimestamp)
-            ) {
-                finishDestinationChangeGpsWait(
-                    destinationChange,
-                    reliablePosition,
-                );
-            }
-        },
     });
 
     if (started && station && stationsMatch(displayedStation, station)) {
@@ -1665,7 +1649,7 @@ function stopNavigation(
     // Invalide les opérations asynchrones de la session.
     navigationSessionId++;
     destinationChangeRequestId++;
-    finishDestinationChangeGpsWait(pendingDestinationChange);
+    pendingDestinationChange?.abortController.abort();
     pendingDestinationChange = null;
     destinationChangeError = null;
     activeNavigationStation = null;
@@ -1776,35 +1760,6 @@ function isCurrentDestinationChange(request) {
     );
 }
 
-function finishDestinationChangeGpsWait(request, position = null) {
-    if (typeof request?.resolveGpsPosition !== 'function') {
-        return;
-    }
-
-    clearTimeout(request.gpsWaitTimeoutId);
-    request.gpsWaitTimeoutId = null;
-    const resolve = request.resolveGpsPosition;
-    request.resolveGpsPosition = null;
-    request.gpsWaitAfterTimestamp = null;
-    resolve(position);
-}
-
-function waitForDestinationChangeGps(request) {
-    return new Promise((resolve) => {
-        const lastReliablePosition = navigationSession.getLastReliablePosition();
-        request.gpsWaitAfterTimestamp = Number.isFinite(
-            lastReliablePosition?.timestamp,
-        )
-            ? lastReliablePosition.timestamp
-            : null;
-        request.resolveGpsPosition = resolve;
-        request.gpsWaitTimeoutId = setTimeout(
-            () => finishDestinationChangeGpsWait(request),
-            DESTINATION_CHANGE_GPS_WAIT_MS,
-        );
-    });
-}
-
 async function startDestinationChange(map, station, styleReady) {
     if (!isNavigationStarted() || pendingDestinationChange) {
         return;
@@ -1814,6 +1769,7 @@ async function startDestinationChange(map, station, styleReady) {
         id: ++destinationChangeRequestId,
         sessionId: navigationSessionId,
         engineRequestId: null,
+        abortController: new AbortController(),
         station,
     };
     const previousDestination =
@@ -1832,48 +1788,43 @@ async function startDestinationChange(map, station, styleReady) {
     let destinationMarkerTouched = false;
 
     try {
-        let userPosition = navigationSession.getLastReliablePosition();
+        let userPosition;
 
-        if (!navigationSession.isReliablePosition(userPosition)) {
-            if (navigationSession.isWatching()) {
-                userPosition = await waitForDestinationChangeGps(request);
-            } else {
-                try {
-                    userPosition = await requestUserPosition({ maximumAge: 0 });
-                } catch (error) {
-                    userPosition = null;
-                }
-            }
-
+        try {
+            userPosition = await navigationSession.getReliablePosition({
+                timeoutMs: DESTINATION_CHANGE_GPS_TIMEOUT_MS,
+                signal: request.abortController.signal,
+            });
+        } catch (error) {
             if (!isCurrentDestinationChange(request)) {
                 return;
             }
 
-            const latestReliablePosition =
-                navigationSession.getLastReliablePosition();
+            pendingDestinationChange = null;
+            destinationChangeError = {
+                station,
+                message:
+                    error.code === 'POSITION_WAIT_TIMEOUT'
+                        ? 'Aucun nouveau relevé GPS assez précis reçu après 10 secondes. L’itinéraire actuel est conservé. Réessaie lorsque le signal sera meilleur.'
+                        : 'La position GPS est absente, trop imprécise ou trop ancienne. Attends un nouveau relevé puis réessaie.',
+            };
+            updateStationPanel(displayedStation ?? station, map, styleReady, false);
+            return;
+        }
 
-            if (
-                navigationSession.isReliablePosition(latestReliablePosition) &&
-                (!navigationSession.isReliablePosition(userPosition) ||
-                    latestReliablePosition.timestamp > userPosition.timestamp)
-            ) {
-                userPosition = latestReliablePosition;
-            }
+        if (!isCurrentDestinationChange(request)) {
+            return;
+        }
 
-            if (!navigationSession.isReliablePosition(userPosition)) {
-                pendingDestinationChange = null;
-                destinationChangeError = {
-                    station,
-                    message:
-                        navigationSession.isWatching()
-                            ? 'Aucun nouveau relevé GPS assez précis reçu après 10 secondes. L’itinéraire actuel est conservé. Réessaie lorsque le signal sera meilleur.'
-                            : 'La position GPS est absente, trop imprécise ou trop ancienne. Attends un nouveau relevé puis réessaie.',
-                };
-                updateStationPanel(displayedStation ?? station, map, styleReady, false);
-                return;
-            }
-
-            navigationSession.rememberPosition(userPosition);
+        if (!userPosition) {
+            pendingDestinationChange = null;
+            destinationChangeError = {
+                station,
+                message:
+                    'La position GPS est absente, trop imprécise ou trop ancienne. Attends un nouveau relevé puis réessaie.',
+            };
+            updateStationPanel(displayedStation ?? station, map, styleReady, false);
+            return;
         }
 
         if (!isCurrentDestinationChange(request)) {
@@ -2079,7 +2030,7 @@ async function updateStationPanel(
     ) {
         destinationChangeRequestId++;
         pendingDestinationChange = null;
-        finishDestinationChangeGpsWait(pendingChange);
+        pendingChange.abortController.abort();
 
         if (pendingChange.engineRequestId !== null) {
             navigationEngine.cancelRouteReplacement(

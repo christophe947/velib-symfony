@@ -164,6 +164,20 @@ async function withFixedNow(now, callback) {
     }
 }
 
+async function withMutableNow(initialNow, callback) {
+    const originalNow = Date.now;
+    let currentNow = initialNow;
+    Date.now = () => currentNow;
+
+    try {
+        return await callback((nextNow) => {
+            currentNow = nextNow;
+        });
+    } finally {
+        Date.now = originalNow;
+    }
+}
+
 async function allowPendingStartToContinue() {
     await Promise.resolve();
     await Promise.resolve();
@@ -212,7 +226,6 @@ async function assertFailedStartIsCleanAndRetryable({
     });
 
     assert.equal(session.isActive(), false);
-    assert.equal(session.isWatching(), false);
     assert.equal(watches.length, 0);
     assert.equal(events.filter((event) => event === 'wake:stop').length, 1);
     assert.equal(events.filter((event) => event === 'engine:stop').length, 1);
@@ -302,7 +315,6 @@ test('preserves walking startup order and stops all session resources', async ()
         'compass:reactivate',
     ]);
     assert.equal(session.getLastKnownPosition(), null);
-    assert.equal(session.getLastReliablePosition(), null);
 
     session.stop();
     assert.equal(events.filter((event) => event === 'wake:stop').length, 1);
@@ -460,7 +472,6 @@ test('a failure after a successful one-shot GPS fix clears the cached fix', asyn
 
     assert.equal(harness.session.isActive(), false);
     assert.equal(harness.session.getLastKnownPosition(), null);
-    assert.equal(harness.session.getLastReliablePosition(), null);
     assert.ok(harness.events.includes('gps:request'));
     assert.ok(harness.events.includes('map:background:start'));
 });
@@ -626,7 +637,7 @@ test('a failed one-shot GPS request is non-blocking and background tracking resu
 });
 
 test('retains only the newest fresh raw fix and newest reliable fix', async () => {
-    await withFixedNow(100_000, () => {
+    await withFixedNow(100_000, async () => {
         const { session } = createSessionHarness();
         const reliable = position({ timestamp: 99_997 });
         const imprecise = position({ timestamp: 99_998, accuracy: 35 });
@@ -636,9 +647,10 @@ test('retains only the newest fresh raw fix and newest reliable fix', async () =
         session.rememberPosition(imprecise);
 
         assert.equal(session.getLastKnownPosition(), imprecise);
-        assert.equal(session.getLastReliablePosition(), reliable);
+        assert.equal(await session.getReliablePosition(), reliable);
         assert.equal(session.rememberPosition(stale), false);
         assert.equal(session.getLastKnownPosition(), imprecise);
+        assert.equal(await session.getReliablePosition(), reliable);
     });
 });
 
@@ -671,32 +683,220 @@ test('clearing an old watch prevents it from progressing a later session', async
     session.stop();
 });
 
-test('delivers a new reliable fix to destination-change waiting without replacing it with an imprecise fix', async () => {
-    await withFixedNow(100_000, async () => {
-        const { session, watches } = createSessionHarness();
-        const initialReliableFix = position({ timestamp: 99_997 });
-        const impreciseFix = position({ timestamp: 99_998, accuracy: 35 });
-        const nextReliableFix = position({ timestamp: 99_999, accuracy: 10 });
-        let deliveredReliablePosition = null;
+test('returns a fresh reliable cached position without requesting another fix', async () => {
+    const { session, events } = createSessionHarness();
+    const cachedPosition = position();
+    session.rememberPosition(cachedPosition);
 
-        session.rememberPosition(initialReliableFix);
+    assert.equal(await session.getReliablePosition(), cachedPosition);
+    assert.equal(events.includes('gps:request'), false);
+});
+
+test('replaces an imprecise cache with a reliable one-shot position', async () => {
+    const requestedPosition = position();
+    const { session, events } = createSessionHarness({
+        requestPosition: async () => requestedPosition,
+    });
+    session.rememberPosition(position({ accuracy: 40 }));
+
+    assert.equal(await session.getReliablePosition(), requestedPosition);
+    assert.equal(events.filter((event) => event === 'gps:request').length, 1);
+});
+
+test('waits for a newer reliable watch fix when the cached fix becomes stale', async () => {
+    await withMutableNow(100_000, async (setNow) => {
+        const { session, watches } = createSessionHarness();
+        const cachedPosition = position({ timestamp: 99_997 });
+        session.rememberPosition(cachedPosition);
         await session.start({
             mode: 'pedestrian',
             compassActivation: Promise.resolve(),
-            onPosition: (_position, state) => {
-                if (state.reliablePositionUpdated) {
-                    deliveredReliablePosition = state.reliablePosition;
-                }
-            },
         });
 
+        setNow(110_001);
+        const result = session.getReliablePosition({ timeoutMs: 1000 });
+        const impreciseFix = position({ timestamp: 110_001, accuracy: 35 });
         watches[0].onPosition(impreciseFix);
-        assert.equal(deliveredReliablePosition, null);
-        assert.equal(session.getLastReliablePosition(), initialReliableFix);
 
-        watches[0].onPosition(nextReliableFix);
-        assert.equal(deliveredReliablePosition, nextReliableFix);
-        assert.equal(session.getLastReliablePosition(), nextReliableFix);
+        let hasSettled = false;
+        void result.then(() => {
+            hasSettled = true;
+        });
+        await Promise.resolve();
+        assert.equal(hasSettled, false);
+
+        const reliableFix = position({ timestamp: 110_002, accuracy: 10 });
+        setNow(110_003);
+        watches[0].onPosition(reliableFix);
+        assert.equal(await result, reliableFix);
+        session.stop();
+    });
+});
+
+test('uses the existing one-shot request when no navigation watch exists', async () => {
+    const requestedPosition = position();
+    const { session, events } = createSessionHarness({
+        requestPosition: async () => requestedPosition,
+        failures: { startWatchingPosition: new Error('watch unavailable') },
+    });
+
+    await withQuietConsole(() =>
+        assert.rejects(
+            session.start({
+                mode: 'bicycle',
+                compassActivation: Promise.resolve(),
+            }),
+        ),
+    );
+
+    // Start failure cleanup leaves the session inactive; the API still uses
+    // the one-shot geolocation service rather than creating another watch.
+    assert.equal(await session.getReliablePosition(), requestedPosition);
+    assert.equal(events.filter((event) => event === 'gps:request').length, 2);
+    assert.equal(events.filter((event) => event === 'gps:watch:start').length, 1);
+});
+
+test('aborts and times out one-shot requests without accepting their late fixes', async () => {
+    const request = createDeferred();
+    const { session } = createSessionHarness({
+        requestPosition: () => request.promise,
+    });
+    const controller = new AbortController();
+    const abortedRequest = session.getReliablePosition({
+        timeoutMs: 1000,
+        signal: controller.signal,
+    });
+
+    controller.abort();
+    await assert.rejects(abortedRequest, { name: 'AbortError' });
+
+    await assert.rejects(
+        session.getReliablePosition({ timeoutMs: 5 }),
+        (error) => error.code === 'POSITION_REQUEST_TIMEOUT',
+    );
+    request.resolve(position());
+    await Promise.resolve();
+    assert.equal(session.getLastKnownPosition(), null);
+});
+
+test('times out while waiting for a reliable watch fix and permits another request', async () => {
+    await withMutableNow(100_000, async (setNow) => {
+        const { session, watches } = createSessionHarness();
+        session.rememberPosition(position({ timestamp: 99_997 }));
+        await session.start({
+            mode: 'pedestrian',
+            compassActivation: Promise.resolve(),
+        });
+
+        setNow(110_000);
+        await assert.rejects(
+            session.getReliablePosition({ timeoutMs: 5 }),
+            (error) => error.code === 'POSITION_WAIT_TIMEOUT',
+        );
+
+        const retry = session.getReliablePosition({ timeoutMs: 1000 });
+        const reliableFix = position({ timestamp: 110_001 });
+        setNow(110_002);
+        watches[0].onPosition(reliableFix);
+        assert.equal(await retry, reliableFix);
+        session.stop();
+    });
+});
+
+test('abort signal cancels only its own waiters and allows a retry', async () => {
+    await withMutableNow(100_000, async (setNow) => {
+        const { session, watches } = createSessionHarness();
+        session.rememberPosition(position({ timestamp: 99_997 }));
+        await session.start({
+            mode: 'pedestrian',
+            compassActivation: Promise.resolve(),
+        });
+        setNow(110_000);
+        const controller = new AbortController();
+        const cancelled = session.getReliablePosition({
+            timeoutMs: 1000,
+            signal: controller.signal,
+        });
+        const stillWaiting = session.getReliablePosition({
+            timeoutMs: 1000,
+        });
+
+        controller.abort();
+        await assert.rejects(cancelled, { name: 'AbortError' });
+
+        const retry = session.getReliablePosition({ timeoutMs: 1000 });
+        const reliableFix = position({ timestamp: 110_001 });
+        setNow(110_002);
+        watches[0].onPosition(reliableFix);
+
+        assert.equal(await stillWaiting, reliableFix);
+        assert.equal(await retry, reliableFix);
+        session.stop();
+    });
+});
+
+test('session stop resolves watch and one-shot waits without accepting late fixes', async () => {
+    const oneShot = createDeferred();
+    const { session, watches, events } = createSessionHarness({
+        requestPosition: () => oneShot.promise,
+    });
+    await withMutableNow(100_000, async (setNow) => {
+        session.rememberPosition(position({ timestamp: 99_997 }));
+        await session.start({
+            mode: 'bicycle',
+            compassActivation: Promise.resolve(),
+        });
+
+        setNow(110_000);
+        const watchWait = session.getReliablePosition({ timeoutMs: 1000 });
+        session.stop();
+        assert.equal(await watchWait, null);
+        const oldWatch = watches[0];
+        oldWatch.onPosition(position({ timestamp: 110_001 }));
+        assert.equal(events.includes('engine:progress'), false);
+    });
+
+    const noWatchHarness = createSessionHarness({
+        requestPosition: () => oneShot.promise,
+        failures: { startWatchingPosition: new Error('watch unavailable') },
+    });
+    noWatchHarness.session.rememberPosition(position());
+    await withQuietConsole(() =>
+        assert.rejects(
+            noWatchHarness.session.start({
+                mode: 'bicycle',
+                compassActivation: Promise.resolve(),
+            }),
+        ),
+    );
+    const oneShotWait = noWatchHarness.session.getReliablePosition({
+        timeoutMs: 1000,
+    });
+    noWatchHarness.session.stop();
+    assert.equal(await oneShotWait, null);
+    oneShot.resolve(position());
+    assert.equal(noWatchHarness.session.getLastKnownPosition(), null);
+});
+
+test('enforces afterTimestamp as a strict floor for cached and watched fixes', async () => {
+    await withMutableNow(100_000, async (setNow) => {
+        const { session, watches } = createSessionHarness();
+        const cachedPosition = position({ timestamp: 99_999 });
+        session.rememberPosition(cachedPosition);
+        await session.start({
+            mode: 'bicycle',
+            compassActivation: Promise.resolve(),
+        });
+
+        setNow(110_000);
+        const wait = session.getReliablePosition({
+            timeoutMs: 1000,
+            afterTimestamp: cachedPosition.timestamp,
+        });
+        const newerPosition = position({ timestamp: 110_001 });
+        setNow(110_002);
+        watches[0].onPosition(newerPosition);
+        assert.equal(await wait, newerPosition);
         session.stop();
     });
 });
