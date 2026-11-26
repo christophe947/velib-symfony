@@ -179,7 +179,7 @@ function isValidPlannerRoute(route = routePreviewData) {
     const segment = route?.segments?.[0];
 
     return (
-        segment?.mode === 'walking' &&
+        segment?.mode === 'pedestrian' &&
         isValidRouteCoordinates(segment.geometry) &&
         isValidRoutePlace(segment.origin) &&
         isValidRoutePlace(segment.destination) &&
@@ -1346,7 +1346,7 @@ async function calculatePlannerRoute(map, styleReady) {
         const result = {
             segments: [
                 {
-                    mode: 'walking',
+                    mode: routeSegment.mode,
                     origin: routeSegment.origin,
                     destination: routeSegment.destination,
                     geometry: routeSegment.geometry,
