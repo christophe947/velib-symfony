@@ -531,6 +531,29 @@ export function createCameraController(
         }
     }
 
+    function setNavigationMode(mode, position = lastGpsPosition) {
+        if (mode !== 'pedestrian' && mode !== 'bicycle') {
+            throw new RangeError(`Unsupported navigation mode: ${mode}`);
+        }
+
+        if (navigationMode === null || navigationMode === mode) {
+            return navigationOrientationHeading;
+        }
+
+        navigationMode = mode;
+        navigationOrientationHeading = null;
+        lastStableHeading = null;
+
+        if (mode === 'bicycle') {
+            updateGpsNavigationHeading(position);
+        }
+
+        // Keep the active RAF/interpolation state; only the orientation policy changes.
+        requestNavigationCameraFrame();
+
+        return navigationOrientationHeading;
+    }
+
     function clearNavigationVisualPosition() {
         if (navigationMode === 'bicycle') {
             lastStableHeading = null;
@@ -858,6 +881,7 @@ export function createCameraController(
         getNavigationOrientationHeading,
         updateFromCompass,
         beginNavigationPositionTracking,
+        setNavigationMode,
         updateNavigationVisualPosition,
         clearNavigationVisualPosition,
         recenter,

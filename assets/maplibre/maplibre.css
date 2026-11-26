@@ -785,6 +785,47 @@
     font-weight: 600;
 }
 
+.route-preview-steps,
+.route-preview-transfers {
+    margin: 0 0 12px;
+    padding-left: 22px;
+    color: #343a40;
+    font-size: 14px;
+}
+
+.route-preview-steps li,
+.route-preview-transfers li {
+    margin-bottom: 8px;
+}
+
+.route-preview-steps li.is-active {
+    font-weight: 600;
+}
+
+.route-preview-steps small,
+.route-preview-transfers small {
+    display: block;
+    margin-top: 2px;
+    color: #6c757d;
+    font-size: 12px;
+}
+
+.route-preview-warning,
+.route-preview-unavailable {
+    margin: 0 0 12px;
+    color: #8a5a00;
+    font-size: 12px;
+}
+
+.route-preview-unavailable {
+    grid-column: 1 / -1;
+    color: #6c757d;
+}
+
+.route-preview-actions:not(.station-panel-navigation-controls).route-preview-actions--unavailable {
+    grid-template-columns: 1fr;
+}
+
 .route-preview-start-note {
     margin: 0 0 14px;
     color: #6c757d;
@@ -793,6 +834,38 @@
 
 .route-preview-start-note.is-error {
     color: #b02a37;
+}
+
+.route-preview-journey-message {
+    margin: 0 0 12px;
+    color: #495057;
+    font-size: 14px;
+}
+
+.route-preview-journey-message.is-error {
+    color: #b02a37;
+}
+
+.route-preview-journey-controls {
+    display: grid;
+    gap: 10px;
+}
+
+.route-preview-journey-action {
+    width: 100%;
+    min-height: 46px;
+    padding: 10px 14px;
+    border: 0;
+    border-radius: 12px;
+    background: #198754;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    touch-action: manipulation;
+}
+
+.route-preview-journey-action:disabled {
+    opacity: 0.65;
 }
 
 .route-preview-actions:not(.station-panel-navigation-controls) {
@@ -813,6 +886,14 @@
 .route-preview-start {
     background: #198754;
     color: #fff;
+}
+
+.route-preview-start[data-route-mode='bicycle'] {
+    background: #9250DE;
+}
+
+.route-preview-start[data-route-mode='pedestrian'] {
+    background: #198754;
 }
 
 .route-preview-start:disabled {

@@ -79,10 +79,6 @@ export function createRoutePlannerController(element, { onChange } = {}) {
     const alreadyOnVelibInput = element.querySelector(
         '[data-route-already-on-velib]',
     );
-    const multimodalUnavailableMessage = element.querySelector(
-        '[data-route-multimodal-unavailable]',
-    );
-
     function getSelections() {
         const getLatestSelection = (field) => {
             if (
@@ -131,12 +127,11 @@ export function createRoutePlannerController(element, { onChange } = {}) {
             alreadyOnVelibInput.checked = false;
         }
 
-        const { destination, alreadyOnVelib } = getSelections();
+        const { destination } = getSelections();
 
         if (button) {
             button.disabled =
                 isCalculating ||
-                alreadyOnVelib ||
                 !isResolvedPlace(origin) ||
                 !isResolvedPlace(destination);
 
@@ -147,9 +142,6 @@ export function createRoutePlannerController(element, { onChange } = {}) {
             }
         }
 
-        if (multimodalUnavailableMessage) {
-            multimodalUnavailableMessage.hidden = !alreadyOnVelib;
-        }
     }
 
     function stateChanged() {

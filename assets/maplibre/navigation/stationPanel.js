@@ -7,12 +7,17 @@ import {
 import { getRoute } from './routing.js';
 import {
     drawWalkingRoute,
+    drawNavigationRouteSegments,
     drawRoutePreview,
+    drawRoutePreviewSegments,
     clearRoutePreview,
+    clearDestinationMarker,
     showDestinationMarker,
+    setActiveNavigationRouteSegment,
     updateWalkingRoute,
     setUserFollowing,
     setNavigationActive,
+    setNavigationTravelMode,
     showUserMarker,
     updateNavigationPosition,
     recenterOnUser,
@@ -26,6 +31,7 @@ import {
 } from '../map.js';
 import { createNavigationEngine } from './navigation.js';
 import { NavigationSession } from './navigationSession.js';
+import { MultimodalNavigationController } from './multimodalNavigationController.js';
 import { createScreenWakeLock } from './screenWakeLock.js';
 import { formatDistance, formatDuration } from './routeFormatting.js';
 import { stopCompass } from './compass.js';
@@ -51,6 +57,7 @@ let isRoutePlannerOpen = false;
 let isRoutePreviewOpen = false;
 let routePreviewRequestId = 0;
 let routePreviewData = null;
+let multimodalJourneyPlan = null;
 let isRouteCalculationPending = false;
 let activeRouteCalculationRequestId = null;
 let routePreviewAbortController = null;
@@ -69,6 +76,10 @@ let destinationChangeError = null;
 
 let navigationEngine = null;
 let navigationSession = null;
+let multimodalNavigationController = null;
+let unsubscribeMultimodalNavigation = null;
+let multimodalNavigationMessage = '';
+let multimodalNavigationMessageIsError = false;
 const screenWakeLock = createScreenWakeLock();
 
 let currentMode = 'bikes';
@@ -76,6 +87,36 @@ let latestStationsById = new Map();
 
 function isNavigationStarted() {
     return navigationSession?.isActive() ?? false;
+}
+
+function getMultimodalJourneyState() {
+    return multimodalNavigationController?.getState() ?? null;
+}
+
+function isMultimodalJourneyInProgress() {
+    const state = getMultimodalJourneyState();
+    if (
+        routePreviewData?.type === 'multimodal' &&
+        (multimodalJourneyPlan !== routePreviewData ||
+            state?.planId !== routePreviewData.id)
+    ) {
+        return false;
+    }
+
+    const phase = state?.phase;
+
+    return [
+        'starting',
+        'navigating',
+        'awaiting-pickup-confirmation',
+        'awaiting-dropoff-confirmation',
+        'transitioning',
+        'transition-error',
+    ].includes(phase);
+}
+
+function isNavigationFlowActive() {
+    return isNavigationStarted() || isMultimodalJourneyInProgress();
 }
 
 function getStationWithLatestAvailability(station) {
@@ -179,6 +220,8 @@ function isValidPlannerRoute(route = routePreviewData) {
     const segment = route?.segments?.[0];
 
     return (
+        route?.type !== 'multimodal' &&
+        route?.segments?.length === 1 &&
         segment?.mode === 'pedestrian' &&
         isValidRouteCoordinates(segment.geometry) &&
         isValidRoutePlace(segment.origin) &&
@@ -192,21 +235,188 @@ function isValidPlannerRoute(route = routePreviewData) {
     );
 }
 
+function isValidMultimodalRoute(route = routePreviewData) {
+    return (
+        route?.type === 'multimodal' &&
+        Array.isArray(route.segments) &&
+        route.segments.length > 0 &&
+        route.segments.every(
+            (segment) =>
+                ['pedestrian', 'bicycle'].includes(segment?.mode) &&
+                isValidRouteCoordinates(segment.geometry) &&
+                isValidRoutePlace(segment.origin) &&
+                isValidRoutePlace(segment.destination) &&
+                Number.isFinite(segment.distance) &&
+                segment.distance >= 0 &&
+                Number.isFinite(segment.duration) &&
+                segment.duration >= 0,
+        ) &&
+        Number.isFinite(route.distance) &&
+        route.distance >= 0 &&
+        Number.isFinite(route.duration) &&
+        route.duration >= 0
+    );
+}
+
+function isValidPlannerPreview(route = routePreviewData) {
+    return isValidPlannerRoute(route) || isValidMultimodalRoute(route);
+}
+
+function getRoutePlaceLabel(place) {
+    return (
+        place?.label ??
+        place?.name ??
+        place?.address ??
+        (place?.type === 'current-location' ? 'Ma position actuelle' : 'Lieu sélectionné')
+    );
+}
+
+function getMultimodalPreviewSteps(route) {
+    return route.segments.map(
+        (segment) => ({
+            label: `${segment.mode === 'bicycle' ? 'À vélo' : 'À pied'} : ${getRoutePlaceLabel(segment.origin)} → ${getRoutePlaceLabel(segment.destination)}`,
+        }),
+    );
+}
+
+function getMultimodalModeLabel(route) {
+    const modes = route.segments.reduce((result, segment) => {
+        if (result[result.length - 1] !== segment.mode) {
+            result.push(segment.mode);
+        }
+
+        return result;
+    }, []);
+
+    return modes
+        .map((mode) => (mode === 'bicycle' ? 'Vélib' : 'marche'))
+        .join(' → ');
+}
+
+function getStationAvailabilityDetail(station, kind) {
+    if (kind === 'pickup') {
+        const bikeCounts = [];
+
+        if (Number.isFinite(station.mechanicalBikes)) {
+            bikeCounts.push(`${station.mechanicalBikes} mécaniques`);
+        }
+
+        if (Number.isFinite(station.electricBikes)) {
+            bikeCounts.push(`${station.electricBikes} électriques`);
+        }
+
+        return `${station.bikes} vélo${station.bikes > 1 ? 's' : ''} disponible${station.bikes > 1 ? 's' : ''}${bikeCounts.length ? ` (${bikeCounts.join(' · ')})` : ''}`;
+    }
+
+    return `${station.docks} place${station.docks > 1 ? 's' : ''} disponible${station.docks > 1 ? 's' : ''}`;
+}
+
+function getMultimodalTransfers(route) {
+    const transfers = [];
+
+    if (route.pickupStation) {
+        transfers.push({
+            label: `Prise : ${getRoutePlaceLabel(route.pickupStation)}`,
+            detail: getStationAvailabilityDetail(route.pickupStation, 'pickup'),
+        });
+    }
+
+    if (route.dropoffStation) {
+        transfers.push({
+            label: `Dépôt : ${getRoutePlaceLabel(route.dropoffStation)}`,
+            detail: getStationAvailabilityDetail(route.dropoffStation, 'dropoff'),
+        });
+    }
+
+    return transfers;
+}
+
+function getStationAlternativeWarning(route) {
+    const alternatives = [];
+
+    if (
+        !route.alreadyOnVelib &&
+        route.origin?.type === 'station' &&
+        route.pickupStation &&
+        String(route.origin.stationId) !== String(route.pickupStation.id)
+    ) {
+        alternatives.push(
+            `La station de départ sélectionnée n’est pas utilisée comme prise ; alternative : ${getRoutePlaceLabel(route.pickupStation)}.`,
+        );
+    }
+
+    if (
+        route.destination?.type === 'station' &&
+        route.dropoffStation &&
+        String(route.destination.stationId) !== String(route.dropoffStation.id)
+    ) {
+        alternatives.push(
+            `La station d’arrivée sélectionnée n’est pas utilisée comme dépôt ; alternative : ${getRoutePlaceLabel(route.dropoffStation)}.`,
+        );
+    }
+
+    return alternatives.join(' ');
+}
+
+function getAvailabilityWarning(availability) {
+    const isStale = availability?.stale === true;
+    const hasKnownFreshness =
+        availability?.stale === false &&
+        typeof availability.fetchedAt === 'string' &&
+        Number.isFinite(Date.parse(availability.fetchedAt));
+
+    if (!isStale && hasKnownFreshness) {
+        return '';
+    }
+
+    const fetchedAt =
+        typeof availability?.fetchedAt === 'string'
+            ? new Date(availability.fetchedAt)
+            : null;
+    const formattedDate =
+        fetchedAt && !Number.isNaN(fetchedAt.getTime())
+            ? new Intl.DateTimeFormat('fr-FR', {
+                  dateStyle: 'short',
+                  timeStyle: 'short',
+              }).format(fetchedAt)
+            : null;
+
+    if (isStale) {
+        return formattedDate
+            ? `Disponibilités issues d’un relevé de secours du ${formattedDate} ; elles peuvent avoir changé.`
+            : 'Disponibilités issues de données de secours ; elles peuvent avoir changé.';
+    }
+
+    return 'La fraîcheur des disponibilités n’est pas connue ; vérifie les stations avant le départ.';
+}
+
 function isPlannerNavigationActive() {
     return (
-        isNavigationStarted() &&
         !activeNavigationStation &&
-        isValidPlannerRoute()
+        ((isNavigationStarted() && isValidPlannerPreview()) ||
+            isMultimodalJourneyInProgress())
     );
 }
 
 function renderPlannerPreview(navigationActive = false, message = '') {
-    if (!routePreviewElement || !isValidPlannerRoute()) {
+    if (!routePreviewElement || !isValidPlannerPreview()) {
         return;
     }
 
+    const isMultimodal = isValidMultimodalRoute();
+    const controllerState = isMultimodal
+        ? getMultimodalJourneyState()
+        : null;
+    const journeyState =
+        multimodalJourneyPlan === routePreviewData &&
+        controllerState?.planId === routePreviewData.id
+            ? controllerState
+            : null;
+    const journeyActive =
+        isMultimodal && isMultimodalJourneyInProgress();
+    const journeyCompleted = journeyState?.phase === 'completed';
     const summary =
-        navigationActive && activeNavigationRouteSummary
+        (journeyActive || navigationActive) && activeNavigationRouteSummary
             ? activeNavigationRouteSummary
             : {
                   distance: formatDistance(routePreviewData.distance),
@@ -216,9 +426,41 @@ function renderPlannerPreview(navigationActive = false, message = '') {
     routePreviewElement.innerHTML = renderRoutePreview({
         distance: summary.distance,
         duration: summary.duration,
-        navigationActive,
-        message,
+        navigationActive: navigationActive || journeyActive,
+        message:
+            message ||
+            (isMultimodal && multimodalNavigationMessage
+                ? multimodalNavigationMessage
+                : ''),
+        isError: multimodalNavigationMessageIsError,
         starting: isPlannerNavigationStarting,
+        modeLabel: isMultimodal
+            ? getMultimodalModeLabel(routePreviewData)
+            : '🚶 À pied',
+        navigationMode:
+            journeyState?.activeSegment?.mode ??
+            routePreviewData.segments[0].mode ??
+            'pedestrian',
+        steps: isMultimodal ? getMultimodalPreviewSteps(routePreviewData) : [],
+        transfers: isMultimodal ? getMultimodalTransfers(routePreviewData) : [],
+        availabilityWarning: isMultimodal
+            ? getAvailabilityWarning(routePreviewData.availability)
+            : routePreviewData.availability
+              ? getAvailabilityWarning(routePreviewData.availability)
+              : '',
+        alternativeWarning: isMultimodal
+            ? getStationAlternativeWarning(routePreviewData)
+            : '',
+        canStart: !journeyActive && !journeyCompleted,
+        journey: journeyState
+            ? {
+                  ...journeyState,
+                  status: journeyCompleted
+                      ? multimodalNavigationMessage || 'Destination atteinte.'
+                      : multimodalNavigationMessage,
+                  isError: multimodalNavigationMessageIsError,
+              }
+            : null,
     });
 }
 
@@ -236,10 +478,64 @@ function setPlannerPreviewMessage(message, isError = false) {
     status.classList.toggle('is-error', isError);
 }
 
-function handleRoutePlannerStateChange(selections, map) {
-    routePreviewRequestId++;
+function cancelPlannerCalculation() {
+    routePreviewRequestId += 1;
     routePreviewAbortController?.abort();
     routePreviewAbortController = null;
+
+    if (activeRouteCalculationRequestId !== null) {
+        activeRouteCalculationRequestId = null;
+        isRouteCalculationPending = false;
+        routePlannerController?.setCalculating(false);
+    }
+}
+
+function waitForAbortableResult(promise, signal) {
+    if (!signal) {
+        return promise;
+    }
+
+    if (signal.aborted) {
+        return Promise.reject(signal.reason);
+    }
+
+    return new Promise((resolve, reject) => {
+        const cleanup = () => signal.removeEventListener('abort', onAbort);
+        const onAbort = () => {
+            cleanup();
+            reject(signal.reason);
+        };
+
+        signal.addEventListener('abort', onAbort, { once: true });
+
+        if (signal.aborted) {
+            onAbort();
+            return;
+        }
+
+        Promise.resolve(promise).then(
+            (value) => {
+                cleanup();
+                resolve(value);
+            },
+            (error) => {
+                cleanup();
+                reject(error);
+            },
+        );
+    });
+}
+
+function handleRoutePlannerStateChange(selections, map) {
+    if (isMultimodalJourneyInProgress()) {
+        setPlannerCalculationMessage(
+            'Termine ou arrête le parcours multimodal avant de modifier ses lieux.',
+            true,
+        );
+        return;
+    }
+
+    cancelPlannerCalculation();
 
     if (selections?.origin?.type === 'current-location') {
         rememberUserGpsPosition(map, selections.origin);
@@ -247,6 +543,8 @@ function handleRoutePlannerStateChange(selections, map) {
 
     if (routePreviewData && !isNavigationStarted()) {
         isPlannerRouteOutdated = true;
+        clearRoutePreview(map);
+        clearDestinationMarker();
     }
 
     const message = plannerElement?.querySelector(
@@ -351,7 +649,9 @@ function updateRouteSummary(distance, duration) {
             durationElement.textContent = `⏱️ ${duration}`;
         }
 
-        isPlannerRouteOutdated = true;
+        if (!isValidMultimodalRoute()) {
+            isPlannerRouteOutdated = true;
+        }
         return;
     }
 
@@ -506,7 +806,7 @@ async function calculateJoinRoute(map, styleReady, station, activeButton) {
         if (
             previewRenderId !== stationPanelRenderId ||
             previewSessionId !== navigationSessionId ||
-            isNavigationStarted()
+                isNavigationFlowActive()
         ) {
             return;
         }
@@ -519,7 +819,7 @@ async function calculateJoinRoute(map, styleReady, station, activeButton) {
         if (
             previewRenderId !== stationPanelRenderId ||
             previewSessionId !== navigationSessionId ||
-            isNavigationStarted()
+                isNavigationFlowActive()
         ) {
             return;
         }
@@ -533,7 +833,7 @@ async function calculateJoinRoute(map, styleReady, station, activeButton) {
         if (
             previewRenderId !== stationPanelRenderId ||
             previewSessionId !== navigationSessionId ||
-            isNavigationStarted()
+            isNavigationFlowActive()
         ) {
             return;
         }
@@ -558,7 +858,7 @@ async function calculateJoinRoute(map, styleReady, station, activeButton) {
             isCurrent: () =>
                 previewRenderId === stationPanelRenderId &&
                 previewSessionId === navigationSessionId &&
-                !isNavigationStarted(),
+                !isNavigationFlowActive(),
         });
 
         if (!wasPresented) {
@@ -606,7 +906,7 @@ async function calculateJoinRoute(map, styleReady, station, activeButton) {
         if (
             previewRenderId !== stationPanelRenderId ||
             previewSessionId !== navigationSessionId ||
-            isNavigationStarted()
+            isNavigationFlowActive()
         ) {
             return;
         }
@@ -780,19 +1080,21 @@ function toggleJoinMode(button) {
 }
 
 function resumeNavigation(map, styleReady) {
-    if (!isNavigationStarted()) {
+    if (!isNavigationFlowActive()) {
         return;
     }
 
-    if (!activeNavigationStation && isValidPlannerRoute()) {
+    if (!activeNavigationStation && isValidPlannerPreview()) {
         const sessionId = navigationSessionId;
         showRoutePlanner(true, map);
-        restoreNavigationCamera(map, null, sessionId).catch((error) => {
-            console.error(
-                'Impossible de reprendre le suivi de navigation :',
-                error,
-            );
-        });
+        if (isNavigationStarted()) {
+            restoreNavigationCamera(map, null, sessionId).catch((error) => {
+                console.error(
+                    'Impossible de reprendre le suivi de navigation :',
+                    error,
+                );
+            });
+        }
         return;
     }
 
@@ -907,7 +1209,7 @@ async function startNavigationSession(
 export function initStationPanel(
     map,
     styleReady,
-    { getStationSnapshot } = {},
+    { getStationSnapshot, multimodalRoutePlanner } = {},
 ) {
     element = document.querySelector('#station-content');
     paneElement = document.querySelector('#maplibre-station-panel');
@@ -945,12 +1247,22 @@ export function initStationPanel(
             stopBackgroundTracking: stopBackgroundUserTracking,
             setNavigationActive: (initialPosition, mode) =>
                 setNavigationActive(true, initialPosition, mode, map),
+            setNavigationMode: (mode, position) =>
+                setNavigationTravelMode(map, mode, position),
+            showNavigationDestination: (destination) =>
+                showNavigationDestinationMarker(map, destination),
+            setActiveNavigationSegment: (segmentIndex) =>
+                setActiveNavigationRouteSegment(map, segmentIndex),
             setUserFollowing,
             showUserPosition: (position) => showUserMarker(map, position),
             drawNavigationRoute: (route) => {
                 const segment = route.segments[0];
 
-                drawWalkingRoute(map, segment.geometry, segment.mode);
+                if (route.type === 'multimodal') {
+                    drawNavigationRouteSegments(map, route.segments, 0);
+                } else {
+                    drawWalkingRoute(map, segment.geometry, segment.mode);
+                }
                 showNavigationDestinationMarker(map, segment.destination);
             },
             clearPlannerRoutePreview: () => clearRoutePreview(map),
@@ -964,6 +1276,10 @@ export function initStationPanel(
             reactivateIfEligible: () => reactivateCompassIfEligible(map),
         },
         wakeLock: screenWakeLock,
+    });
+    multimodalNavigationController = new MultimodalNavigationController({
+        navigationSession,
+        navigationEngine,
     });
 
     // Le panneau vide est présent dès le lancement
@@ -1020,7 +1336,11 @@ export function initStationPanel(
         } else if (calculateButton) {
             event.preventDefault();
             event.stopPropagation();
-            void calculatePlannerRoute(map, styleReady).catch((error) => {
+            void calculatePlannerRoute(
+                map,
+                styleReady,
+                multimodalRoutePlanner,
+            ).catch((error) => {
                 console.error('Erreur inattendue du calcul d’itinéraire :', error);
                 setPlannerCalculationMessage(
                     'Le calcul a échoué. Vérifie ta connexion puis réessaie.',
@@ -1034,6 +1354,7 @@ export function initStationPanel(
         const editButton = event.target.closest('[data-edit-route-planner]');
         const startButton = event.target.closest('.route-preview-start');
         const stopButton = event.target.closest('[data-route-stop-navigation]');
+        const journeyAction = event.target.closest('[data-multimodal-action]');
 
         if (startButton && !startButton.disabled) {
             event.preventDefault();
@@ -1046,6 +1367,13 @@ export function initStationPanel(
             event.preventDefault();
             event.stopPropagation();
             showStopNavigationConfirmation(map, null, styleReady);
+            return;
+        }
+
+        if (journeyAction && !journeyAction.disabled) {
+            event.preventDefault();
+            event.stopPropagation();
+            handleMultimodalJourneyAction(journeyAction, map);
             return;
         }
 
@@ -1089,7 +1417,208 @@ export function initStationPanel(
         updateAvailability: updateStationAvailability,
         setRouteSearchApi: (searchApi) =>
             routePlannerController?.setSearchApi(searchApi),
+        destroy: () => {
+            unsubscribeMultimodalNavigation?.();
+            unsubscribeMultimodalNavigation = null;
+            multimodalNavigationController?.stop();
+            clearRoutePreview(map);
+            multimodalJourneyPlan = null;
+            routePlannerController?.destroy();
+        },
     };
+}
+
+function ensureMultimodalNavigationSubscription(map) {
+    if (!unsubscribeMultimodalNavigation) {
+        unsubscribeMultimodalNavigation =
+            multimodalNavigationController?.subscribe((event) =>
+                handleMultimodalNavigationEvent(event, map),
+            ) ?? null;
+    }
+}
+
+function handleMultimodalJourneyAction(button, map) {
+    const action = button.dataset.multimodalAction;
+    button.disabled = true;
+
+    try {
+        if (action === 'report-arrival') {
+            multimodalNavigationController?.reportMilestoneReached();
+            return;
+        }
+
+        const operation =
+            action === 'confirm-pickup'
+                ? multimodalNavigationController?.confirmPickup()
+                : action === 'confirm-dropoff'
+                  ? multimodalNavigationController?.confirmDropoff()
+                  : action === 'retry-transition'
+                    ? multimodalNavigationController?.retryTransition()
+                    : null;
+
+        Promise.resolve(operation).catch((error) => {
+            console.error('Impossible de poursuivre le trajet multimodal :', error);
+            multimodalNavigationMessage =
+                'Cette étape n’a pas pu être validée. Réessaie.';
+            multimodalNavigationMessageIsError = true;
+            renderPlannerPreview(true);
+            recalculatePlannerPreviewHeight();
+        });
+    } catch (error) {
+        console.error('Impossible de poursuivre le trajet multimodal :', error);
+        multimodalNavigationMessage =
+            'Cette étape n’a pas pu être validée. Réessaie.';
+        multimodalNavigationMessageIsError = true;
+        renderPlannerPreview(true);
+        recalculatePlannerPreviewHeight();
+    }
+}
+
+function recalculatePlannerPreviewHeight(moveToMiddle = false) {
+    if (!paneController?.isAvailable() || routePreviewElement?.hidden) {
+        return;
+    }
+
+    const preview = routePreviewElement.querySelector('.route-preview-panel');
+    if (preview) {
+        const expectedPlan = routePreviewData;
+        void paneController
+            .updateMiddleHeight(preview.getBoundingClientRect().height, false)
+            .then(() => {
+                if (
+                    moveToMiddle &&
+                    routePreviewData === expectedPlan &&
+                    isRoutePreviewOpen
+                ) {
+                    return paneController.moveToBreak('middle');
+                }
+            })
+            .catch((error) =>
+                console.error('Impossible de recalculer la hauteur de l’aperçu :', error),
+            );
+    }
+}
+
+function presentMultimodalJourney(
+    map,
+    { restorePreview = false, moveToMiddle = false } = {},
+) {
+    if (!routePreviewData || !isValidMultimodalRoute()) {
+        return;
+    }
+
+    isRoutePlannerOpen = true;
+    isRoutePreviewOpen = true;
+    element.hidden = true;
+    plannerElement.hidden = true;
+    routePreviewElement.hidden = false;
+    renderPlannerPreview(isMultimodalJourneyInProgress());
+
+    if (restorePreview && !isNavigationStarted()) {
+        drawRoutePreviewSegments(map, routePreviewData.segments);
+        showDestinationMarker(
+            map,
+            routePreviewData.segments.at(-1).destination,
+        );
+    }
+
+    recalculatePlannerPreviewHeight(moveToMiddle);
+}
+
+function handleMultimodalNavigationEvent(event, map) {
+    if (event?.type === 'stopped') {
+        unsubscribeMultimodalNavigation?.();
+        unsubscribeMultimodalNavigation = null;
+        return;
+    }
+
+    const eventPlanId = event?.planId ?? event?.state?.planId;
+    if (
+        routePreviewData?.type !== 'multimodal' ||
+        (eventPlanId && eventPlanId !== routePreviewData.id)
+    ) {
+        return;
+    }
+
+    switch (event.type) {
+        case 'pickup-reached':
+            multimodalNavigationMessage = 'Station de prise atteinte.';
+            multimodalNavigationMessageIsError = false;
+            presentMultimodalJourney(map, { moveToMiddle: true });
+            break;
+        case 'dropoff-reached':
+            multimodalNavigationMessage = 'Station de dépôt atteinte.';
+            multimodalNavigationMessageIsError = false;
+            presentMultimodalJourney(map, { moveToMiddle: true });
+            break;
+        case 'pickup-confirmed':
+        case 'dropoff-confirmed':
+            multimodalNavigationMessage =
+                event.type === 'pickup-confirmed'
+                    ? 'Passage au tronçon vélo…'
+                    : 'Passage au tronçon suivant…';
+            multimodalNavigationMessageIsError = false;
+            presentMultimodalJourney(map);
+            break;
+        case 'segment-changed': {
+            multimodalNavigationMessage = '';
+            multimodalNavigationMessageIsError = false;
+            if (event.segment) {
+                activeNavigationRouteSummary = {
+                    distance: formatDistance(event.segment.distance),
+                    duration: formatDuration(event.segment.duration),
+                };
+                routeSummaryData = activeNavigationRouteSummary;
+            }
+            presentMultimodalJourney(map);
+            break;
+        }
+        case 'transition-failed':
+            multimodalNavigationMessage =
+                'Le tronçon suivant n’a pas pu être activé. Tu peux réessayer.';
+            multimodalNavigationMessageIsError = true;
+            presentMultimodalJourney(map, { moveToMiddle: true });
+            break;
+        case 'start-failed':
+            multimodalNavigationMessage =
+                'La navigation n’a pas pu démarrer. Tu peux réessayer.';
+            multimodalNavigationMessageIsError = true;
+            if (isRoutePlannerOpen && isRoutePreviewOpen) {
+                presentMultimodalJourney(map, { restorePreview: true });
+            } else if (!isNavigationStarted()) {
+                drawRoutePreviewSegments(map, routePreviewData.segments);
+                showDestinationMarker(
+                    map,
+                    routePreviewData.segments.at(-1).destination,
+                );
+            }
+            break;
+        case 'compass-unavailable':
+            multimodalNavigationMessage =
+                'La boussole est indisponible ; la navigation continue sans orientation assistée.';
+            multimodalNavigationMessageIsError = false;
+            presentMultimodalJourney(map);
+            break;
+        case 'segment-route-recalculated':
+            isPlannerRouteOutdated = true;
+            multimodalNavigationMessage =
+                'Le tronçon actif a été recalculé pendant la navigation.';
+            multimodalNavigationMessageIsError = false;
+            presentMultimodalJourney(map);
+            break;
+        case 'destination-reached':
+            multimodalNavigationMessage = 'Destination atteinte.';
+            multimodalNavigationMessageIsError = false;
+            activeNavigationStation = null;
+            activeNavigationRouteSummary = null;
+            routeSummaryData = null;
+            presentMultimodalJourney(map, { moveToMiddle: true });
+            unsubscribeMultimodalNavigation?.();
+            unsubscribeMultimodalNavigation = null;
+            break;
+        default:
+            break;
+    }
 }
 
 function showRoutePlanner(movePane, map) {
@@ -1153,11 +1682,15 @@ function showRoutePlanner(movePane, map) {
         renderPlannerPreview(false);
 
         if (map && !isNavigationStarted()) {
-            drawRoutePreview(
-                map,
-                routePreviewData.segments[0].geometry,
-                routePreviewData.segments[0].mode,
-            );
+            if (isValidPlannerRoute()) {
+                drawRoutePreview(
+                    map,
+                    routePreviewData.segments[0].geometry,
+                    routePreviewData.segments[0].mode,
+                );
+            } else if (isValidMultimodalRoute()) {
+                drawRoutePreviewSegments(map, routePreviewData.segments);
+            }
         }
 
         if (movePane && paneController?.isAvailable()) {
@@ -1199,9 +1732,8 @@ function closeRoutePlanner(movePane) {
         return;
     }
 
-    const closeRequestId = ++routePreviewRequestId;
-    routePreviewAbortController?.abort();
-    routePreviewAbortController = null;
+    const closeRequestId = routePreviewRequestId + 1;
+    cancelPlannerCalculation();
     routePlannerController?.hideSuggestions();
     plannerElement.hidden = true;
     routePreviewElement.hidden = true;
@@ -1248,9 +1780,9 @@ function setPlannerCalculationMessage(message, isError = false) {
     status.classList.toggle('is-error', isError);
 }
 
-async function calculatePlannerRoute(map, styleReady) {
-    if (!isRoutePlannerOpen || isRoutePreviewOpen || isNavigationStarted()) {
-        if (isNavigationStarted()) {
+async function calculatePlannerRoute(map, styleReady, multimodalRoutePlanner) {
+    if (!isRoutePlannerOpen || isRoutePreviewOpen || isNavigationFlowActive()) {
+        if (isNavigationFlowActive()) {
             setPlannerCalculationMessage(
                 'Termine ou arrête la navigation en cours avant de calculer un autre itinéraire.',
                 true,
@@ -1274,10 +1806,6 @@ async function calculatePlannerRoute(map, styleReady) {
 
     const { origin, destination, alreadyOnVelib } =
         routePlannerController?.getSelections() ?? {};
-
-    if (alreadyOnVelib) {
-        return;
-    }
 
     if (!isValidRoutePlace(origin) || !isValidRoutePlace(destination)) {
         setPlannerCalculationMessage(
@@ -1305,14 +1833,15 @@ async function calculatePlannerRoute(map, styleReady) {
                 'Actualisation de la position GPS en cours…',
             );
 
-            const refreshedPosition = await requestUserPosition({
-                maximumAge: 0,
-            });
+            const refreshedPosition = await waitForAbortableResult(
+                requestUserPosition({ maximumAge: 0 }),
+                routePreviewAbortController.signal,
+            );
 
             if (
                 requestId !== routePreviewRequestId ||
                 !isRoutePlannerOpen ||
-                isNavigationStarted()
+                isNavigationFlowActive()
             ) {
                 return;
             }
@@ -1334,55 +1863,154 @@ async function calculatePlannerRoute(map, styleReady) {
             rememberUserGpsPosition(map, refreshedPosition);
         }
 
-        setPlannerCalculationMessage('Calcul de l’itinéraire en cours…');
-        const routeSegment = await getRoute(
-            routeOrigin,
-            destination,
-            'pedestrian',
-            {
-                signal: routePreviewAbortController.signal,
-            },
-        );
+        const signal = routePreviewAbortController.signal;
+        let pedestrianRoute = null;
+        let pedestrianError = null;
+        let multimodalPlan = null;
+        let multimodalError = null;
+        let multimodalReason = null;
+        let multimodalAvailability = { fetchedAt: null, stale: null };
+
+        if (!alreadyOnVelib) {
+            try {
+                pedestrianRoute = await getRoute(
+                    routeOrigin,
+                    destination,
+                    'pedestrian',
+                    { signal },
+                );
+            } catch (error) {
+                if (
+                    signal.aborted ||
+                    requestId !== routePreviewRequestId ||
+                    !isRoutePlannerOpen
+                ) {
+                    return;
+                }
+
+                pedestrianError = error;
+            }
+
+            if (
+                requestId !== routePreviewRequestId ||
+                !isRoutePlannerOpen ||
+                isNavigationFlowActive()
+            ) {
+                return;
+            }
+        }
+
+        if (!multimodalRoutePlanner?.calculate) {
+            multimodalError = new Error('Le calcul multimodal est indisponible.');
+        } else {
+            try {
+                const calculation = await multimodalRoutePlanner.calculate({
+                    origin: routeOrigin,
+                    destination,
+                    alreadyOnVelib,
+                    signal,
+                });
+
+                if (
+                    requestId !== routePreviewRequestId ||
+                    !isRoutePlannerOpen ||
+                    isNavigationFlowActive()
+                ) {
+                    return;
+                }
+
+                multimodalPlan = calculation.plans[0] ?? null;
+                multimodalReason = calculation.reason;
+                multimodalAvailability = calculation.availability ??
+                    multimodalAvailability;
+            } catch (error) {
+                if (
+                    signal.aborted ||
+                    requestId !== routePreviewRequestId ||
+                    !isRoutePlannerOpen
+                ) {
+                    return;
+                }
+
+                multimodalError = error;
+            }
+        }
+
+        const usePedestrianRoute =
+            !alreadyOnVelib &&
+            pedestrianRoute &&
+            (!multimodalPlan || pedestrianRoute.duration <= multimodalPlan.duration);
+        let result;
+        let previewMessage = '';
+
+        if (usePedestrianRoute) {
+            result = {
+                type: 'pedestrian',
+                segments: [pedestrianRoute],
+                distance: pedestrianRoute.distance,
+                duration: pedestrianRoute.duration,
+                availability:
+                    multimodalPlan?.availability ?? multimodalAvailability,
+            };
+
+            if (!multimodalPlan && (multimodalError || multimodalReason)) {
+                previewMessage =
+                    'Aucun parcours Vélib complet n’a été trouvé ; un trajet à pied est proposé.';
+                if (pedestrianError) {
+                    previewMessage =
+                        'Le calcul piéton a échoué ; aucun parcours Vélib complet n’a été trouvé.';
+                }
+            }
+        } else if (multimodalPlan) {
+            result = {
+                ...multimodalPlan,
+                type: 'multimodal',
+            };
+        } else {
+            const messages = {
+                'no-pickup-station':
+                    'Aucune station de prise avec des vélos disponibles n’a été trouvée à proximité du départ.',
+                'no-dropoff-station':
+                    'Aucune station de dépôt avec des places disponibles n’a été trouvée à proximité de l’arrivée.',
+                'no-complete-route':
+                    'Aucun itinéraire complet n’a pu être calculé pour ces lieux.',
+            };
+            const message = alreadyOnVelib
+                ? messages[multimodalReason] ??
+                  'Aucun itinéraire à Vélib n’est disponible pour ces lieux.'
+                : pedestrianError
+                  ? 'Le calcul piéton a échoué et aucun parcours Vélib complet n’a été trouvé.'
+                  : messages[multimodalReason] ??
+                    'Aucun itinéraire n’est disponible pour ces lieux.';
+
+            setPlannerCalculationMessage(message, true);
+            return;
+        }
 
         if (
             requestId !== routePreviewRequestId ||
             !isRoutePlannerOpen ||
-            isNavigationStarted()
+            isNavigationFlowActive()
         ) {
             return;
         }
-
-        const result = {
-            segments: [
-                {
-                    mode: routeSegment.mode,
-                    origin: routeSegment.origin,
-                    destination: routeSegment.destination,
-                    geometry: routeSegment.geometry,
-                    distance: routeSegment.distance,
-                    duration: routeSegment.duration,
-                },
-            ],
-            distance: routeSegment.distance,
-            duration: routeSegment.duration,
-        };
 
         await styleReady;
 
         if (
             requestId !== routePreviewRequestId ||
             !isRoutePlannerOpen ||
-            isNavigationStarted()
+            isNavigationFlowActive()
         ) {
             return;
         }
 
-        const wasPresented = await presentRoute(map, routeSegment, {
+        const wasPresented = await presentRoute(map, result.segments, {
             layer: 'preview',
             isCurrent: () =>
                 requestId === routePreviewRequestId &&
                 isRoutePlannerOpen &&
-                !isNavigationStarted(),
+                !isNavigationFlowActive(),
         });
 
         if (!wasPresented) {
@@ -1390,9 +2018,12 @@ async function calculatePlannerRoute(map, styleReady) {
         }
 
         routePreviewData = result;
+        multimodalJourneyPlan = null;
+        multimodalNavigationMessage = '';
+        multimodalNavigationMessageIsError = false;
         isPlannerRouteOutdated = false;
-        renderPlannerPreview();
-        setPlannerPreviewMessage('');
+        renderPlannerPreview(false, previewMessage);
+        setPlannerPreviewMessage(previewMessage);
         routePreviewElement.hidden = false;
         plannerElement.hidden = true;
         isRoutePreviewOpen = true;
@@ -1418,7 +2049,7 @@ async function calculatePlannerRoute(map, styleReady) {
         routePreviewElement.hidden = true;
         plannerElement.hidden = false;
 
-        console.error('Impossible de calculer l’aperçu piéton :', error);
+        console.error('Impossible de calculer l’aperçu :', error);
         const message =
             error?.code === 1 ||
             error?.code === 2 ||
@@ -1446,17 +2077,19 @@ async function calculatePlannerRoute(map, styleReady) {
 async function startPlannerNavigation(map, styleReady) {
     if (
         isPlannerNavigationStarting ||
-        isNavigationStarted() ||
+        isNavigationFlowActive() ||
         !isRoutePlannerOpen ||
         !isRoutePreviewOpen ||
         isPlannerRouteOutdated ||
-        !isValidPlannerRoute()
+        !isValidPlannerPreview()
     ) {
         return;
     }
 
     const route = routePreviewData;
-    const routeMode = route.segments[0].mode ?? 'pedestrian';
+    const isMultimodal = route.type === 'multimodal';
+    const firstSegment = route.segments[0];
+    const routeMode = firstSegment.mode ?? 'pedestrian';
     const requestId = ++routePreviewRequestId;
     const startButton = routePreviewElement.querySelector(
         '.route-preview-start',
@@ -1465,11 +2098,19 @@ async function startPlannerNavigation(map, styleReady) {
     let sessionId = null;
 
     isPlannerNavigationStarting = true;
+    multimodalNavigationMessage = '';
+    multimodalNavigationMessageIsError = false;
     if (startButton) {
         startButton.disabled = true;
-        startButton.textContent = 'Vérification GPS…';
+        startButton.textContent = isMultimodal
+            ? 'Préparation…'
+            : 'Vérification GPS…';
     }
-    setPlannerPreviewMessage('Vérification de la position GPS…');
+    setPlannerPreviewMessage(
+        isMultimodal
+            ? 'Préparation de la navigation…'
+            : 'Vérification de la position GPS…',
+    );
 
     // Lance la demande de permission dans le geste du clic. Les lectures ne
     // pilotent la caméra qu'après la restauration de la vue de navigation.
@@ -1490,7 +2131,7 @@ async function startPlannerNavigation(map, styleReady) {
         routePreviewData === route &&
         isRoutePlannerOpen &&
         isRoutePreviewOpen &&
-        !isNavigationStarted();
+        !isNavigationFlowActive();
 
     try {
         // La demande de permission boussole a été déclenchée dans le clic.
@@ -1502,19 +2143,59 @@ async function startPlannerNavigation(map, styleReady) {
 
         sessionId = ++navigationSessionId;
         isPlannerRouteOutdated = false;
+        const summary = {
+            distance: formatDistance(firstSegment.distance),
+            duration: formatDuration(firstSegment.duration),
+        };
 
-        await startNavigationSession(map, sessionId, {
-            station: null,
-            route,
-            summary: {
-                distance: formatDistance(route.distance),
-                duration: formatDuration(route.duration),
-            },
-            compassActivation,
-            onCameraReady: () => {
-                canControlCamera = true;
-            },
-        });
+        if (isMultimodal) {
+            multimodalJourneyPlan = route;
+            ensureMultimodalNavigationSubscription(map);
+            const started = await multimodalNavigationController.start(route, {
+                compassActivation,
+                isCurrent: () =>
+                    requestId === routePreviewRequestId &&
+                    routePreviewData === route &&
+                    isRoutePlannerOpen &&
+                    isRoutePreviewOpen &&
+                    navigationSessionId === sessionId,
+                onActivating: () => {
+                    activeNavigationStation = null;
+                    activeNavigationRouteSummary = summary;
+                    routeSummaryData = summary;
+                },
+                onPreparing: () => {
+                    if (
+                        navigationSessionId === sessionId &&
+                        routePreviewData === route
+                    ) {
+                        presentMultimodalJourney(map);
+                    }
+                },
+                prepareCamera: () =>
+                    restoreNavigationCamera(map, null, sessionId),
+                onCameraReady: () => {
+                    canControlCamera = true;
+                },
+            });
+
+            if (!started && isCurrentPlannerStart()) {
+                multimodalNavigationMessage =
+                    'La navigation multimodale n’a pas pu démarrer. Réessaie.';
+                multimodalNavigationMessageIsError = true;
+                renderPlannerPreview(false);
+            }
+        } else {
+            await startNavigationSession(map, sessionId, {
+                station: null,
+                route,
+                summary,
+                compassActivation,
+                onCameraReady: () => {
+                    canControlCamera = true;
+                },
+            });
+        }
     } catch (error) {
         if (
             sessionId !== null &&
@@ -1643,6 +2324,7 @@ function stopNavigation(
         failedPlannerStart = false,
     } = {},
 ) {
+    const wasMultimodalJourney = isMultimodalJourneyInProgress();
     const wasPlannerNavigation =
         isPlannerNavigationActive() || failedPlannerStart;
     const shouldRestorePlannerPreview =
@@ -1666,16 +2348,24 @@ function stopNavigation(
     routeSummaryData = null;
     if (wasPlannerNavigation && !shouldRestorePlannerPreview) {
         routePreviewData = null;
+        multimodalJourneyPlan = null;
     }
+    multimodalNavigationMessage = '';
+    multimodalNavigationMessageIsError = false;
     isPlannerRouteOutdated = false;
 
     // La session libère le watch, les capteurs et nettoie la carte.
-    navigationSession.stop({
-        afterNavigationClear:
-            wasPlannerNavigation && !shouldRestorePlannerPreview
-                ? () => clearRoutePreview(map)
-                : undefined,
-    });
+    if (wasMultimodalJourney) {
+        multimodalNavigationController.stop();
+        clearRoutePreview(map);
+    } else {
+        navigationSession.stop({
+            afterNavigationClear:
+                wasPlannerNavigation && !shouldRestorePlannerPreview
+                    ? () => clearRoutePreview(map)
+                    : undefined,
+        });
+    }
     stationPanelRenderId++;
 
     // Restaure le bouton permettant de recalculer l'itinéraire.
@@ -1770,7 +2460,11 @@ function isCurrentDestinationChange(request) {
 }
 
 async function startDestinationChange(map, station, styleReady) {
-    if (!isNavigationStarted() || pendingDestinationChange) {
+    if (
+        !isNavigationStarted() ||
+        isMultimodalJourneyInProgress() ||
+        pendingDestinationChange
+    ) {
         return;
     }
 
@@ -1896,6 +2590,7 @@ async function startDestinationChange(map, station, styleReady) {
         activeNavigationStation = station;
         if (replacingPlannerRoute) {
             routePreviewData = null;
+            multimodalJourneyPlan = null;
             isPlannerRouteOutdated = false;
         }
         activeNavigationRouteSummary = { distance, duration };
@@ -1943,15 +2638,23 @@ async function startDestinationChange(map, station, styleReady) {
 }
 
 function getStationPanelNavigationState(station) {
+    const isMultimodalNavigation = isMultimodalJourneyInProgress();
+    const hasNavigationContext =
+        isNavigationStarted() || isMultimodalNavigation;
     const isActiveNavigationPanel =
         isNavigationStarted() &&
         stationsMatch(station, activeNavigationStation);
+    const activeSegment = getMultimodalJourneyState()?.activeSegment;
 
     return {
         isActiveNavigationPanel,
-        isNavigationContextPanel:
-            isNavigationStarted() && !isActiveNavigationPanel,
-        navigationMode: navigationEngine.getNavigationMode() ?? 'pedestrian',
+        isNavigationContextPanel: hasNavigationContext && !isActiveNavigationPanel,
+        isMultimodalNavigation,
+        canChangeDestination: !isMultimodalNavigation,
+        navigationMode:
+            navigationEngine.getNavigationMode() ??
+            activeSegment?.mode ??
+            'pedestrian',
     };
 }
 

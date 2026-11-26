@@ -22,10 +22,14 @@ import { createCameraController } from './map/cameraController.js';
 import {
     clearRouteLayer,
     clearRoutePreview,
+    clearDestinationMarker,
     drawWalkingRoute,
+    drawNavigationRouteSegments,
     drawRoutePreview,
+    drawRoutePreviewSegments,
     fitWalkingRoute,
     showDestinationMarker,
+    setActiveNavigationRouteSegment as setActiveNavigationRouteSegmentLayer,
     updateWalkingRoute,
 } from './map/layers/routeLayer.js';
 
@@ -34,10 +38,14 @@ const STYLE_URL =
 
 export {
     clearRoutePreview,
+    clearDestinationMarker,
     drawWalkingRoute,
+    drawNavigationRouteSegments,
     drawRoutePreview,
+    drawRoutePreviewSegments,
     fitWalkingRoute,
     showDestinationMarker,
+    setActiveNavigationRouteSegmentLayer as setActiveNavigationRouteSegment,
     updateWalkingRoute,
 };
 
@@ -124,19 +132,31 @@ export async function presentWalkingRoute(
     return presentRoute(map, segment, { layer, isCurrent });
 }
 
-export async function presentRoute(map, segment, { layer, isCurrent }) {
+export async function presentRoute(map, route, { layer, isCurrent }) {
+    const segments = Array.isArray(route) ? route : [route];
     const drawRoute =
         layer === 'preview'
             ? drawRoutePreview
             : layer === 'walking'
               ? drawWalkingRoute
               : null;
+    const isValidSegment = (segment) =>
+        Array.isArray(segment?.geometry) &&
+        segment.geometry.length >= 2 &&
+        ['pedestrian', 'bicycle'].includes(segment.mode ?? 'pedestrian') &&
+        Number.isFinite(segment.destination?.latitude) &&
+        segment.destination.latitude >= -90 &&
+        segment.destination.latitude <= 90 &&
+        Number.isFinite(segment.destination?.longitude) &&
+        segment.destination.longitude >= -180 &&
+        segment.destination.longitude <= 180;
 
     if (
         !map ||
-        !Array.isArray(segment?.geometry) ||
-        segment.geometry.length < 2 ||
-        !drawRoute ||
+        segments.length === 0 ||
+        !segments.every(isValidSegment) ||
+        (layer === 'walking' && segments.length > 1) ||
+        (layer !== 'preview' && layer !== 'walking') ||
         typeof isCurrent !== 'function' ||
         !isCurrent()
     ) {
@@ -152,9 +172,16 @@ export async function presentRoute(map, segment, { layer, isCurrent }) {
     // Suspend le suivi avant le cadrage afin qu'un relevé GPS de fond ne
     // relance pas une caméra centrée sur l'utilisateur pendant fitBounds().
     setUserFollowing(false);
-    fitWalkingRoute(map, segment.geometry);
-    drawRoute(map, segment.geometry, segment.mode ?? 'pedestrian');
-    showDestinationMarker(map, segment.destination);
+    fitWalkingRoute(map, segments.flatMap((segment) => segment.geometry));
+
+    if (segments.length > 1) {
+        drawRoutePreviewSegments(map, segments);
+    } else {
+        const [segment] = segments;
+        drawRoute(map, segment.geometry, segment.mode ?? 'pedestrian');
+    }
+
+    showDestinationMarker(map, segments.at(-1).destination);
 
     return true;
 }
@@ -394,6 +421,23 @@ export function setNavigationActive(
         setUserMarkerNavigationMode(map, null);
         cameraController?.clearNavigationVisualPosition();
     }
+}
+
+export function setNavigationTravelMode(map, mode, position = null) {
+    if (!map || !isNavigationActive) {
+        return false;
+    }
+
+    const heading = getCameraController()?.setNavigationMode(mode, position);
+    setUserMarkerNavigationMode(map, mode);
+
+    if (mode === 'bicycle') {
+        showUserMarkerDirection(map, heading);
+    } else {
+        hideUserMarkerCompass(map);
+    }
+
+    return true;
 }
 
 function updateCameraFromCompass(map, reading) {

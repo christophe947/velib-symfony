@@ -205,6 +205,8 @@ test('une arrivée station éligible est incluse et omet la marche finale nulle'
     );
 
     assert.ok(selectedPlan);
+    assert.equal(result.plans.length, 1);
+    assert.equal(selectedPlan.segments.some((segment) => segment.mode === 'pedestrian' && segment.origin.id === 'selected-dropoff'), false);
     assert.equal(selectedPlan.segments.at(-1).mode, 'bicycle');
     assert.equal(
         calls.some(
@@ -243,13 +245,13 @@ test('deux stations choisies éligibles forment un seul segment vélo sans géom
     assert.ok(plan.segments.every((segment) => segment.geometry.length >= 2));
 });
 
-test('garde la durée totale prioritaire et favorise le choix explicite à durée égale', async () => {
+test('utilise exclusivement la station explicitement choisie lorsqu’elle est éligible', async () => {
     const stations = [
         pickup('selected-pickup', 0, 0),
         pickup('alternative-pickup', 0, 0.001),
         pickup('dropoff', 0, 0.999),
     ];
-    let alternativeBikeDuration = 400;
+    const calls = [];
     const planner = makePlanner({
         stations,
         getRoute: routeDouble((from, to, mode) => {
@@ -257,7 +259,9 @@ test('garde la durée totale prioritaire et favorise le choix explicite à duré
                 return to.id === 'alternative-pickup' ? 100 : 0;
             }
 
-            return from.id === 'selected-pickup' ? 500 : alternativeBikeDuration;
+            return from.id === 'selected-pickup' ? 500 : 1;
+        }, {
+            onCall: (from, to, mode) => calls.push({ from: from.id, to: to.id, mode }),
         }),
     });
     const result = await planner.calculate({
@@ -268,22 +272,13 @@ test('garde la durée totale prioritaire et favorise le choix explicite à duré
         destination: place('destination', 0, 1),
     });
 
+    assert.equal(result.plans.length, 1);
     assert.equal(result.plans[0].duration, 500);
     assert.equal(result.plans[0].pickupStation.id, 'selected-pickup');
-    assert.equal(result.plans[1].duration, 500);
-    assert.equal(result.plans[1].pickupStation.id, 'alternative-pickup');
-
-    alternativeBikeDuration = 300;
-    const fasterAlternative = await planner.calculate({
-        origin: {
-            ...place('selected-pickup', 0, 0, 'station'),
-            stationId: 'selected-pickup',
-        },
-        destination: place('destination', 0, 1),
-    });
-
-    assert.equal(fasterAlternative.plans[0].duration, 400);
-    assert.equal(fasterAlternative.plans[0].pickupStation.id, 'alternative-pickup');
+    assert.equal(
+        calls.some((call) => call.to === 'alternative-pickup'),
+        false,
+    );
 });
 
 test('station de départ non éligible : propose des prises alternatives', async () => {

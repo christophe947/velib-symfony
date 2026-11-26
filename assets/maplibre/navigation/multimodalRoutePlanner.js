@@ -423,15 +423,10 @@ export class MultimodalRoutePlanner {
                   (station) => String(station.id) === preferredStationId,
               )
             : null;
-        const candidates = preferredStation
-            ? [
-                  preferredStation,
-                  ...nearby.filter(
-                      (station) =>
-                          stationKey(station) !== stationKey(preferredStation),
-                  ),
-              ]
-            : nearby;
+        // An eligible station explicitly selected by the user is the transfer
+        // they asked for. Nearby alternatives are for a selected station that
+        // is no longer eligible (or is absent from the captured snapshot).
+        const candidates = preferredStation ? [preferredStation] : nearby;
         const seen = new Set();
 
         return candidates.filter((station) => {

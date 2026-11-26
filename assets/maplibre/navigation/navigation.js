@@ -13,6 +13,8 @@ export function createNavigationEngine(effects) {
         // Observateur synchrone appelé après l'acceptation d'une progression.
         onProgress,
     } = effects;
+    const progressListeners = new Set();
+    const routeRecalculationListeners = new Set();
 
     let currentRouteCoordinates = [];
     let cumulativeRouteDistances = [];
@@ -97,6 +99,55 @@ export function createNavigationEngine(effects) {
         return currentRouteMode;
     }
 
+    function getRouteGeneration() {
+        return routeGeneration;
+    }
+
+    function subscribeToProgress(listener) {
+        if (typeof listener !== 'function') {
+            throw new TypeError('Progress listener must be a function.');
+        }
+
+        progressListeners.add(listener);
+        return () => progressListeners.delete(listener);
+    }
+
+    function subscribeToRouteRecalculation(listener) {
+        if (typeof listener !== 'function') {
+            throw new TypeError('Route recalculation listener must be a function.');
+        }
+
+        routeRecalculationListeners.add(listener);
+        return () => routeRecalculationListeners.delete(listener);
+    }
+
+    function notifyProgressListener(listener, event) {
+        try {
+            listener({
+                ...event,
+                position: { ...event.position },
+                destination: event.destination
+                    ? { ...event.destination }
+                    : null,
+            });
+        } catch (error) {
+            console.error('Erreur du callback de progression GPS :', error);
+        }
+    }
+
+    function notifyRouteRecalculationListener(listener, event) {
+        try {
+            listener({
+                ...event,
+                destination: event.destination
+                    ? { ...event.destination }
+                    : null,
+            });
+        } catch (error) {
+            console.error('Erreur du callback de recalcul de route :', error);
+        }
+    }
+
     function beginRouteReplacement() {
         if (isReplacingRoute || !navigationDestination || !currentRouteMode) {
             return null;
@@ -176,6 +227,9 @@ export function createNavigationEngine(effects) {
         const sessionId = navigationSessionId;
         const expectedRouteGeneration = routeGeneration;
         const routeMode = currentRouteMode;
+        const routeDestination = navigationDestination
+            ? { ...navigationDestination }
+            : null;
 
         if (routeMode !== 'pedestrian' && routeMode !== 'bicycle') {
             isRecalculatingRoute = false;
@@ -189,7 +243,7 @@ export function createNavigationEngine(effects) {
             // Recalcule l'itinéraire avec le profil de la route courante.
             const segment = await getRoute(
                 position,
-                navigationDestination,
+                routeDestination,
                 routeMode,
             );
 
@@ -205,6 +259,20 @@ export function createNavigationEngine(effects) {
             setRouteProgressGeometry(segment.geometry);
             currentRouteMode = segment.mode;
             routeGeneration++;
+
+            const recalculationEvent = {
+                sessionId,
+                previousRouteGeneration: expectedRouteGeneration,
+                routeGeneration,
+                mode: currentRouteMode,
+                destination: navigationDestination
+                    ? { ...navigationDestination }
+                    : null,
+            };
+
+            for (const listener of [...routeRecalculationListeners]) {
+                notifyRouteRecalculationListener(listener, recalculationEvent);
+            }
 
             // Réinitialise la détection de déviation.
             resetOffRouteConfirmations();
@@ -512,7 +580,10 @@ export function createNavigationEngine(effects) {
             updateNavigationPosition(position, displayedPosition);
         }
 
-        if (typeof onProgress === 'function') {
+        if (
+            typeof onProgress === 'function' ||
+            progressListeners.size > 0
+        ) {
             const finalRouteDistance =
                 cumulativeRouteDistances[cumulativeRouteDistances.length - 1];
             const progressEvent = {
@@ -529,10 +600,14 @@ export function createNavigationEngine(effects) {
                 routeGeneration,
             };
 
-            try {
-                onProgress(progressEvent);
-            } catch (error) {
-                console.error('Erreur du callback de progression GPS :', error);
+            if (typeof onProgress === 'function') {
+                notifyProgressListener(onProgress, progressEvent);
+            }
+
+            for (const listener of [...progressListeners]) {
+                if (listener !== onProgress) {
+                    notifyProgressListener(listener, progressEvent);
+                }
             }
         }
     }
@@ -565,6 +640,9 @@ export function createNavigationEngine(effects) {
     return {
         setNavigationRoute,
         getNavigationMode,
+        getRouteGeneration,
+        subscribeToProgress,
+        subscribeToRouteRecalculation,
         beginRouteReplacement,
         cancelRouteReplacement,
         commitRouteReplacement,

@@ -15,6 +15,8 @@ export class NavigationSession {
     #reliablePositionWaiters = new Set();
     #positionRequestCancellers = new Set();
     #sessionGeneration = 0;
+    #segmentTransitionGeneration = 0;
+    #compassActivationPromise = null;
     #isActive = false;
     #compassExpected = false;
 
@@ -33,6 +35,8 @@ export class NavigationSession {
             typeof mapEffects.startBackgroundTracking !== 'function' ||
             typeof mapEffects.stopBackgroundTracking !== 'function' ||
             typeof mapEffects.setNavigationActive !== 'function' ||
+            typeof mapEffects.setNavigationMode !== 'function' ||
+            typeof mapEffects.showNavigationDestination !== 'function' ||
             !compass ||
             typeof compass.activate !== 'function' ||
             typeof compass.stop !== 'function' ||
@@ -42,7 +46,10 @@ export class NavigationSession {
             typeof navigationEngine.setNavigationRoute !== 'function' ||
             typeof navigationEngine.updateNavigationProgress !== 'function' ||
             typeof navigationEngine.stopNavigationProcessing !== 'function' ||
-            typeof navigationEngine.getNavigationMode !== 'function'
+            typeof navigationEngine.getNavigationMode !== 'function' ||
+            typeof navigationEngine.beginRouteReplacement !== 'function' ||
+            typeof navigationEngine.cancelRouteReplacement !== 'function' ||
+            typeof navigationEngine.commitRouteReplacement !== 'function'
         ) {
             throw new TypeError('NavigationSession dependencies are required.');
         }
@@ -323,6 +330,118 @@ export class NavigationSession {
         }
     }
 
+    async activateSegment(
+        segment,
+        {
+            onCompassError,
+            isCurrent = () => true,
+            segmentIndex,
+        } = {},
+    ) {
+        if (
+            !this.#isActive ||
+            !isCurrent() ||
+            !isValidNavigationSegment(segment)
+        ) {
+            return false;
+        }
+
+        const sessionGeneration = this.#sessionGeneration;
+        const transitionGeneration = ++this.#segmentTransitionGeneration;
+        const initialMode = this.#navigationEngine.getNavigationMode();
+        const isTransitionCurrent = () =>
+            this.#isActive &&
+            sessionGeneration === this.#sessionGeneration &&
+            transitionGeneration === this.#segmentTransitionGeneration &&
+            isCurrent();
+
+        if (segment.mode === 'pedestrian' && initialMode === 'bicycle') {
+            await this.#requestCompassForPedestrianMode(
+                sessionGeneration,
+                onCompassError,
+            );
+        }
+
+        if (!isTransitionCurrent()) {
+            return false;
+        }
+
+        const previousMode = this.#navigationEngine.getNavigationMode();
+        const replacementId = this.#navigationEngine.beginRouteReplacement();
+
+        if (replacementId === null) {
+            return false;
+        }
+
+        const destination = {
+            latitude: segment.destination.latitude,
+            longitude: segment.destination.longitude,
+        };
+        let previousActiveSegmentIndex = null;
+        try {
+            if (
+                Number.isInteger(segmentIndex) &&
+                typeof this.#mapEffects.setActiveNavigationSegment === 'function'
+            ) {
+                previousActiveSegmentIndex =
+                    this.#mapEffects.setActiveNavigationSegment(segmentIndex);
+                if (previousActiveSegmentIndex === false) {
+                    this.#navigationEngine.cancelRouteReplacement(replacementId);
+                    return false;
+                }
+            }
+        } catch (error) {
+            this.#navigationEngine.cancelRouteReplacement(replacementId);
+            throw error;
+        }
+
+        let routeCommitted = false;
+
+        try {
+            routeCommitted = this.#navigationEngine.commitRouteReplacement(
+                replacementId,
+                segment.geometry,
+                destination,
+                segment.mode,
+            );
+        } catch (error) {
+            this.#navigationEngine.cancelRouteReplacement(replacementId);
+            if (previousActiveSegmentIndex !== null) {
+                this.#mapEffects.setActiveNavigationSegment(
+                    previousActiveSegmentIndex,
+                );
+            }
+            throw error;
+        }
+
+        if (!routeCommitted) {
+            this.#navigationEngine.cancelRouteReplacement(replacementId);
+            if (previousActiveSegmentIndex !== null) {
+                this.#mapEffects.setActiveNavigationSegment(
+                    previousActiveSegmentIndex,
+                );
+            }
+            return false;
+        }
+
+        this.#compassExpected = segment.mode !== 'bicycle';
+
+        if (previousMode !== segment.mode) {
+            if (segment.mode === 'bicycle') {
+                this.#compass.stop();
+                this.#stopCompassAfterPendingActivation(sessionGeneration);
+            }
+
+            this.#mapEffects.setNavigationMode(
+                segment.mode,
+                this.#lastKnownPosition,
+            );
+        }
+
+        this.#mapEffects.showNavigationDestination(segment.destination);
+        return true;
+    }
+
     stop({ afterNavigationClear } = {}) {
         if (
             !this.#isActive &&
@@ -334,6 +453,8 @@ export class NavigationSession {
         }
 
         this.#sessionGeneration++;
+        this.#segmentTransitionGeneration++;
+        this.#compassActivationPromise = null;
         this.#isActive = false;
         this.#compassExpected = false;
         this.#finishReliablePositionWaiters(null);
@@ -388,6 +509,76 @@ export class NavigationSession {
         }
 
         return true;
+    }
+
+    #requestCompassForPedestrianMode(sessionGeneration, onCompassError) {
+        if (this.#compassActivationPromise) {
+            return this.#compassActivationPromise;
+        }
+
+        let activation;
+
+        try {
+            // Invoke synchronously from activateSegment() so Safari can honor
+            // its user-gesture requirement for DeviceOrientation permission.
+            activation = this.#compass.activate(
+                () =>
+                    this.#isActive &&
+                    sessionGeneration === this.#sessionGeneration &&
+                    this.#navigationEngine.getNavigationMode() === 'pedestrian',
+                (error) => {
+                    if (sessionGeneration === this.#sessionGeneration) {
+                        onCompassError?.(error);
+                    }
+                },
+            );
+        } catch (error) {
+            onCompassError?.(error);
+            return Promise.resolve();
+        }
+
+        let activationPromise;
+        activationPromise = Promise.resolve(activation)
+            .catch((error) => {
+                if (sessionGeneration === this.#sessionGeneration) {
+                    onCompassError?.(error);
+                }
+            })
+            .finally(() => {
+                if (this.#compassActivationPromise === activationPromise) {
+                    this.#compassActivationPromise = null;
+                }
+
+                if (
+                    sessionGeneration !== this.#sessionGeneration &&
+                    (!this.#isActive || !this.#compassExpected)
+                ) {
+                    this.#compass.stop();
+                }
+            });
+        this.#compassActivationPromise = activationPromise;
+
+        return activationPromise;
+    }
+
+    #stopCompassAfterPendingActivation(sessionGeneration) {
+        const pendingActivation = this.#compassActivationPromise;
+
+        if (!pendingActivation) {
+            return;
+        }
+
+        void pendingActivation.then(() => {
+            queueMicrotask(() => {
+                if (
+                    this.#isActive &&
+                    sessionGeneration === this.#sessionGeneration &&
+                    this.#navigationEngine.getNavigationMode() === 'bicycle'
+                ) {
+                    this.#compass.stop();
+                }
+            });
+        });
     }
 
     #cleanupAbortedStart(generation) {
@@ -659,6 +850,31 @@ function createAbortError() {
     const error = new Error('The operation was aborted.');
     error.name = 'AbortError';
     return error;
+}
+
+function isValidNavigationSegment(segment) {
+    return (
+        segment &&
+        (segment.mode === 'pedestrian' || segment.mode === 'bicycle') &&
+        Array.isArray(segment.geometry) &&
+        segment.geometry.length >= 2 &&
+        segment.geometry.every(
+            (coordinate) =>
+                Array.isArray(coordinate) &&
+                Number.isFinite(coordinate[0]) &&
+                coordinate[0] >= -180 &&
+                coordinate[0] <= 180 &&
+                Number.isFinite(coordinate[1]) &&
+                coordinate[1] >= -90 &&
+                coordinate[1] <= 90,
+        ) &&
+        Number.isFinite(segment.destination?.latitude) &&
+        segment.destination.latitude >= -90 &&
+        segment.destination.latitude <= 90 &&
+        Number.isFinite(segment.destination?.longitude) &&
+        segment.destination.longitude >= -180 &&
+        segment.destination.longitude <= 180
+    );
 }
 
 function createPositionTimeoutError(code = 'POSITION_WAIT_TIMEOUT') {

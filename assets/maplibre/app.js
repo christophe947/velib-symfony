@@ -1,6 +1,13 @@
 import { createMap } from 'maplibre/map';
 import { initStationPanel } from './navigation/stationPanel.js';
+import { MultimodalRoutePlanner } from './navigation/multimodalRoutePlanner.js';
+import { getRoute } from './navigation/routing.js';
 import { initSearch } from './search/search.js';
+import { findNearbyStations } from './search/nearbyStations.js';
+import {
+    isStationEligibleForDropoff,
+    isStationEligibleForPickup,
+} from './shared/availability.js';
 import { setSelectedStation } from './shared/state.js';
 import { startStationRefresh } from './shared/stationRefresh.js';
 
@@ -22,6 +29,13 @@ const initialSnapshot = hasCompleteInitialSnapshot
       };
 let currentStationSnapshot = initialSnapshot;
 const getStationSnapshot = () => currentStationSnapshot;
+const multimodalRoutePlanner = new MultimodalRoutePlanner({
+    getStationSnapshot,
+    findNearbyStations,
+    getRoute,
+    isStationEligibleForPickup,
+    isStationEligibleForDropoff,
+});
 const { map, styleReady, updateStationData } = createMap();
 
 function updateStationDataStatus(snapshot) {
@@ -69,6 +83,7 @@ styleReady.catch((error) => {
 
 const stationPanel = initStationPanel(map, styleReady, {
     getStationSnapshot,
+    multimodalRoutePlanner,
 });
 
 const searchReady = initSearch(map).catch((error) => {

@@ -132,22 +132,11 @@ export function renderRoutePlanner() {
                     <input
                         type="checkbox"
                         data-route-already-on-velib
-                        aria-describedby="route-planner-velib-unavailable"
                     >
                     <span>Je suis déjà sur un Vélib</span>
                 </label>
-                <p
-                    id="route-planner-velib-unavailable"
-                    class="route-planner-velib-message"
-                    data-route-multimodal-unavailable
-                    role="status"
-                    aria-live="polite"
-                    hidden
-                >
-                    Le calcul des itinéraires Vélib est en préparation. Décoche cette option pour calculer un trajet à pied.
-                </p>
             </div>
-
+            &nbsp;
             <button type="button" class="route-planner-calculate" disabled>
                 Calculer l’itinéraire
             </button>
@@ -166,6 +155,7 @@ export function renderStationPanel({ station, mode, navigationState }) {
     const {
         isActiveNavigationPanel,
         isNavigationContextPanel,
+        canChangeDestination = true,
         navigationMode = 'pedestrian',
     } = navigationState;
 
@@ -274,7 +264,8 @@ export function renderStationPanel({ station, mode, navigationState }) {
                     type="button"
                     class="station-panel-join station-panel-context-replace"
                     data-route-mode="${navigationMode}"
-                    title="Calculer un itinéraire vers cette station"
+                    title="${canChangeDestination ? 'Calculer un itinéraire vers cette station' : 'Arrête le parcours multimodal avant de changer de destination'}"
+                    ${canChangeDestination ? '' : 'disabled aria-disabled="true"'}
                 >
                     Naviguer vers cette station
                 </button>

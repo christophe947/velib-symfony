@@ -8,6 +8,8 @@ const ROUTE_LAYER_IDS = {
 };
 
 let destinationMarker = null;
+let activeNavigationRouteFeatures = null;
+let activeNavigationSegmentIndex = 0;
 
 export function setRouteVisibility(map, visibleRoute) {
     if (!map || (visibleRoute !== null && !ROUTE_LAYER_IDS[visibleRoute])) {
@@ -37,19 +39,32 @@ function getRouteColorExpression() {
     ];
 }
 
-function setRouteData(map, layerId, coordinates, isPreview, mode = 'pedestrian') {
+function createRouteFeature(
+    coordinates,
+    mode = 'pedestrian',
+    segmentIndex = 0,
+    isActive = null,
+) {
     if (mode !== 'pedestrian' && mode !== 'bicycle') {
         throw new RangeError(`Unsupported route mode: ${mode}`);
     }
 
-    const data = {
+    const properties = { mode, segmentIndex };
+    if (isActive !== null) {
+        properties.isActive = isActive;
+    }
+
+    return {
         type: 'Feature',
         geometry: {
             type: 'LineString',
             coordinates,
         },
-        properties: { mode },
+        properties,
     };
+}
+
+function setRouteData(map, layerId, data, isPreview) {
     const source = map.getSource(layerId);
 
     if (source) {
@@ -66,17 +81,31 @@ function setRouteData(map, layerId, coordinates, isPreview, mode = 'pedestrian')
             id: layerId,
             type: 'line',
             source: layerId,
+            layout: {
+                'line-sort-key': ['get', 'segmentIndex'],
+            },
             paint: {
                 'line-color': getRouteColorExpression(),
-                'line-width': isPreview ? 5 : 6,
-                'line-opacity': isPreview ? 0.8 : 0.9,
+                'line-width': isPreview
+                    ? 5
+                    : ['case', ['boolean', ['get', 'isActive'], true], 6, 4],
+                'line-opacity': isPreview
+                    ? 0.8
+                    : ['case', ['boolean', ['get', 'isActive'], true], 0.9, 0.45],
             },
         });
     }
 }
 
 export function drawWalkingRoute(map, coordinates, mode = 'pedestrian') {
-    setRouteData(map, ROUTE_ID, coordinates, false, mode);
+    activeNavigationRouteFeatures = null;
+    activeNavigationSegmentIndex = 0;
+    setRouteData(
+        map,
+        ROUTE_ID,
+        createRouteFeature(coordinates, mode, 0, true),
+        false,
+    );
     setRouteVisibility(map, 'walking');
 }
 
@@ -91,16 +120,125 @@ export function updateWalkingRoute(map, coordinates, mode = 'pedestrian') {
         return false;
     }
 
+    if (activeNavigationRouteFeatures) {
+        if (activeNavigationSegmentIndex >= activeNavigationRouteFeatures.length) {
+            return false;
+        }
+
+        const updatedFeatures = activeNavigationRouteFeatures.map(
+            (feature, index) =>
+                index === activeNavigationSegmentIndex
+                    ? {
+                          ...feature,
+                          geometry: {
+                              type: 'LineString',
+                              coordinates,
+                          },
+                          properties: {
+                              ...feature.properties,
+                              mode,
+                              isActive: true,
+                          },
+                      }
+                    : feature,
+        );
+        source.setData({
+            type: 'FeatureCollection',
+            features: updatedFeatures,
+        });
+        activeNavigationRouteFeatures = updatedFeatures;
+        return true;
+    }
+
     source.setData({
         type: 'Feature',
         geometry: {
             type: 'LineString',
             coordinates,
         },
-        properties: { mode },
+        properties: { mode, segmentIndex: 0, isActive: true },
     });
 
     return true;
+}
+
+/** Installs every journey segment while retaining one feature per mode/leg. */
+export function drawNavigationRouteSegments(
+    map,
+    segments,
+    activeSegmentIndex = 0,
+) {
+    if (
+        !map ||
+        !Array.isArray(segments) ||
+        segments.length === 0 ||
+        !Number.isInteger(activeSegmentIndex) ||
+        activeSegmentIndex < 0 ||
+        activeSegmentIndex >= segments.length ||
+        segments.some(
+            (segment) =>
+                !Array.isArray(segment?.geometry) ||
+                segment.geometry.length < 2 ||
+                !['pedestrian', 'bicycle'].includes(segment.mode),
+        )
+    ) {
+        return false;
+    }
+
+    activeNavigationSegmentIndex = activeSegmentIndex;
+    activeNavigationRouteFeatures = segments.map((segment, segmentIndex) =>
+        createRouteFeature(
+            segment.geometry,
+            segment.mode,
+            segmentIndex,
+            segmentIndex === activeSegmentIndex,
+        ),
+    );
+
+    setRouteData(
+        map,
+        ROUTE_ID,
+        {
+            type: 'FeatureCollection',
+            features: activeNavigationRouteFeatures,
+        },
+        false,
+    );
+    setRouteVisibility(map, 'walking');
+    return true;
+}
+
+/** Returns the previous active index, or false when the update is obsolete. */
+export function setActiveNavigationRouteSegment(map, segmentIndex) {
+    const source = map?.getSource(ROUTE_ID);
+    if (
+        !source ||
+        !activeNavigationRouteFeatures ||
+        !Number.isInteger(segmentIndex) ||
+        segmentIndex < 0 ||
+        segmentIndex >= activeNavigationRouteFeatures.length
+    ) {
+        return false;
+    }
+
+    const previousIndex = activeNavigationSegmentIndex;
+    const updatedFeatures = activeNavigationRouteFeatures.map(
+        (feature, index) => ({
+            ...feature,
+            properties: {
+                ...feature.properties,
+                isActive: index === segmentIndex,
+            },
+        }),
+    );
+    source.setData({
+        type: 'FeatureCollection',
+        features: updatedFeatures,
+    });
+    activeNavigationSegmentIndex = segmentIndex;
+    activeNavigationRouteFeatures = updatedFeatures;
+    setRouteVisibility(map, 'walking');
+    return previousIndex;
 }
 
 export function fitWalkingRoute(map, coordinates) {
@@ -127,8 +265,47 @@ export function fitWalkingRoute(map, coordinates) {
 }
 
 export function drawRoutePreview(map, coordinates, mode = 'pedestrian') {
-    setRouteData(map, PREVIEW_ROUTE_ID, coordinates, true, mode);
+    setRouteData(
+        map,
+        PREVIEW_ROUTE_ID,
+        createRouteFeature(coordinates, mode),
+        true,
+    );
     setRouteVisibility(map, 'preview');
+}
+
+export function drawRoutePreviewSegments(map, segments) {
+    if (
+        !map ||
+        !Array.isArray(segments) ||
+        segments.length === 0 ||
+        segments.some(
+            (segment) =>
+                !Array.isArray(segment?.geometry) ||
+                segment.geometry.length < 2 ||
+                !['pedestrian', 'bicycle'].includes(segment.mode),
+        )
+    ) {
+        return false;
+    }
+
+    const features = segments.map((segment, segmentIndex) =>
+        createRouteFeature(
+            segment.geometry,
+            segment.mode,
+            segmentIndex,
+        ),
+    );
+
+    setRouteData(
+        map,
+        PREVIEW_ROUTE_ID,
+        { type: 'FeatureCollection', features },
+        true,
+    );
+    setRouteVisibility(map, 'preview');
+
+    return true;
 }
 
 export function clearRoutePreview(map) {
@@ -168,7 +345,15 @@ export function showDestinationMarker(
         .addTo(map);
 }
 
+export function clearDestinationMarker() {
+    destinationMarker?.remove();
+    destinationMarker = null;
+}
+
 export function clearRouteLayer(map) {
+    activeNavigationRouteFeatures = null;
+    activeNavigationSegmentIndex = 0;
+
     if (map.getLayer(ROUTE_ID)) {
         map.removeLayer(ROUTE_ID);
     }
@@ -177,6 +362,5 @@ export function clearRouteLayer(map) {
         map.removeSource(ROUTE_ID);
     }
 
-    destinationMarker?.remove();
-    destinationMarker = null;
+    clearDestinationMarker();
 }

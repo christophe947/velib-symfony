@@ -33,6 +33,10 @@ function createSessionHarness({
     const progressedPositions = [];
     const compassControlPredicates = [];
     let nextWatchId = 1;
+    let nextReplacementId = 1;
+    let activeReplacementId = null;
+    let navigationMode = null;
+    let activeMapSegmentIndex = 0;
     const fail = (name) => {
         if (failures[name]) {
             throw failures[name];
@@ -40,10 +44,38 @@ function createSessionHarness({
     };
 
     const navigationEngine = {
-        getNavigationMode: () => null,
-        setNavigationRoute() {
+        getNavigationMode: () => navigationMode,
+        setNavigationRoute(_coordinates, _destination, mode = 'pedestrian') {
             events.push('engine:route:set');
             fail('setNavigationRoute');
+            navigationMode = mode;
+        },
+        beginRouteReplacement() {
+            events.push('engine:replacement:begin');
+            activeReplacementId = nextReplacementId++;
+            return activeReplacementId;
+        },
+        cancelRouteReplacement(replacementId) {
+            events.push(`engine:replacement:cancel:${replacementId}`);
+            if (activeReplacementId !== replacementId) {
+                return false;
+            }
+
+            activeReplacementId = null;
+            return true;
+        },
+        commitRouteReplacement(replacementId, _coordinates, _destination, mode) {
+            events.push(
+                `engine:replacement:commit:${replacementId}:${mode}:${activeMapSegmentIndex}`,
+            );
+            fail('commitRouteReplacement');
+            if (activeReplacementId !== replacementId) {
+                return false;
+            }
+
+            activeReplacementId = null;
+            navigationMode = mode;
+            return true;
         },
         updateNavigationProgress(positionValue) {
             events.push('engine:progress');
@@ -82,6 +114,16 @@ function createSessionHarness({
                 events.push(`map:navigation:${mode}:${Boolean(initialPosition)}`);
                 fail('setNavigationActive');
             },
+            setNavigationMode(mode) {
+                events.push(`map:mode:${mode}`);
+                fail('setNavigationMode');
+            },
+            showNavigationDestination(destination) {
+                events.push(
+                    `map:destination:${destination.latitude}:${destination.longitude}`,
+                );
+                fail('showNavigationDestination');
+            },
             setUserFollowing(enabled) {
                 events.push(`map:following:${enabled}`);
             },
@@ -89,9 +131,22 @@ function createSessionHarness({
                 events.push('map:user-position');
                 fail('showUserPosition');
             },
-            drawNavigationRoute() {
+            drawNavigationRoute(route) {
                 events.push('map:route:draw');
+                if (route?.type === 'multimodal') {
+                    activeMapSegmentIndex = 0;
+                }
                 fail('drawNavigationRoute');
+            },
+            setActiveNavigationSegment(segmentIndex) {
+                events.push(`map:segment:${segmentIndex}`);
+                const previousIndex = activeMapSegmentIndex;
+                if (!Number.isInteger(segmentIndex) || segmentIndex < 0) {
+                    return false;
+                }
+
+                activeMapSegmentIndex = segmentIndex;
+                return previousIndex;
             },
             clearPlannerRoutePreview() {
                 events.push('map:preview:clear');
@@ -151,6 +206,21 @@ function position({ timestamp = Date.now(), accuracy = 8, latitude = 48.86 } = {
         accuracy,
         timestamp,
     };
+}
+
+function segment(mode, longitude) {
+    return {
+        mode,
+        geometry: [
+            [longitude - 0.001, 48.86],
+            [longitude, 48.86],
+        ],
+        destination: { latitude: 48.86, longitude, type: 'station' },
+    };
+}
+
+function routeFor(mode, longitude = 2.35) {
+    return { segments: [segment(mode, longitude)] };
 }
 
 async function withFixedNow(now, callback) {
@@ -899,4 +969,180 @@ test('enforces afterTimestamp as a strict floor for cached and watched fixes', a
         assert.equal(await wait, newerPosition);
         session.stop();
     });
+});
+
+test('activates a bicycle segment without restarting GPS or the wake lock', async () => {
+    const harness = createSessionHarness();
+    await harness.session.start({ route: routeFor('pedestrian') });
+
+    assert.equal(
+        await harness.session.activateSegment(segment('bicycle', 2.36)),
+        true,
+    );
+
+    assert.equal(harness.watches.length, 1);
+    assert.equal(harness.events.filter((event) => event === 'gps:watch:start').length, 1);
+    assert.equal(harness.events.filter((event) => event === 'wake:start').length, 1);
+    assert.ok(harness.events.includes('engine:replacement:commit:1:bicycle:0'));
+    assert.ok(harness.events.includes('map:mode:bicycle'));
+    assert.ok(harness.events.includes('map:destination:48.86:2.36'));
+    assert.ok(harness.events.includes('compass:stop'));
+});
+
+test('activates pedestrian mode from the transition call when compass permission is granted', async () => {
+    const activation = createDeferred();
+    const harness = createSessionHarness({
+        compassActivationPromise: activation.promise,
+    });
+    await harness.session.start({ route: routeFor('bicycle') });
+
+    const transition = harness.session.activateSegment(
+        segment('pedestrian', 2.37),
+    );
+    assert.ok(harness.events.includes('compass:activate'));
+    activation.resolve();
+
+    assert.equal(await transition, true);
+    assert.equal(harness.watches.length, 1);
+    assert.equal(harness.events.filter((event) => event === 'wake:start').length, 1);
+    assert.ok(harness.events.includes('map:mode:pedestrian'));
+    assert.ok(harness.events.includes('map:destination:48.86:2.37'));
+    assert.equal(harness.compassControlPredicates.at(-1)(), true);
+});
+
+test('continues pedestrian navigation when compass permission is denied', async () => {
+    const activation = createDeferred();
+    const harness = createSessionHarness({
+        compassActivationPromise: activation.promise,
+    });
+    await harness.session.start({ route: routeFor('bicycle') });
+
+    const transition = harness.session.activateSegment(
+        segment('pedestrian', 2.37),
+        { onCompassError() {} },
+    );
+    assert.ok(harness.events.includes('compass:activate'));
+    activation.reject(new Error('permission denied'));
+
+    assert.equal(await transition, true);
+    assert.equal(harness.watches.length, 1);
+    assert.equal(harness.events.filter((event) => event === 'wake:start').length, 1);
+    assert.ok(harness.events.includes('map:mode:pedestrian'));
+    assert.ok(harness.events.includes('map:destination:48.86:2.37'));
+});
+
+test('a failed route commit cancels its transaction without changing mode or marker', async () => {
+    const harness = createSessionHarness({
+        failures: {
+            commitRouteReplacement: new Error('route source unavailable'),
+        },
+    });
+    await harness.session.start({ route: routeFor('bicycle') });
+
+    await assert.rejects(
+        harness.session.activateSegment(segment('bicycle', 2.375)),
+        /route source unavailable/,
+    );
+
+    assert.ok(harness.events.includes('engine:replacement:cancel:1'));
+    assert.ok(!harness.events.includes('map:mode:bicycle'));
+    assert.ok(!harness.events.includes('map:destination:48.86:2.375'));
+    assert.equal(harness.watches.length, 1);
+});
+
+test('selects the next map segment before route commit and preserves the current watch', async () => {
+    const harness = createSessionHarness();
+    const plan = {
+        type: 'multimodal',
+        segments: [segment('pedestrian', 2.36), segment('bicycle', 2.38)],
+    };
+    await harness.session.start({ route: plan });
+
+    assert.equal(
+        await harness.session.activateSegment(segment('bicycle', 2.38), {
+            segmentIndex: 1,
+        }),
+        true,
+    );
+
+    const selectIndex = harness.events.indexOf('map:segment:1');
+    const commit = harness.events.indexOf('engine:replacement:commit:1:bicycle:1');
+    assert.ok(selectIndex >= 0);
+    assert.ok(commit > selectIndex);
+    assert.equal(harness.watches.length, 1);
+    assert.equal(harness.events.filter((event) => event === 'wake:start').length, 1);
+});
+
+test('restores the previous map segment if route commit fails', async () => {
+    const harness = createSessionHarness({
+        failures: { commitRouteReplacement: new Error('commit failed') },
+    });
+    await harness.session.start({
+        route: {
+            type: 'multimodal',
+            segments: [segment('pedestrian', 2.36), segment('bicycle', 2.38)],
+        },
+    });
+
+    await assert.rejects(
+        harness.session.activateSegment(segment('bicycle', 2.38), {
+            segmentIndex: 1,
+        }),
+        /commit failed/,
+    );
+
+    assert.deepEqual(
+        harness.events.filter((event) => event.startsWith('map:segment:')),
+        ['map:segment:1', 'map:segment:0'],
+    );
+    assert.ok(harness.events.includes('engine:replacement:cancel:1'));
+});
+
+test('stopping during a compass transition prevents a late segment installation', async () => {
+    const activation = createDeferred();
+    const harness = createSessionHarness({
+        compassActivationPromise: activation.promise,
+    });
+    await harness.session.start({ route: routeFor('bicycle') });
+
+    const transition = harness.session.activateSegment(
+        segment('pedestrian', 2.38),
+    );
+    harness.session.stop();
+    activation.resolve();
+
+    assert.equal(await transition, false);
+    assert.equal(
+        harness.events.filter((event) => event.startsWith('engine:replacement:commit:')).length,
+        0,
+    );
+    assert.equal(harness.events.filter((event) => event === 'gps:watch:start').length, 1);
+    assert.equal(harness.clearedWatchIds.length, 1);
+    assert.equal(harness.events.filter((event) => event === 'wake:start').length, 1);
+    assert.equal(harness.events.filter((event) => event === 'wake:stop').length, 1);
+});
+
+test('a newer segment transition supersedes an older permission wait', async () => {
+    const activation = createDeferred();
+    const harness = createSessionHarness({
+        compassActivationPromise: activation.promise,
+    });
+    await harness.session.start({ route: routeFor('bicycle') });
+
+    const obsoleteTransition = harness.session.activateSegment(
+        segment('pedestrian', 2.39),
+    );
+    const currentTransition = harness.session.activateSegment(
+        segment('bicycle', 2.4),
+    );
+
+    assert.equal(await currentTransition, true);
+    activation.resolve();
+    assert.equal(await obsoleteTransition, false);
+
+    assert.equal(harness.watches.length, 1);
+    assert.equal(harness.events.filter((event) => event === 'gps:watch:start').length, 1);
+    assert.equal(harness.events.filter((event) => event === 'wake:start').length, 1);
+    assert.ok(harness.events.includes('map:destination:48.86:2.4'));
+    assert.ok(!harness.events.includes('map:destination:48.86:2.39'));
 });
