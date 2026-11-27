@@ -23,6 +23,7 @@ function createDeferred() {
 
 function createSessionHarness({
     requestPosition = async () => position(),
+    watchReturnsNull = false,
     followingAfterClear = true,
     compassActivationPromise = Promise.resolve(),
     failures = {},
@@ -96,6 +97,11 @@ function createSessionHarness({
             startWatchingPosition(onPosition, onError) {
                 events.push('gps:watch:start');
                 fail('startWatchingPosition');
+                if (watchReturnsNull) {
+                    onError?.(new Error('Geolocation unavailable'));
+                    return null;
+                }
+
                 const watch = { id: nextWatchId++, onPosition, onError };
                 watches.push(watch);
                 return watch.id;
@@ -364,6 +370,7 @@ test('preserves walking startup order and stops all session resources', async ()
     ]);
     assert.ok(events.indexOf('camera:prepare') < events.indexOf('gps:watch:start'));
     assert.ok(events.indexOf('camera:ready') < events.indexOf('gps:watch:start'));
+    assert.equal(events.includes('gps:request'), false);
     assert.equal(watches.length, 1);
 
     session.stop({
@@ -522,13 +529,13 @@ test('a watch creation failure is cleaned and can be retried', async () => {
     });
 });
 
-test('a failure after a successful one-shot GPS fix clears the cached fix', async () => {
+test('a start failure clears a previously cached fix', async () => {
     const freshFix = position();
     const failure = new Error('User marker update failed');
     const harness = createSessionHarness({
         failures: { showUserPosition: failure },
-        requestPosition: async () => freshFix,
     });
+    harness.session.rememberPosition(freshFix);
 
     await withQuietConsole(() =>
         assert.rejects(
@@ -542,7 +549,7 @@ test('a failure after a successful one-shot GPS fix clears the cached fix', asyn
 
     assert.equal(harness.session.isActive(), false);
     assert.equal(harness.session.getLastKnownPosition(), null);
-    assert.ok(harness.events.includes('gps:request'));
+    assert.equal(harness.events.includes('gps:request'), false);
     assert.ok(harness.events.includes('map:background:start'));
 });
 
@@ -638,26 +645,86 @@ test('a late compass reading cannot control the camera after the session stops',
     assert.equal(watches.length, 1);
 });
 
-test('an abort during one-shot GPS acquisition ignores its late result', async () => {
-    const gpsRequest = createDeferred();
-    const { session, events, watches } = createSessionHarness({
-        requestPosition: () => gpsRequest.promise,
-    });
+test('starts without a cached fix and uses the first navigation-watch fix', async () => {
+    const { session, events, watches, progressedPositions } =
+        createSessionHarness({
+            requestPosition: async () => {
+                throw new Error('Start must not request a one-shot position');
+            },
+        });
+    const route = plannerRoute('pedestrian');
     const start = session.start({
         mode: 'pedestrian',
+        route,
         compassActivation: Promise.resolve(),
         prepareCamera: () => events.push('camera:prepare'),
     });
 
-    await allowPendingStartToContinue();
-    assert.ok(events.includes('gps:request'));
-    session.stop();
-    gpsRequest.resolve(position());
+    assert.equal(await start, true);
+    assert.equal(events.includes('gps:request'), false);
+    assert.equal(events.includes('map:navigation:pedestrian:false'), true);
+    assert.equal(events.includes('map:user-position'), false);
+    assert.ok(events.indexOf('engine:route:set') < events.indexOf('gps:watch:start'));
+    assert.equal(watches.length, 1);
 
-    assert.equal(await start, false);
+    const firstFix = position();
+    watches[0].onPosition(firstFix);
+    assert.equal(session.getLastKnownPosition(), firstFix);
+    assert.deepEqual(progressedPositions, [firstFix]);
+    session.stop();
+});
+
+test('does not display an expired cached fix while waiting for the watch', async () => {
+    await withMutableNow(100_000, async (setNow) => {
+        const { session, events, watches } = createSessionHarness({
+            requestPosition: async () => {
+                throw new Error('Start must not request a one-shot position');
+            },
+        });
+        session.rememberPosition(position({ timestamp: 99_999 }));
+        setNow(110_001);
+
+        assert.equal(
+            await session.start({
+                mode: 'pedestrian',
+                compassActivation: Promise.resolve(),
+            }),
+            true,
+        );
+        assert.equal(events.includes('map:navigation:pedestrian:false'), true);
+        assert.equal(events.includes('map:user-position'), false);
+        assert.equal(events.includes('gps:request'), false);
+
+        const firstFreshFix = position({ timestamp: 110_001 });
+        watches[0].onPosition(firstFreshFix);
+        assert.equal(session.getLastKnownPosition(), firstFreshFix);
+        session.stop();
+    });
+});
+
+test('stopping before the first fix clears the watch and ignores its late callback', async () => {
+    const { session, events, watches, clearedWatchIds, progressedPositions } =
+        createSessionHarness();
+
+    assert.equal(
+        await session.start({
+            mode: 'bicycle',
+            route: plannerRoute('bicycle'),
+            compassActivation: Promise.resolve(),
+        }),
+        true,
+    );
+    assert.equal(events.includes('gps:request'), false);
+    assert.equal(watches.length, 1);
+
+    const lateFix = position();
+    session.stop();
+    watches[0].onPosition(lateFix);
+
+    assert.deepEqual(clearedWatchIds, [watches[0].id]);
     assert.equal(session.getLastKnownPosition(), null);
-    assert.equal(events.includes('camera:prepare'), false);
-    assert.equal(watches.length, 0);
+    assert.deepEqual(progressedPositions, []);
+    assert.ok(events.includes('map:background:start'));
 });
 
 test('an abort during camera preparation prevents a navigation watch', async () => {
@@ -678,32 +745,49 @@ test('an abort during camera preparation prevents a navigation watch', async () 
     assert.equal(watches.length, 0);
 });
 
-test('a failed one-shot GPS request is non-blocking and background tracking resumes on stop', async () => {
-    const originalWarn = console.warn;
-    console.warn = () => {};
+test('does not wait for a one-shot position and resumes background tracking on stop', async () => {
+    const { session, events, watches } = createSessionHarness({
+        requestPosition: async () => {
+            throw new Error('Start must not request a one-shot position');
+        },
+    });
 
-    try {
-        const { session, events, watches } = createSessionHarness({
-            requestPosition: async () => {
-                throw new Error('GPS unavailable');
-            },
-        });
+    assert.equal(
+        await session.start({
+            mode: 'pedestrian',
+            compassActivation: Promise.resolve(),
+        }),
+        true,
+    );
+    assert.equal(events.includes('gps:request'), false);
+    assert.equal(watches.length, 1);
 
-        assert.equal(
-            await session.start({
-                mode: 'pedestrian',
+    session.stop();
+    assert.ok(events.includes('map:background:start'));
+    assert.equal(session.getLastKnownPosition(), null);
+});
+
+test('a missing navigation watch fails startup and cleans the session', async () => {
+    const { session, events, watches } = createSessionHarness({
+        watchReturnsNull: true,
+    });
+
+    await withQuietConsole(() =>
+        assert.rejects(
+            session.start({
+                mode: 'bicycle',
+                route: plannerRoute('bicycle'),
                 compassActivation: Promise.resolve(),
             }),
-            true,
-        );
-        assert.equal(watches.length, 1);
+            /suivi GPS de navigation n’a pas démarré/,
+        ),
+    );
 
-        session.stop();
-        assert.ok(events.includes('map:background:start'));
-        assert.equal(session.getLastKnownPosition(), null);
-    } finally {
-        console.warn = originalWarn;
-    }
+    assert.equal(session.isActive(), false);
+    assert.equal(watches.length, 0);
+    assert.equal(events.includes('gps:request'), false);
+    assert.equal(events.filter((event) => event === 'map:navigation:clear').length, 1);
+    assert.ok(events.includes('map:background:start'));
 });
 
 test('retains only the newest fresh raw fix and newest reliable fix', async () => {
@@ -819,10 +903,10 @@ test('uses the existing one-shot request when no navigation watch exists', async
         ),
     );
 
-    // Start failure cleanup leaves the session inactive; the API still uses
-    // the one-shot geolocation service rather than creating another watch.
+    // Start failure cleanup leaves the session inactive; the explicit reliable
+    // position API still uses one-shot geolocation when no watch is active.
     assert.equal(await session.getReliablePosition(), requestedPosition);
-    assert.equal(events.filter((event) => event === 'gps:request').length, 2);
+    assert.equal(events.filter((event) => event === 'gps:request').length, 1);
     assert.equal(events.filter((event) => event === 'gps:watch:start').length, 1);
 });
 

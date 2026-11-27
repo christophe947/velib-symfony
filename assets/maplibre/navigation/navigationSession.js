@@ -259,31 +259,6 @@ export class NavigationSession {
                 return false;
             }
 
-            if (!this.isFreshPosition(this.#lastKnownPosition)) {
-                try {
-                    const userPosition = await this.#gps.requestPosition({
-                        maximumAge: 0,
-                    });
-
-                    if (!isSessionCurrent()) {
-                        this.#cleanupAbortedStart(generation);
-                        return false;
-                    }
-
-                    this.rememberPosition(userPosition);
-                } catch (error) {
-                    if (!isSessionCurrent()) {
-                        this.#cleanupAbortedStart(generation);
-                        return false;
-                    }
-
-                    console.warn(
-                        'Impossible d’obtenir une position GPS récente au démarrage :',
-                        error,
-                    );
-                }
-            }
-
             if (route) {
                 const segment = route.segments[0];
 
@@ -299,7 +274,7 @@ export class NavigationSession {
                 this.#mapEffects.clearPlannerRoutePreview();
             }
 
-            if (this.#lastKnownPosition) {
+            if (this.isFreshPosition(this.#lastKnownPosition)) {
                 this.#mapEffects.showUserPosition(this.#lastKnownPosition);
             }
 
@@ -312,10 +287,14 @@ export class NavigationSession {
 
             isInitialCameraSetup = false;
             onCameraReady?.();
-            this.#startPositionWatch({
+            const watchStarted = this.#startPositionWatch({
                 sessionGeneration: generation,
                 onError: (error) => console.error('Erreur GPS :', error),
             });
+
+            if (!watchStarted) {
+                throw new Error('Le suivi GPS de navigation n’a pas démarré.');
+            }
 
             return true;
         } catch (error) {
